@@ -1,41 +1,41 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServiceClient } from '@/lib/supabase'
-import { Database } from '@/types/supabase'
-
-type Tables = Database['public']['Tables']
+import { Database, Tables, TablesInsert, TablesUpdate } from '@/types/supabase'
 
 // Core API Client Class
 export class ApiClient {
   private supabase = createSupabaseServiceClient()
 
   // Work Orders
-  async getWorkOrders() {
+  async getWorkOrders(): Promise<Tables<'work_orders'>[]> {
     const { data, error } = await this.supabase
       .from('work_orders')
       .select('*')
       .order('created_at', { ascending: false })
     
     if (error) throw error
-    return data
+    return data || []
   }
 
   async createWorkOrder(workOrder: {
     title: string
     description: string
-    risk_level?: 'low' | 'medium' | 'high'  // Use risk_level, not priority
-    estimated_effort_hours?: number
-    budget_cap?: number
-  }) {
+    risk_level?: string
+  }): Promise<Tables<'work_orders'>> {
+    const insertData: TablesInsert<'work_orders'> = {
+      title: workOrder.title,
+      description: workOrder.description,
+      risk_level: workOrder.risk_level || 'low',
+      status: 'pending',
+      proposer_id: 'a40c5caf-b0fb-4a8b-a544-ca82bb2ab939', 
+      estimated_cost: 0, 
+      pattern_confidence: 0.5,
+      created_at: new Date().toISOString(),
+    }
+
     const { data, error } = await this.supabase
       .from('work_orders')
-      .insert([{
-        ...workOrder,
-        status: 'pending',
-    	proposer_id: 'a40c5caf-b0fb-4a8b-a544-ca82bb2ab939', 
-      	estimated_cost: workOrder.budget_cap || 0, 
-      	pattern_confidence: 0.5, 
-        created_at: new Date().toISOString(),
-      }])
+      .insert(insertData)
       .select()
       .single()
     
@@ -43,7 +43,7 @@ export class ApiClient {
     return data
   }
 
-  async updateWorkOrder(id: string, updates: Partial<Tables['work_orders']['Update']>) {
+  async updateWorkOrder(id: string, updates: TablesUpdate<'work_orders'>): Promise<Tables<'work_orders'>> {
     const { data, error } = await this.supabase
       .from('work_orders')
       .update(updates)
@@ -55,24 +55,26 @@ export class ApiClient {
     return data
   }
 
-  // System Status (corrected table name)
-  async getSystemStatus() {
+  // System Status
+  async getSystemStatus(): Promise<Tables<'system_status'>[]> {
     const { data, error } = await this.supabase
-      .from('system_status')  // Changed from system_components
+      .from('system_status')
       .select('*')
-      .order('component_name')  // Use component_name instead of name
+      .order('component_name')
     
     if (error) throw error
-    return data
+    return data || []
   }
 
-  async updateSystemStatus(id: string, status: 'online' | 'offline' | 'degraded') {
+  async updateSystemStatus(id: string, status: 'online' | 'offline' | 'degraded'): Promise<Tables<'system_status'>> {
+    const updateData: TablesUpdate<'system_status'> = { 
+      status,
+      last_heartbeat: new Date().toISOString(),
+    }
+
     const { data, error } = await this.supabase
-      .from('system_status')  // Changed from system_components
-      .update({ 
-        status,
-        last_heartbeat: new Date().toISOString(),
-      })
+      .from('system_status')
+      .update(updateData)
       .eq('id', id)
       .select()
       .single()
@@ -81,8 +83,8 @@ export class ApiClient {
     return data
   }
 
-  // Escalations - FIXED VERSION
-  async getEscalations() {
+  // Escalations
+  async getEscalations(): Promise<any[]> {
     const { data, error } = await this.supabase
       .from('escalations')
       .select(`
@@ -97,18 +99,20 @@ export class ApiClient {
       .order('created_at', { ascending: false })
     
     if (error) throw error
-    return data
+    return data || []
   }
 
-  async resolveEscalation(id: string, resolution: string) {
+  async resolveEscalation(id: string, resolution: string): Promise<Tables<'escalations'>> {
+    const updateData: TablesUpdate<'escalations'> = {
+      status: 'resolved',
+      resolution_notes: resolution,
+      resolved_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    }
+
     const { data, error } = await this.supabase
       .from('escalations')
-      .update({
-        status: 'resolved',
-        resolution_notes: resolution,
-        resolved_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      })
+      .update(updateData)
       .eq('id', id)
       .select()
       .single()
@@ -118,7 +122,7 @@ export class ApiClient {
   }
 
   // Decision Logs
-  async getDecisionLogs() {
+  async getDecisionLogs(): Promise<any[]> {
     const { data, error } = await this.supabase
       .from('decision_logs')
       .select(`
@@ -128,23 +132,23 @@ export class ApiClient {
           status
         )
       `)
-      .order('timestamp', { ascending: false })
+      .order('created_at', { ascending: false })
       .limit(50)
     
     if (error) throw error
-    return data
+    return data || []
   }
 
-  // Cost Tracking (corrected table name)
-  async getCostData() {
+  // Cost Tracking
+  async getCostData(): Promise<Tables<'cost_tracking'>[]> {
     const { data, error } = await this.supabase
-      .from('cost_tracking')  // Changed from budget_tracking
+      .from('cost_tracking')
       .select('*')
       .order('created_at', { ascending: false })
       .limit(30)
     
     if (error) throw error
-    return data
+    return data || []
   }
 }
 
@@ -201,7 +205,7 @@ class SystemStatusService {
 
   async getAll() {
     try {
-      const data = await this.apiClient.getSystemStatus()  // Now calls corrected method
+      const data = await this.apiClient.getSystemStatus()
       return NextResponse.json(data)
     } catch (error) {
       console.error('Error fetching system status:', error)
@@ -218,7 +222,7 @@ class BudgetService {
 
   async getAll() {
     try {
-      const data = await this.apiClient.getCostData()  // Now calls corrected method
+      const data = await this.apiClient.getCostData()
       return NextResponse.json(data)
     } catch (error) {
       console.error('Error fetching budget data:', error)
@@ -249,7 +253,6 @@ class EscalationsService {
   async create(request: NextRequest) {
     try {
       const body = await request.json()
-      // Implementation for creating escalations would go here
       return NextResponse.json({ message: 'Escalation created' })
     } catch (error) {
       console.error('Error creating escalation:', error)
@@ -298,7 +301,6 @@ class PatternMetricsService {
 
   async getAll() {
     try {
-      // Placeholder for pattern metrics - would integrate with playbook_memory table
       const data = { patterns: [], confidence_scores: [] }
       return NextResponse.json(data)
     } catch (error) {
@@ -316,22 +318,21 @@ class DashboardMetricsService {
 
   async getAll() {
     try {
-      // Aggregate multiple data sources for dashboard overview
       const [workOrders, systemStatus, escalations, costData] = await Promise.all([
         this.apiClient.getWorkOrders(),
-        this.apiClient.getSystemStatus(),  // Corrected method name
+        this.apiClient.getSystemStatus(),
         this.apiClient.getEscalations(),
-        this.apiClient.getCostData()  // Corrected method name
+        this.apiClient.getCostData()
       ])
 
       const metrics = {
-        activeWorkOrders: workOrders.filter(wo => wo.status === 'processing').length,  // Use 'processing' not 'in_progress'
-        pendingEscalations: escalations.filter(esc => esc.status === 'pending').length,
+        activeWorkOrders: workOrders.filter((wo: Tables<'work_orders'>) => wo.status === 'processing').length,
+        pendingEscalations: escalations.filter((esc: Tables<'escalations'>) => esc.status === 'open').length,
         systemHealth: {
-          active: systemStatus.filter(comp => comp.status === 'online').length,  // Use 'online' not 'active'
+          active: systemStatus.filter((comp: Tables<'system_status'>) => comp.status === 'online').length,
           total: systemStatus.length
         },
-        monthlySpend: costData.reduce((sum, record) => sum + (record.cost || 0), 0)  // Use 'cost' field
+        monthlySpend: costData.reduce((sum: number, record: Tables<'cost_tracking'>) => sum + (record.cost || 0), 0)
       }
 
       return NextResponse.json(metrics)

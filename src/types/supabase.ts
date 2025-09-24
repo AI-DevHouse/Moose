@@ -1,7 +1,4 @@
-// types/supabase.ts
-// Database types generated from Supabase schema
-
-export type Json =
+﻿export type Json =
   | string
   | number
   | boolean
@@ -9,398 +6,670 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[]
 
-export interface Database {
+export type Database = {
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: "13.0.5"
+  }
   public: {
     Tables: {
-      work_orders: {
+      contracts: {
         Row: {
-          id: string
-          title: string
-          description: string
-          status: 'pending' | 'processing' | 'completed' | 'failed' | 'escalated'
-          risk_level: 'low' | 'medium' | 'high'
-          proposer_id: string
-          estimated_cost: number
-          actual_cost: number | null
-          pattern_confidence: number
-          metadata: Json | null
+          breaking_changes: Json | null
+          contract_type: string
           created_at: string
-          updated_at: string
-          completed_at: string | null
-        }
-        Insert: {
-          id?: string
-          title: string
-          description: string
-          status?: 'pending' | 'processing' | 'completed' | 'failed' | 'escalated'
-          risk_level: 'low' | 'medium' | 'high'
-          proposer_id: string
-          estimated_cost: number
-          actual_cost?: number | null
-          pattern_confidence?: number
-          metadata?: Json | null
-          created_at?: string
-          updated_at?: string
-          completed_at?: string | null
-        }
-        Update: {
-          id?: string
-          title?: string
-          description?: string
-          status?: 'pending' | 'processing' | 'completed' | 'failed' | 'escalated'
-          risk_level?: 'low' | 'medium' | 'high'
-          proposer_id?: string
-          estimated_cost?: number
-          actual_cost?: number | null
-          pattern_confidence?: number
-          metadata?: Json | null
-          created_at?: string
-          updated_at?: string
-          completed_at?: string | null
-        }
-      }
-      proposer_configs: {
-        Row: {
           id: string
-          name: string
-          provider: string
-          endpoint: string
-          context_limit: number
-          cost_profile: Json
-          strengths: string[]
-          complexity_threshold: number
-          success_patterns: Json | null
-          notes: string | null
           is_active: boolean
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
           name: string
-          provider: string
-          endpoint: string
-          context_limit: number
-          cost_profile: Json
-          strengths: string[]
-          complexity_threshold?: number
-          success_patterns?: Json | null
-          notes?: string | null
-          is_active?: boolean
+          specification: Json
+          updated_at: string
+          validation_rules: Json
+          version: string
+        }
+        Insert: {
+          breaking_changes?: Json | null
+          contract_type: string
           created_at?: string
+          id?: string
+          is_active?: boolean
+          name: string
+          specification: Json
           updated_at?: string
+          validation_rules: Json
+          version: string
         }
         Update: {
+          breaking_changes?: Json | null
+          contract_type?: string
+          created_at?: string
           id?: string
+          is_active?: boolean
           name?: string
-          provider?: string
-          endpoint?: string
-          context_limit?: number
-          cost_profile?: Json
-          strengths?: string[]
-          complexity_threshold?: number
-          success_patterns?: Json | null
-          notes?: string | null
-          is_active?: boolean
-          created_at?: string
+          specification?: Json
           updated_at?: string
+          validation_rules?: Json
+          version?: string
         }
-      }
-      system_status: {
-        Row: {
-          id: string
-          component_name: string
-          status: 'online' | 'offline' | 'degraded'
-          last_heartbeat: string
-          response_time_ms: number
-          metadata: Json | null
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          component_name: string
-          status: 'online' | 'offline' | 'degraded'
-          last_heartbeat: string
-          response_time_ms?: number
-          metadata?: Json | null
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          component_name?: string
-          status?: 'online' | 'offline' | 'degraded'
-          last_heartbeat?: string
-          response_time_ms?: number
-          metadata?: Json | null
-          created_at?: string
-          updated_at?: string
-        }
-      }
-      escalations: {
-        Row: {
-          id: string
-          work_order_id: string
-          reason: string
-          status: 'open' | 'in_progress' | 'resolved' | 'dismissed'
-          escalation_data: Json | null
-          resolution_notes: string | null
-          assigned_to: string | null
-          created_at: string
-          updated_at: string
-          resolved_at: string | null
-        }
-        Insert: {
-          id?: string
-          work_order_id: string
-          reason: string
-          status?: 'open' | 'in_progress' | 'resolved' | 'dismissed'
-          escalation_data?: Json | null
-          resolution_notes?: string | null
-          assigned_to?: string | null
-          created_at?: string
-          updated_at?: string
-          resolved_at?: string | null
-        }
-        Update: {
-          id?: string
-          work_order_id?: string
-          reason?: string
-          status?: 'open' | 'in_progress' | 'resolved' | 'dismissed'
-          escalation_data?: Json | null
-          resolution_notes?: string | null
-          assigned_to?: string | null
-          created_at?: string
-          updated_at?: string
-          resolved_at?: string | null
-        }
-      }
-      pattern_confidence_scores: {
-        Row: {
-          id: string
-          work_order_type: string
-          pattern_hash: string
-          confidence_score: number
-          success_count: number
-          failure_count: number
-          last_success_at: string | null
-          last_failure_at: string | null
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          work_order_type: string
-          pattern_hash: string
-          confidence_score?: number
-          success_count?: number
-          failure_count?: number
-          last_success_at?: string | null
-          last_failure_at?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          work_order_type?: string
-          pattern_hash?: string
-          confidence_score?: number
-          success_count?: number
-          failure_count?: number
-          last_success_at?: string | null
-          last_failure_at?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-      }
-      outcome_vectors: {
-        Row: {
-          id: string
-          work_order_id: string
-          success: boolean
-          execution_time_ms: number
-          cost: number
-          model_used: string
-          route_reason: string
-          diff_size_lines: number
-          test_duration_ms: number | null
-          failure_classes: string[] | null
-          metadata: Json | null
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          work_order_id: string
-          success: boolean
-          execution_time_ms: number
-          cost: number
-          model_used: string
-          route_reason: string
-          diff_size_lines: number
-          test_duration_ms?: number | null
-          failure_classes?: string[] | null
-          metadata?: Json | null
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          work_order_id?: string
-          success?: boolean
-          execution_time_ms?: number
-          cost?: number
-          model_used?: string
-          route_reason?: string
-          diff_size_lines?: number
-          test_duration_ms?: number | null
-          failure_classes?: string[] | null
-          metadata?: Json | null
-          created_at?: string
-        }
+        Relationships: []
       }
       cost_tracking: {
         Row: {
-          id: string
-          service_name: string
           cost: number
-          metadata: Json | null
           created_at: string
+          id: string
+          metadata: Json | null
+          service_name: string
         }
         Insert: {
-          id?: string
-          service_name: string
           cost: number
-          metadata?: Json | null
           created_at?: string
+          id?: string
+          metadata?: Json | null
+          service_name: string
         }
         Update: {
-          id?: string
-          service_name?: string
           cost?: number
-          metadata?: Json | null
           created_at?: string
+          id?: string
+          metadata?: Json | null
+          service_name?: string
         }
+        Relationships: []
       }
       decision_logs: {
         Row: {
-          id: string
-          work_order_id: string | null
-          decision_type: string
-          decision_data: Json
           approved: boolean
           approved_by: string | null
-          reasoning: string | null
           created_at: string
-        }
-        Insert: {
-          id?: string
-          work_order_id?: string | null
-          decision_type: string
           decision_data: Json
-          approved?: boolean
-          approved_by?: string | null
-          reasoning?: string | null
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          work_order_id?: string | null
-          decision_type?: string
-          decision_data?: Json
-          approved?: boolean
-          approved_by?: string | null
-          reasoning?: string | null
-          created_at?: string
-        }
-      }
-      contracts: {
-        Row: {
+          decision_type: string
           id: string
-          contract_type: 'api' | 'event' | 'domain' | 'ux' | 'nfr'
-          name: string
-          version: string
-          specification: Json
-          breaking_changes: Json | null
-          validation_rules: Json
-          is_active: boolean
-          created_at: string
-          updated_at: string
+          reasoning: string | null
+          work_order_id: string | null
         }
         Insert: {
-          id?: string
-          contract_type: 'api' | 'event' | 'domain' | 'ux' | 'nfr'
-          name: string
-          version: string
-          specification: Json
-          breaking_changes?: Json | null
-          validation_rules: Json
-          is_active?: boolean
+          approved?: boolean
+          approved_by?: string | null
           created_at?: string
-          updated_at?: string
+          decision_data: Json
+          decision_type: string
+          id?: string
+          reasoning?: string | null
+          work_order_id?: string | null
         }
         Update: {
-          id?: string
-          contract_type?: 'api' | 'event' | 'domain' | 'ux' | 'nfr'
-          name?: string
-          version?: string
-          specification?: Json
-          breaking_changes?: Json | null
-          validation_rules?: Json
-          is_active?: boolean
+          approved?: boolean
+          approved_by?: string | null
           created_at?: string
-          updated_at?: string
+          decision_data?: Json
+          decision_type?: string
+          id?: string
+          reasoning?: string | null
+          work_order_id?: string | null
         }
+        Relationships: [
+          {
+            foreignKeyName: "decision_logs_work_order_id_fkey"
+            columns: ["work_order_id"]
+            isOneToOne: false
+            referencedRelation: "work_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      escalations: {
+        Row: {
+          assigned_to: string | null
+          created_at: string
+          escalation_data: Json | null
+          id: string
+          reason: string
+          resolution_notes: string | null
+          resolved_at: string | null
+          status: string
+          updated_at: string
+          work_order_id: string
+        }
+        Insert: {
+          assigned_to?: string | null
+          created_at?: string
+          escalation_data?: Json | null
+          id?: string
+          reason: string
+          resolution_notes?: string | null
+          resolved_at?: string | null
+          status?: string
+          updated_at?: string
+          work_order_id: string
+        }
+        Update: {
+          assigned_to?: string | null
+          created_at?: string
+          escalation_data?: Json | null
+          id?: string
+          reason?: string
+          resolution_notes?: string | null
+          resolved_at?: string | null
+          status?: string
+          updated_at?: string
+          work_order_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "escalations_work_order_id_fkey"
+            columns: ["work_order_id"]
+            isOneToOne: false
+            referencedRelation: "work_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      github_events: {
+        Row: {
+          action: string
+          branch_name: string | null
+          check_name: string | null
+          commit_sha: string | null
+          conclusion: string | null
+          created_at: string | null
+          event_data: Json | null
+          event_type: string
+          id: string
+          pr_number: number | null
+          repository_id: number
+          repository_name: string
+          status: string | null
+          workflow_name: string | null
+        }
+        Insert: {
+          action: string
+          branch_name?: string | null
+          check_name?: string | null
+          commit_sha?: string | null
+          conclusion?: string | null
+          created_at?: string | null
+          event_data?: Json | null
+          event_type: string
+          id?: string
+          pr_number?: number | null
+          repository_id: number
+          repository_name: string
+          status?: string | null
+          workflow_name?: string | null
+        }
+        Update: {
+          action?: string
+          branch_name?: string | null
+          check_name?: string | null
+          commit_sha?: string | null
+          conclusion?: string | null
+          created_at?: string | null
+          event_data?: Json | null
+          event_type?: string
+          id?: string
+          pr_number?: number | null
+          repository_id?: number
+          repository_name?: string
+          status?: string | null
+          workflow_name?: string | null
+        }
+        Relationships: []
+      }
+      outcome_vectors: {
+        Row: {
+          cost: number
+          created_at: string
+          diff_size_lines: number
+          execution_time_ms: number
+          failure_classes: string[] | null
+          id: string
+          metadata: Json | null
+          model_used: string
+          route_reason: string
+          success: boolean
+          test_duration_ms: number | null
+          work_order_id: string
+        }
+        Insert: {
+          cost: number
+          created_at?: string
+          diff_size_lines?: number
+          execution_time_ms: number
+          failure_classes?: string[] | null
+          id?: string
+          metadata?: Json | null
+          model_used: string
+          route_reason: string
+          success: boolean
+          test_duration_ms?: number | null
+          work_order_id: string
+        }
+        Update: {
+          cost?: number
+          created_at?: string
+          diff_size_lines?: number
+          execution_time_ms?: number
+          failure_classes?: string[] | null
+          id?: string
+          metadata?: Json | null
+          model_used?: string
+          route_reason?: string
+          success?: boolean
+          test_duration_ms?: number | null
+          work_order_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "outcome_vectors_work_order_id_fkey"
+            columns: ["work_order_id"]
+            isOneToOne: false
+            referencedRelation: "work_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pattern_confidence_scores: {
+        Row: {
+          confidence_score: number
+          created_at: string
+          failure_count: number
+          id: string
+          last_failure_at: string | null
+          last_success_at: string | null
+          pattern_hash: string
+          success_count: number
+          updated_at: string
+          work_order_type: string
+        }
+        Insert: {
+          confidence_score?: number
+          created_at?: string
+          failure_count?: number
+          id?: string
+          last_failure_at?: string | null
+          last_success_at?: string | null
+          pattern_hash: string
+          success_count?: number
+          updated_at?: string
+          work_order_type: string
+        }
+        Update: {
+          confidence_score?: number
+          created_at?: string
+          failure_count?: number
+          id?: string
+          last_failure_at?: string | null
+          last_success_at?: string | null
+          pattern_hash?: string
+          success_count?: number
+          updated_at?: string
+          work_order_type?: string
+        }
+        Relationships: []
       }
       playbook_memory: {
         Row: {
+          confidence_score: number
+          created_at: string
+          fixes: Json | null
           id: string
+          last_used_at: string | null
           pattern_name: string
           pattern_type: string
           prompts: Json
-          fixes: Json | null
-          confidence_score: number
           success_variations: Json | null
-          usage_count: number
-          last_used_at: string | null
-          created_at: string
           updated_at: string
+          usage_count: number
         }
         Insert: {
+          confidence_score?: number
+          created_at?: string
+          fixes?: Json | null
           id?: string
+          last_used_at?: string | null
           pattern_name: string
           pattern_type: string
           prompts: Json
-          fixes?: Json | null
-          confidence_score?: number
           success_variations?: Json | null
-          usage_count?: number
-          last_used_at?: string | null
-          created_at?: string
           updated_at?: string
+          usage_count?: number
         }
         Update: {
+          confidence_score?: number
+          created_at?: string
+          fixes?: Json | null
           id?: string
+          last_used_at?: string | null
           pattern_name?: string
           pattern_type?: string
           prompts?: Json
-          fixes?: Json | null
-          confidence_score?: number
           success_variations?: Json | null
+          updated_at?: string
           usage_count?: number
-          last_used_at?: string | null
+        }
+        Relationships: []
+      }
+      proposer_configs: {
+        Row: {
+          complexity_threshold: number
+          context_limit: number
+          cost_profile: Json
+          created_at: string
+          endpoint: string
+          id: string
+          is_active: boolean
+          name: string
+          notes: string | null
+          provider: string
+          strengths: string[]
+          success_patterns: Json | null
+          updated_at: string
+        }
+        Insert: {
+          complexity_threshold?: number
+          context_limit?: number
+          cost_profile: Json
           created_at?: string
+          endpoint: string
+          id?: string
+          is_active?: boolean
+          name: string
+          notes?: string | null
+          provider: string
+          strengths?: string[]
+          success_patterns?: Json | null
           updated_at?: string
         }
+        Update: {
+          complexity_threshold?: number
+          context_limit?: number
+          cost_profile?: Json
+          created_at?: string
+          endpoint?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          notes?: string | null
+          provider?: string
+          strengths?: string[]
+          success_patterns?: Json | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      system_status: {
+        Row: {
+          component_name: string
+          created_at: string
+          id: string
+          last_heartbeat: string
+          metadata: Json | null
+          response_time_ms: number
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          component_name: string
+          created_at?: string
+          id?: string
+          last_heartbeat?: string
+          metadata?: Json | null
+          response_time_ms?: number
+          status: string
+          updated_at?: string
+        }
+        Update: {
+          component_name?: string
+          created_at?: string
+          id?: string
+          last_heartbeat?: string
+          metadata?: Json | null
+          response_time_ms?: number
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      work_orders: {
+        Row: {
+          actual_cost: number | null
+          completed_at: string | null
+          created_at: string
+          description: string
+          estimated_cost: number
+          github_branch: string | null
+          github_pr_number: number | null
+          github_pr_url: string | null
+          id: string
+          metadata: Json | null
+          pattern_confidence: number
+          proposer_id: string
+          risk_level: string
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          actual_cost?: number | null
+          completed_at?: string | null
+          created_at?: string
+          description: string
+          estimated_cost?: number
+          github_branch?: string | null
+          github_pr_number?: number | null
+          github_pr_url?: string | null
+          id?: string
+          metadata?: Json | null
+          pattern_confidence?: number
+          proposer_id: string
+          risk_level: string
+          status?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          actual_cost?: number | null
+          completed_at?: string | null
+          created_at?: string
+          description?: string
+          estimated_cost?: number
+          github_branch?: string | null
+          github_pr_number?: number | null
+          github_pr_url?: string | null
+          id?: string
+          metadata?: Json | null
+          pattern_confidence?: number
+          proposer_id?: string
+          risk_level?: string
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "work_orders_proposer_id_fkey"
+            columns: ["proposer_id"]
+            isOneToOne: false
+            referencedRelation: "proposer_configs"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
-      [_ in never]: never
+      dashboard_summary: {
+        Row: {
+          avg_confidence_7d: number | null
+          daily_spend: number | null
+          escalated_work_orders: number | null
+          monthly_spend: number | null
+          open_escalations: number | null
+          pending_work_orders: number | null
+          processing_work_orders: number | null
+        }
+        Relationships: []
+      }
+      github_integration_status: {
+        Row: {
+          events_last_24h: number | null
+          integration_status: string | null
+          last_api_check: string | null
+          last_event_received: string | null
+          prs_last_24h: number | null
+          pushes_last_24h: number | null
+          webhook_status: string | null
+          work_orders_with_prs: number | null
+          workflows_last_24h: number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
-      [_ in never]: never
+      get_work_order_github_events: {
+        Args: { work_order_id_param: string }
+        Returns: {
+          action: string
+          branch_name: string
+          commit_sha: string
+          conclusion: string
+          created_at: string
+          event_id: string
+          event_summary: Json
+          event_type: string
+          pr_number: number
+          status: string
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never
     }
+    CompositeTypes: {
+      [_ in never]: never
+    }
   }
 }
+
+type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
+
+type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
+
+export type Tables<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+      Row: infer R
+    }
+    ? R
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])
+    ? (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
+        Row: infer R
+      }
+      ? R
+      : never
+    : never
+
+export type TablesInsert<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Insert: infer I
+    }
+    ? I
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Insert: infer I
+      }
+      ? I
+      : never
+    : never
+
+export type TablesUpdate<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Update: infer U
+    }
+    ? U
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Update: infer U
+      }
+      ? U
+      : never
+    : never
+
+export type Enums<
+  DefaultSchemaEnumNameOrOptions extends
+    | keyof DefaultSchema["Enums"]
+    | { schema: keyof DatabaseWithoutInternals },
+  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
+    : never = never,
+> = DefaultSchemaEnumNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
+  : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
+    ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
+    : never
+
+export type CompositeTypes<
+  PublicCompositeTypeNameOrOptions extends
+    | keyof DefaultSchema["CompositeTypes"]
+    | { schema: keyof DatabaseWithoutInternals },
+  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
+    : never = never,
+> = PublicCompositeTypeNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
+  : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
+    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
+    : never
+
+export const Constants = {
+  public: {
+    Enums: {},
+  },
+} as const

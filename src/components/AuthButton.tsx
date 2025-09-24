@@ -14,15 +14,15 @@ export default function AuthButton() {
   const supabase = createSupabaseClient()
 
   useEffect(() => {
-    // Get initial user
-    supabase.auth.getUser().then(({ data: { user } }) => {
+    // Get initial user - FIXED: Proper typing for user
+    supabase.auth.getUser().then(({ data: { user } }: { data: { user: User | null } }) => {
       setUser(user)
       setLoading(false)
     })
 
-    // Listen for auth changes
+    // Listen for auth changes - FIXED: Proper typing for event and session
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
+      (event: string, session: any) => {
         setUser(session?.user ?? null)
         setLoading(false)
       }
@@ -31,7 +31,8 @@ export default function AuthButton() {
     return () => subscription.unsubscribe()
   }, [supabase])
 
-  const handleAuth = async (e: React.FormEvent) => {
+  // FIXED: Proper typing for form event
+  const handleAuth = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setAuthLoading(true)
 
@@ -45,8 +46,10 @@ export default function AuthButton() {
       setShowAuthModal(false)
       setEmail('')
       setPassword('')
-    } catch (error: any) {
-      alert(error.message)
+    } catch (error: unknown) {
+      // FIXED: Proper error type handling
+      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred'
+      alert(errorMessage)
     } finally {
       setAuthLoading(false)
     }
@@ -94,7 +97,8 @@ export default function AuthButton() {
                 Sign In to Moose
               </h3>
               
-              <div className="space-y-4">
+              {/* FIXED: Proper form element with onSubmit handler */}
+              <form onSubmit={handleAuth} className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
                   <input 
@@ -127,14 +131,14 @@ export default function AuthButton() {
                     Cancel
                   </button>
                   <button
-                    onClick={handleAuth}
+                    type="submit"
                     disabled={authLoading}
                     className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
                   >
                     {authLoading ? 'Loading...' : 'Sign In'}
                   </button>
                 </div>
-              </div>
+              </form>
             </div>
           </div>
         </div>
