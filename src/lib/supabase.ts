@@ -1,26 +1,32 @@
 // lib/supabase.ts
 // Supabase client configuration for Mission Control Dashboard
 
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
-import { createClient } from '@supabase/supabase-js'
+import { createClient, SupabaseClient } from '@supabase/supabase-js'
 import { Database } from '@/types/supabase'
 
+// Type the client properly for modern versions
+type TypedSupabaseClient = SupabaseClient<Database>
+
 // Client-side Supabase client
-export const createSupabaseClient = () => {
-  return createClientComponentClient<Database>()
+export const createSupabaseClient = (): TypedSupabaseClient => {
+  return createClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
 }
 
-// Simple service client for server operations
-export const createSupabaseServiceClient = () => {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
-  
-  return createClient<Database>(supabaseUrl, supabaseServiceKey, {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false
+// Server-side service client  
+export const createSupabaseServiceClient = (): TypedSupabaseClient => {
+  return createClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      }
     }
-  })
+  )
 }
 
 // Real-time subscription helper
@@ -63,11 +69,7 @@ export const workOrderOperations = {
     const supabase = createSupabaseClient()
     const { data, error } = await supabase
       .from('work_orders')
-      .select(`
-        *,
-        proposer_configs(name, provider),
-        pattern_confidence_scores(confidence_score)
-      `)
+      .select('*')
       .order('created_at', { ascending: false })
       .limit(50)
     
@@ -75,11 +77,11 @@ export const workOrderOperations = {
     return data
   },
 
-  async create(workOrder: Partial<Database['public']['Tables']['work_orders']['Insert']>) {
+  async create(workOrder: Database['public']['Tables']['work_orders']['Insert']) {
     const supabase = createSupabaseClient()
     const { data, error } = await supabase
       .from('work_orders')
-      .insert([workOrder])
+      .insert(workOrder)
       .select()
       .single()
     
@@ -89,13 +91,15 @@ export const workOrderOperations = {
 
   async updateStatus(id: string, status: string, metadata?: any) {
     const supabase = createSupabaseClient()
+    const updateData: Database['public']['Tables']['work_orders']['Update'] = { 
+      status: status,
+      metadata: { ...metadata },
+      updated_at: new Date().toISOString()
+    }
+    
     const { data, error } = await supabase
       .from('work_orders')
-      .update({ 
-        status,
-        metadata: { ...metadata },
-        updated_at: new Date().toISOString()
-      })
+      .update(updateData)
       .eq('id', id)
       .select()
       .single()
@@ -106,15 +110,17 @@ export const workOrderOperations = {
 
   async escalate(id: string, reason: string, escalation_data?: any) {
     const supabase = createSupabaseClient()
+    const escalationData: Database['public']['Tables']['escalations']['Insert'] = {
+      work_order_id: id,
+      reason,
+      escalation_data,
+      status: 'open',
+      created_at: new Date().toISOString()
+    }
+    
     const { data, error } = await supabase
       .from('escalations')
-      .insert([{
-        work_order_id: id,
-        reason,
-        escalation_data,
-        status: 'open',
-        created_at: new Date().toISOString()
-      }])
+      .insert(escalationData)
       .select()
       .single()
     
@@ -141,15 +147,17 @@ export const systemStatusOperations = {
 
   async updateHeartbeat(component: string, status: 'online' | 'offline' | 'degraded', responseTime?: number) {
     const supabase = createSupabaseServiceClient()
+    const upsertData: Database['public']['Tables']['system_status']['Insert'] = {
+      component_name: component,
+      status,
+      last_heartbeat: new Date().toISOString(),
+      response_time_ms: responseTime || 0,
+      metadata: { timestamp: Date.now() }
+    }
+    
     const { data, error } = await supabase
       .from('system_status')
-      .upsert([{
-        component_name: component,
-        status,
-        last_heartbeat: new Date().toISOString(),
-        response_time_ms: responseTime || 0,
-        metadata: { timestamp: Date.now() }
-      }])
+      .upsert(upsertData)
       .select()
       .single()
     
@@ -171,22 +179,24 @@ export const budgetOperations = {
     
     if (error) throw error
     
-    // Calculate totals
-    const monthlySpend = data.reduce((sum, record) => sum + (record.cost || 0), 0)
+    if (!data) return { monthlySpend: 0, dailySpend: 0, costByService: [] }
+    
+    // Calculate totals with proper typing
+    const monthlySpend = data.reduce((sum: number, record) => sum + (record.cost || 0), 0)
     const dailySpend = data
       .filter(record => {
         const recordDate = new Date(record.created_at).toDateString()
         const today = new Date().toDateString()
         return recordDate === today
       })
-      .reduce((sum, record) => sum + (record.cost || 0), 0)
+      .reduce((sum: number, record) => sum + (record.cost || 0), 0)
     
-    // Group by service
-    const costByService = data.reduce((acc, record) => {
+    // Group by service with proper typing
+    const costByService = data.reduce((acc: Record<string, number>, record) => {
       const service = record.service_name || 'unknown'
       acc[service] = (acc[service] || 0) + (record.cost || 0)
       return acc
-    }, {} as Record<string, number>)
+    }, {})
     
     return {
       monthlySpend,
@@ -197,14 +207,16 @@ export const budgetOperations = {
 
   async recordCost(service: string, cost: number, metadata?: any) {
     const supabase = createSupabaseServiceClient()
+    const costData: Database['public']['Tables']['cost_tracking']['Insert'] = {
+      service_name: service,
+      cost,
+      metadata,
+      created_at: new Date().toISOString()
+    }
+    
     const { data, error } = await supabase
       .from('cost_tracking')
-      .insert([{
-        service_name: service,
-        cost,
-        metadata,
-        created_at: new Date().toISOString()
-      }])
+      .insert(costData)
       .select()
       .single()
     
@@ -232,15 +244,15 @@ export const patternOperations = {
     
     if (outcomesError) throw outcomesError
     
-    const totalPatterns = patterns.length
-    const highConfidencePatterns = patterns.filter(p => p.confidence_score > 0.9).length
-    const successRate = outcomes.length > 0 
+    const totalPatterns = patterns?.length || 0
+    const highConfidencePatterns = patterns?.filter(p => p.confidence_score > 0.9).length || 0
+    const successRate = outcomes && outcomes.length > 0 
       ? outcomes.filter(o => o.success).length / outcomes.length 
       : 0
     
     // Calculate learning rate (new patterns per day)
     const last24Hours = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
-    const recentPatterns = patterns.filter(p => p.updated_at > last24Hours).length
+    const recentPatterns = patterns?.filter(p => p.updated_at > last24Hours).length || 0
     
     return {
       totalPatterns,
