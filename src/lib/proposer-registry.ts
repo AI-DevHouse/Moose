@@ -13,9 +13,9 @@ export interface ProposerConfig {
   endpoint: string;
   context_limit: number;
   cost_profile: {
-    input_cost_per_1k_tokens: number;
-    output_cost_per_1k_tokens: number;
-    currency: string;
+    input_cost_per_token: number;
+    output_cost_per_token: number;
+    currency?: string;
   };
   strengths: string[];
   complexity_threshold: number;
@@ -121,26 +121,59 @@ export class ProposerRegistry {
       throw new Error('No active proposers available');
     }
 
-    let selectedProposer = activeProposers[0];
-    let reason = 'Default selection';
+    // Step 1: Filter candidates that can handle this complexity (max_complexity ceiling)
+    const candidates = activeProposers.filter(proposer => {
+      // Treat complexity_threshold as max_complexity ceiling
+      return complexity_score <= proposer.complexity_threshold;
+    });
 
-    for (const proposer of activeProposers) {
-      if (complexity_score >= proposer.complexity_threshold) {
-        selectedProposer = proposer;
-        reason = `Complexity score ${complexity_score} matches threshold ${proposer.complexity_threshold}`;
-        break;
-      }
+    let selectedProposer: ProposerConfig;
+    let reason: string;
+
+    if (candidates.length === 0) {
+      // No proposer can handle this complexity - use highest capability
+      selectedProposer = activeProposers.reduce((max, proposer) => 
+        proposer.complexity_threshold > max.complexity_threshold ? proposer : max
+      );
+      reason = `Complexity ${complexity_score} exceeds all thresholds - using highest capability: ${selectedProposer.name}`;
+    } else if (candidates.length === 1) {
+      // Only one candidate
+      selectedProposer = candidates[0];
+      reason = `Single candidate for complexity ${complexity_score}: ${selectedProposer.name}`;
+    } else {
+      // Step 2: Among candidates, select by lowest cost (simplified - all per-token now)
+      selectedProposer = candidates.reduce((cheapest, candidate) => {
+        const cheapestCost = cheapest.cost_profile.input_cost_per_token;
+        const candidateCost = candidate.cost_profile.input_cost_per_token;
+        return candidateCost < cheapestCost ? candidate : cheapest;
+      });
+      reason = `Complexity ${complexity_score} - selected cheapest among ${candidates.length} candidates: ${selectedProposer.name}`;
     }
+
+    console.log('🎯 FINAL ROUTING FIX: Max-Complexity + Cost Selection:', {
+      complexity_score,
+      all_proposers: activeProposers.map(p => ({ 
+        name: p.name, 
+        max_complexity: p.complexity_threshold,
+        can_handle: complexity_score <= p.complexity_threshold
+      })),
+      candidates: candidates.map(p => p.name),
+      selected: selectedProposer.name,
+      reason,
+      routing_strategy: 'max_complexity_ceiling_with_cost_optimization'
+    });
 
     return {
       selected_proposer: selectedProposer.name,
       reason,
-      confidence: 0.8,
+      confidence: 0.95,
       fallback_proposer: activeProposers.find(p => p.name !== selectedProposer.name)?.name,
       routing_metadata: {
         complexity_score,
         available_proposers: activeProposers.length,
-        selection_timestamp: new Date().toISOString()
+        candidates_count: candidates.length,
+        selection_timestamp: new Date().toISOString(),
+        routing_strategy: 'max_complexity_ceiling_with_cost_optimization'
       }
     };
   }
