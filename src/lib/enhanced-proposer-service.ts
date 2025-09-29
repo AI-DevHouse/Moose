@@ -1,7 +1,9 @@
-// Enhanced Proposer Service - Phase 2.2.3
+// Enhanced Proposer Service - Phase 2.2.3 → 2.2.4
 // Performance monitoring for gpt-4o-mini fallback optimization
+// Integrated with modular ComplexityAnalyzer
 
 import { proposerRegistry, type ProposerConfig, type RoutingDecision } from './proposer-registry';
+import { complexityAnalyzer, type ComplexityAnalysis } from './complexity-analyzer';
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from '@/types/supabase';
 
@@ -56,11 +58,7 @@ export interface EnhancedProposerResponse {
     total: number;
   };
   execution_time_ms: number;
-  complexity_analysis: {
-    score: number;
-    factors: Record<string, number>;
-    reasoning: string;
-  };
+  complexity_analysis: ComplexityAnalysis;
   routing_decision: RoutingDecision;
   performance_metrics: PerformanceMetrics;
   fallback_monitoring?: FallbackMonitoring;
@@ -107,13 +105,21 @@ export class EnhancedProposerService {
     
     await proposerRegistry.initialize();
     
-    // Analyze complexity for initial routing
-    const complexityAnalysis = await this.analyzeComplexity(request);
-    console.log('🔍 DIAGNOSTIC: Complexity Analysis:', {
+    // Use modular complexity analyzer - Phase 2.2.4
+    const complexityAnalysis = await complexityAnalyzer.analyze({
+      task_description: request.task_description,
+      context: request.context,
+      security_context: request.security_context,
+      expected_output_type: request.expected_output_type,
+      priority: request.priority
+    });
+    
+    console.log('🔍 DIAGNOSTIC: Complexity Analysis (2.2.4):', {
       task_description: request.task_description.substring(0, 50) + '...',
       complexity_score: complexityAnalysis.score,
       factors: complexityAnalysis.factors,
-      reasoning: complexityAnalysis.reasoning
+      reasoning: complexityAnalysis.reasoning,
+      metadata: complexityAnalysis.metadata
     });
     
     const routingDecision = await proposerRegistry.routeRequest(
@@ -197,8 +203,8 @@ export class EnhancedProposerService {
           execution_time_ms: attemptExecutionTime
         });
 
-        // Store performance data in database
-        await this.storePerformanceData(request, response, performanceMetrics, isFallback);
+        // Store performance data in database - Phase 2.2.4 enhanced
+        await this.storePerformanceData(request, response, performanceMetrics, complexityAnalysis, isFallback);
 
         const totalExecutionTime = Date.now() - startTime;
 
@@ -259,37 +265,6 @@ export class EnhancedProposerService {
     return routingDecision.selected_proposer;
   }
 
-  private async analyzeComplexity(request: ProposerRequest) {
-    const { task_description, context, security_context, expected_output_type } = request;
-    
-    // Reuse existing complexity analysis logic
-    const codeComplexity = this.assessCodeComplexity(task_description);
-    const contextRequirements = this.assessContextRequirements(context);
-    const securityImplications = this.assessSecurityImplications(security_context, task_description);
-    const architecturalImpact = this.assessArchitecturalImpact(task_description, expected_output_type);
-    const reasoningDepth = this.assessReasoningDepth(task_description, expected_output_type);
-
-    const factors = {
-      codeComplexity,
-      contextRequirements,
-      securityImplications,
-      architecturalImpact,
-      reasoningDepth
-    };
-
-    const score = (
-      codeComplexity * 0.25 +
-      contextRequirements * 0.15 +
-      securityImplications * 0.20 +
-      architecturalImpact * 0.25 +
-      reasoningDepth * 0.15
-    );
-
-    const reasoning = this.generateComplexityReasoning(factors, score);
-
-    return { score, factors, reasoning };
-  }
-
   private calculatePerformanceMetrics(
     response: any,
     executionTime: number,
@@ -340,6 +315,7 @@ export class EnhancedProposerService {
     request: ProposerRequest,
     response: any,
     metrics: PerformanceMetrics,
+    complexityAnalysis: ComplexityAnalysis,
     isFallback: boolean
   ): Promise<void> {
     try {
@@ -353,7 +329,10 @@ export class EnhancedProposerService {
           fallback_used: isFallback,
           retry_count: metrics.retry_count,
           task_type: request.expected_output_type,
-          complexity_score: response.complexity_analysis?.score || 0
+          complexity_score: complexityAnalysis.score,
+          complexity_factors: complexityAnalysis.factors, // Phase 2.2.4
+          complexity_metadata: complexityAnalysis.metadata, // Phase 2.2.4
+          routing_accuracy: metrics.routing_accuracy
         }
       });
     } catch (error) {
@@ -376,6 +355,7 @@ export class EnhancedProposerService {
       fallback_efficiency: number;
       routing_accuracy: number;
     };
+    routing_accuracy_by_complexity?: any; // Phase 2.2.4
   }> {
     const proposerPerformance: Record<string, any> = {};
     
@@ -391,6 +371,9 @@ export class EnhancedProposerService {
       };
     }
 
+    // Get routing accuracy analysis from complexity analyzer - Phase 2.2.4
+    const routingAccuracy = await complexityAnalyzer.getRoutingAccuracyByComplexity();
+
     return {
       proposer_performance: proposerPerformance,
       fallback_monitoring: this.fallbackStats,
@@ -398,77 +381,9 @@ export class EnhancedProposerService {
         total_savings: this.fallbackStats.cost_savings,
         fallback_efficiency: this.fallbackStats.fallback_success_rate,
         routing_accuracy: this.fallbackStats.routing_efficiency
-      }
+      },
+      routing_accuracy_by_complexity: routingAccuracy
     };
-  }
-
-  // Reuse existing complexity assessment methods from original service
-  private assessCodeComplexity(description: string): number {
-    const complexityIndicators = [
-      /\b(refactor|architecture|design pattern|algorithm|optimization)\b/i,
-      /\b(async|concurrent|parallel|threading|performance)\b/i,
-      /\b(integration|api|database|schema|migration)\b/i,
-      /\b(complex|sophisticated|advanced|enterprise)\b/i,
-      /\b(multi-step|workflow|orchestration|pipeline)\b/i
-    ];
-
-    let score = 0.1;
-    complexityIndicators.forEach(pattern => {
-      if (pattern.test(description)) score += 0.18;
-    });
-
-    return Math.min(score, 1.0);
-  }
-
-  private assessContextRequirements(context: string[]): number {
-    const contextSize = context.join(' ').length;
-    if (contextSize > 10000) return 0.9;
-    if (contextSize > 5000) return 0.7;
-    if (contextSize > 2000) return 0.5;
-    if (contextSize > 500) return 0.3;
-    return 0.1;
-  }
-
-  private assessSecurityImplications(security_context: string | undefined, description: string): number {
-    if (security_context === 'high') return 0.9;
-    if (security_context === 'medium') return 0.6;
-    
-    const securityKeywords = /\b(auth|security|encryption|permission|validate|sanitize|vulnerability)\b/i;
-    return securityKeywords.test(description) ? 0.7 : 0.2;
-  }
-
-  private assessArchitecturalImpact(description: string, outputType: string): number {
-    const architecturalKeywords = /\b(architecture|system|infrastructure|scalability|maintainability)\b/i;
-    
-    if (outputType === 'planning' && architecturalKeywords.test(description)) return 0.8;
-    if (outputType === 'analysis' && architecturalKeywords.test(description)) return 0.7;
-    if (architecturalKeywords.test(description)) return 0.6;
-    
-    return 0.2;
-  }
-
-  private assessReasoningDepth(description: string, outputType: string): number {
-    const reasoningKeywords = /\b(analyze|evaluate|compare|assess|strategy|decision|trade-off)\b/i;
-    
-    if (outputType === 'analysis') return 0.8;
-    if (outputType === 'planning') return 0.7;
-    if (reasoningKeywords.test(description)) return 0.6;
-    
-    return 0.3;
-  }
-
-  private generateComplexityReasoning(factors: Record<string, number>, score: number): string {
-    const highFactors = Object.entries(factors)
-      .filter(([_, value]) => value > 0.6)
-      .map(([key, _]) => key);
-
-    if (score > 0.7) {
-      return `High complexity (${score.toFixed(2)}) due to: ${highFactors.join(', ')}. Requires Claude Sonnet 4.`;
-    } else if (score > 0.4) {
-      return `Medium complexity (${score.toFixed(2)}). Factors: ${highFactors.join(', ') || 'moderate requirements'}.`;
-    } else {
-      return `Low complexity (${score.toFixed(2)}). Suitable for gpt-4o-mini optimization.`;
-    }
   }
 
   private async executeWithProposer(
