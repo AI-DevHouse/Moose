@@ -94,7 +94,7 @@ export async function PUT(request: NextRequest) {
           output_cost_per_token: 0.60  // $0.60 per 1M tokens
         },
         strengths: ["fast-execution", "simple-tasks", "cost-effective"],
-        complexity_threshold: 0.8,
+        complexity_threshold: 0.3,
         notes: "Cost-optimized fallback (44x cheaper than reasoning models)",
         is_active: true
       };
@@ -124,3 +124,4 @@ export async function PUT(request: NextRequest) {
     );
   }
 }
+
