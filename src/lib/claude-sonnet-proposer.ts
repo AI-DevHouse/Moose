@@ -230,8 +230,8 @@ export class ClaudeSonnetProposer {
     const outputTokens = data.usage.output_tokens;
     
     const cost = (
-      (inputTokens / 1000) * proposer.cost_profile.input_cost_per_1k_tokens +
-      (outputTokens / 1000) * proposer.cost_profile.output_cost_per_1k_tokens
+      (inputTokens / 1000) * proposer.cost_profile.input_cost_per_token +
+      (outputTokens / 1000) * proposer.cost_profile.output_cost_per_token
     );
 
     return {
@@ -279,8 +279,8 @@ export class ClaudeSonnetProposer {
     const outputTokens = data.usage.completion_tokens;
     
     const cost = (
-      (inputTokens / 1000) * proposer.cost_profile.input_cost_per_1k_tokens +
-      (outputTokens / 1000) * proposer.cost_profile.output_cost_per_1k_tokens
+      (inputTokens / 1000) * proposer.cost_profile.input_cost_per_token +
+      (outputTokens / 1000) * proposer.cost_profile.output_cost_per_token
     );
 
     return {

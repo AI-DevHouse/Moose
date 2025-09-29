@@ -1,4 +1,4 @@
-﻿export type Json =
+export type Json =
   | string
   | number
   | boolean
@@ -398,6 +398,39 @@ export type Database = {
         }
         Relationships: []
       }
+      system_config: {
+        Row: {
+          config_key: string
+          config_type: string
+          config_value: Json
+          created_at: string | null
+          description: string | null
+          id: string
+          updated_at: string | null
+          updated_by: string | null
+        }
+        Insert: {
+          config_key: string
+          config_type: string
+          config_value: Json
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          updated_at?: string | null
+          updated_by?: string | null
+        }
+        Update: {
+          config_key?: string
+          config_type?: string
+          config_value?: Json
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          updated_at?: string | null
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       system_status: {
         Row: {
           component_name: string
@@ -668,8 +701,16 @@ export type CompositeTypes<
     ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
     : never
 
+
+// Type aliases for convenient imports
+export type ProposerConfig = Tables<'proposer_configs'>
+export type Contract = Tables<'contracts'>
+export type WorkOrder = Tables<'work_orders'>
+export type GitHubEvent = Tables<'github_events'>
+export type Escalation = Tables<'escalations'>
 export const Constants = {
   public: {
     Enums: {},
   },
 } as const
+

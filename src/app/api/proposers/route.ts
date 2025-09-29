@@ -90,8 +90,8 @@ export async function PUT(request: NextRequest) {
         endpoint: "https://api.openai.com/v1/chat/completions",
         context_limit: 128000,
         cost_profile: {
-          input_cost_per_1k_tokens: 0.15,  // $0.15 per 1M tokens
-          output_cost_per_1k_tokens: 0.60  // $0.60 per 1M tokens
+          input_cost_per_token: 0.15,  // $0.15 per 1M tokens
+          output_cost_per_token: 0.60  // $0.60 per 1M tokens
         },
         strengths: ["fast-execution", "simple-tasks", "cost-effective"],
         complexity_threshold: 0.8,
