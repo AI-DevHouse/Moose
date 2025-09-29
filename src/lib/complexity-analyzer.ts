@@ -40,6 +40,7 @@ export interface ComplexityAnalysis {
     risk_indicators: string[];
     confidence: number;
   };
+  hard_stop_required?: boolean;
 }
 
 export interface AnalyzerRequest {
@@ -71,6 +72,33 @@ export class ComplexityAnalyzer {
   };
 
   private readonly USABLE_CONTEXT_RATIO = 0.80; // 20% safety margin
+  // Hard Stop Keywords - Force claude-sonnet-4 regardless of complexity
+  private readonly HARD_STOP_KEYWORDS = {
+    security: [
+      'authentication',
+      'authorization',
+      'sql injection',
+      'xss',
+      'csrf',
+      'encryption',
+      'security vulnerability',
+      'password',
+      'token validation',
+      'api key',
+      'credential',
+      'security flaw'
+    ],
+    architecture: [
+      'system design',
+      'architecture decision',
+      'api contract',
+      'database schema',
+      'breaking change',
+      'backwards compatibility',
+      'migration strategy',
+      'schema change'
+    ]
+  };
 
   static getInstance(): ComplexityAnalyzer {
     if (!ComplexityAnalyzer.instance) {
@@ -78,19 +106,53 @@ export class ComplexityAnalyzer {
     }
     return ComplexityAnalyzer.instance;
   }
+  private detectHardStop(
+    task_description: string,
+    context: string[],
+    security_context?: 'high' | 'medium' | 'low'
+  ): boolean {
+    // Force Hard Stop for high security context
+    if (security_context === 'high') {
+      return true;
+    }
+
+    // Check task description and context for Hard Stop keywords
+    const searchText = `${task_description} ${context.join(' ')}`.toLowerCase();
+
+    // Check security keywords
+    for (const keyword of this.HARD_STOP_KEYWORDS.security) {
+      if (searchText.includes(keyword.toLowerCase())) {
+        return true;
+      }
+    }
+
+    // Check architecture keywords
+    for (const keyword of this.HARD_STOP_KEYWORDS.architecture) {
+      if (searchText.includes(keyword.toLowerCase())) {
+        return true;
+      }
+    }
+
+    return false;
+  }
 
   async analyze(request: AnalyzerRequest): Promise<ComplexityAnalysis> {
     const factors = await this.calculateFactors(request);
     const score = this.calculateWeightedScore(factors);
     const reasoning = this.generateReasoning(factors, score);
     const metadata = this.generateMetadata(request, factors);
-
+    const hard_stop_required = this.detectHardStop(
+      request.task_description,
+      request.context,
+      request.security_context
+    );
     return {
       score,
       factors,
       weights: { ...this.weights },
       reasoning,
-      metadata
+      metadata,
+      hard_stop_required
     };
   }
 

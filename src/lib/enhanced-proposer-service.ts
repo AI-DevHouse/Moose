@@ -125,7 +125,8 @@ export class EnhancedProposerService {
     const routingDecision = await proposerRegistry.routeRequest(
       request.task_description,
       complexityAnalysis.score,
-      request.context
+      request.context,
+      complexityAnalysis.hard_stop_required || false
     );
     
     console.log('🔍 DIAGNOSTIC: Routing Decision:', {
