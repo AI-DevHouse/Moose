@@ -1,9 +1,10 @@
-// Enhanced Proposer Service - Phase 2.2.3 → 2.2.4
+// Enhanced Proposer Service - Phase 2.2.3 → 2.2.6
 // Performance monitoring for gpt-4o-mini fallback optimization
 // Integrated with modular ComplexityAnalyzer
+// Phase 2.2.6: Self-refinement with TypeScript error detection
 
 import { proposerRegistry, type ProposerConfig, type RoutingDecision } from './proposer-registry';
-import { complexityAnalyzer, type ComplexityAnalysis } from './complexity-analyzer';
+import { complexityAnalyzer, type ComplexityAnalysis, parseTypeScriptErrors, type TypeScriptError } from './complexity-analyzer';
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from '@/types/supabase';
 
@@ -15,7 +16,7 @@ const supabase = createClient<Database>(
 export interface PerformanceMetrics {
   execution_time_ms: number;
   cost: number;
-  token_efficiency: number; // tokens per second
+  token_efficiency: number;
   success_rate: number;
   retry_count: number;
   fallback_used: boolean;
@@ -62,6 +63,13 @@ export interface EnhancedProposerResponse {
   routing_decision: RoutingDecision;
   performance_metrics: PerformanceMetrics;
   fallback_monitoring?: FallbackMonitoring;
+  refinement_metadata?: {
+    refinement_count: number;
+    initial_errors: number;
+    final_errors: number;
+    refinement_success: boolean;
+    error_details: TypeScriptError[];
+  };
   retry_history?: Array<{
     attempt: number;
     proposer: string;
@@ -91,6 +99,156 @@ export class EnhancedProposerService {
     return EnhancedProposerService.instance;
   }
 
+  private async attemptSelfRefinement(
+    originalContent: string,
+    request: ProposerRequest,
+    proposer: ProposerConfig,
+    maxAttempts: number = 1
+  ): Promise<{
+    content: string;
+    refinement_count: number;
+    initial_errors: number;
+    final_errors: number;
+    refinement_success: boolean;
+    error_details: TypeScriptError[];
+  }> {
+    let currentContent = originalContent;
+    let refinementCount = 0;
+    let initialErrorCount = 0;
+    let currentErrors: TypeScriptError[] = [];
+
+    const initialErrors = await this.checkTypeScriptErrors(currentContent);
+    initialErrorCount = initialErrors.length;
+    currentErrors = initialErrors;
+
+    console.log('🔍 SELF-REFINEMENT: Initial TS check found', initialErrorCount, 'errors');
+
+    if (initialErrorCount === 0) {
+      return {
+        content: currentContent,
+        refinement_count: 0,
+        initial_errors: 0,
+        final_errors: 0,
+        refinement_success: true,
+        error_details: []
+      };
+    }
+
+    while (refinementCount < maxAttempts && currentErrors.length > 0) {
+      refinementCount++;
+      
+      console.log(`🔧 SELF-REFINEMENT: Attempt ${refinementCount}/${maxAttempts}`);
+      console.log('   Errors to fix:', currentErrors.map(e => `${e.code}: ${e.message}`).join('; '));
+
+      const refinementPrompt = this.buildRefinementPrompt(request, currentContent, currentErrors);
+
+      const refinedResponse = await this.executeWithProposerDirect(
+        { ...request, task_description: refinementPrompt },
+        proposer
+      );
+
+      currentContent = refinedResponse.content;
+
+      const newErrors = await this.checkTypeScriptErrors(currentContent);
+      
+      console.log(`   Result: ${currentErrors.length} → ${newErrors.length} errors`);
+
+      currentErrors = newErrors;
+    }
+
+    const refinementSuccess = currentErrors.length < initialErrorCount;
+
+    return {
+      content: currentContent,
+      refinement_count: refinementCount,
+      initial_errors: initialErrorCount,
+      final_errors: currentErrors.length,
+      refinement_success: refinementSuccess,
+      error_details: currentErrors
+    };
+  }
+
+  private async checkTypeScriptErrors(code: string): Promise<TypeScriptError[]> {
+    const fs = require('fs');
+    const path = require('path');
+    const { execSync } = require('child_process');
+
+    const tempDir = path.join(process.cwd(), '.temp-refinement');
+    if (!fs.existsSync(tempDir)) {
+      fs.mkdirSync(tempDir, { recursive: true });
+    }
+
+    const tempFile = path.join(tempDir, `check-${Date.now()}.ts`);
+    
+    try {
+      fs.writeFileSync(tempFile, code, 'utf8');
+
+      execSync(`npx tsc --noEmit ${tempFile}`, {
+        cwd: process.cwd(),
+        encoding: 'utf8',
+        stdio: 'pipe'
+      });
+
+      return [];
+
+    } catch (error: any) {
+      const stderr = error.stderr || error.stdout || '';
+      const errors = parseTypeScriptErrors(stderr);
+      return errors;
+
+    } finally {
+      try {
+        if (fs.existsSync(tempFile)) {
+          fs.unlinkSync(tempFile);
+        }
+      } catch (cleanupError) {
+        console.error('Failed to cleanup temp file:', cleanupError);
+      }
+    }
+  }
+
+  private buildRefinementPrompt(
+    request: ProposerRequest,
+    previousCode: string,
+    errors: TypeScriptError[]
+  ): string {
+    const errorSummary = errors.map(e => 
+      `- Line ${e.line}, Column ${e.column}: ${e.code} - ${e.message}`
+    ).join('\n');
+
+    return `${request.task_description}
+
+PREVIOUS ATTEMPT HAD TYPESCRIPT ERRORS:
+${errorSummary}
+
+PREVIOUS CODE:
+\`\`\`typescript
+${previousCode}
+\`\`\`
+
+Please fix these TypeScript errors and provide corrected code. Ensure:
+1. All imports are present
+2. All types are correctly defined
+3. All variables are declared before use
+4. Function signatures have proper type annotations
+5. No syntax errors
+
+Provide only the corrected code without explanation.`;
+  }
+
+  private async executeWithProposerDirect(
+    request: ProposerRequest, 
+    proposer: ProposerConfig
+  ): Promise<any> {
+    if (proposer.provider === 'anthropic') {
+      return this.executeWithClaude(request, proposer);
+    } else if (proposer.provider === 'openai') {
+      return this.executeWithOpenAI(request, proposer);
+    } else {
+      throw new Error(`Unsupported provider: ${proposer.provider}`);
+    }
+  }
+
   async executeWithMonitoring(request: ProposerRequest): Promise<EnhancedProposerResponse> {
     const startTime = Date.now();
     const retryConfig = request.retry_config || {
@@ -105,7 +263,6 @@ export class EnhancedProposerService {
     
     await proposerRegistry.initialize();
     
-    // Use modular complexity analyzer - Phase 2.2.4
     const complexityAnalysis = await complexityAnalyzer.analyze({
       task_description: request.task_description,
       context: request.context,
@@ -140,10 +297,9 @@ export class EnhancedProposerService {
     this.fallbackStats.total_requests++;
 
     for (let attempt = 0; attempt <= retryConfig.max_retries; attempt++) {
+      const attemptStartTime = Date.now();
+      
       try {
-        const attemptStartTime = Date.now();
-        
-        // Determine proposer for this attempt
         const proposerName = this.selectProposerForAttempt(
           attempt, 
           routingDecision, 
@@ -155,7 +311,6 @@ export class EnhancedProposerService {
           throw new Error(`Proposer ${proposerName} not found`);
         }
 
-        // Track if this is a fallback request
         const isFallback = proposerName !== routingDecision.selected_proposer;
         if (isFallback) {
           this.fallbackStats.fallback_requests++;
@@ -169,8 +324,29 @@ export class EnhancedProposerService {
           attempt_number: attempt + 1
         });
 
-        // Execute request
-        const response = await this.executeWithProposer(request, proposerConfig);
+        let response = await this.executeWithProposer(request, proposerConfig);
+        
+        let refinementMetadata = undefined;
+        if (response.success && response.content && request.expected_output_type === 'code') {
+          const refinementResult = await this.attemptSelfRefinement(
+            response.content,
+            request,
+            proposerConfig,
+            1
+          );
+          
+          response.content = refinementResult.content;
+          
+          refinementMetadata = {
+            refinement_count: refinementResult.refinement_count,
+            initial_errors: refinementResult.initial_errors,
+            final_errors: refinementResult.final_errors,
+            refinement_success: refinementResult.refinement_success,
+            error_details: refinementResult.error_details
+          };
+
+          console.log('🔍 SELF-REFINEMENT: Complete', refinementMetadata);
+        }
         
         console.log('🔍 DIAGNOSTIC: API Response:', {
           proposer_used: response.proposer_used,
@@ -179,9 +355,9 @@ export class EnhancedProposerService {
           token_usage: response.token_usage,
           content_length: response.content?.length || 0
         });
+        
         const attemptExecutionTime = Date.now() - attemptStartTime;
 
-        // Calculate performance metrics
         const performanceMetrics = this.calculatePerformanceMetrics(
           response,
           attemptExecutionTime,
@@ -189,13 +365,10 @@ export class EnhancedProposerService {
           isFallback
         );
 
-        // Update performance history
         this.updatePerformanceHistory(proposerName, performanceMetrics);
 
-        // Update fallback monitoring
         const fallbackMonitoring = this.updateFallbackMonitoring(isFallback, true);
 
-        // Record successful attempt
         retryHistory.push({
           attempt: attempt + 1,
           proposer: proposerName,
@@ -204,7 +377,6 @@ export class EnhancedProposerService {
           execution_time_ms: attemptExecutionTime
         });
 
-        // Store performance data in database - Phase 2.2.4 enhanced
         await this.storePerformanceData(request, response, performanceMetrics, complexityAnalysis, isFallback);
 
         const totalExecutionTime = Date.now() - startTime;
@@ -216,6 +388,7 @@ export class EnhancedProposerService {
           routing_decision: routingDecision,
           performance_metrics: performanceMetrics,
           fallback_monitoring: fallbackMonitoring,
+          refinement_metadata: refinementMetadata,
           retry_history: retryHistory
         };
 
@@ -232,18 +405,14 @@ export class EnhancedProposerService {
           execution_time_ms: attemptExecutionTime
         });
 
-        // Update fallback monitoring for failure
         this.updateFallbackMonitoring(false, false);
 
-        // If this is the last attempt, break
         if (attempt === retryConfig.max_retries) break;
 
-        // Wait before retry
         await new Promise(resolve => setTimeout(resolve, retryConfig.retry_delay_ms));
       }
     }
 
-    // All retries failed
     throw new Error(`All retry attempts failed. Last error: ${lastError?.message}`);
   }
 
@@ -256,7 +425,6 @@ export class EnhancedProposerService {
       return routingDecision.selected_proposer;
     }
 
-    // Use fallback after escalation threshold
     if (attempt >= retryConfig.escalation_threshold && 
         retryConfig.fallback_on_failure && 
         routingDecision.fallback_proposer) {
@@ -272,16 +440,16 @@ export class EnhancedProposerService {
     retryCount: number,
     fallbackUsed: boolean
   ): PerformanceMetrics {
-    const tokenEfficiency = response.token_usage.total / (executionTime / 1000); // tokens per second
+    const tokenEfficiency = response.token_usage.total / (executionTime / 1000);
     
     return {
       execution_time_ms: executionTime,
       cost: response.cost,
       token_efficiency: tokenEfficiency,
-      success_rate: 1.0, // This execution succeeded
+      success_rate: 1.0,
       retry_count: retryCount,
       fallback_used: fallbackUsed,
-      routing_accuracy: fallbackUsed ? 0.7 : 1.0 // Lower if fallback was needed
+      routing_accuracy: fallbackUsed ? 0.7 : 1.0
     };
   }
 
@@ -293,7 +461,6 @@ export class EnhancedProposerService {
     const history = this.performanceHistory.get(proposerName)!;
     history.push(metrics);
     
-    // Keep only last 100 entries
     if (history.length > 100) {
       history.shift();
     }
@@ -331,14 +498,13 @@ export class EnhancedProposerService {
           retry_count: metrics.retry_count,
           task_type: request.expected_output_type,
           complexity_score: complexityAnalysis.score,
-          complexity_factors: complexityAnalysis.factors, // Phase 2.2.4
-          complexity_metadata: complexityAnalysis.metadata, // Phase 2.2.4
+          complexity_factors: complexityAnalysis.factors,
+          complexity_metadata: complexityAnalysis.metadata,
           routing_accuracy: metrics.routing_accuracy
         }
       });
     } catch (error) {
       console.error('Failed to store performance data:', error);
-      // Don't throw - this is monitoring, not critical path
     }
   }
 
@@ -356,7 +522,7 @@ export class EnhancedProposerService {
       fallback_efficiency: number;
       routing_accuracy: number;
     };
-    routing_accuracy_by_complexity?: any; // Phase 2.2.4
+    routing_accuracy_by_complexity?: any;
   }> {
     const proposerPerformance: Record<string, any> = {};
     
@@ -372,7 +538,6 @@ export class EnhancedProposerService {
       };
     }
 
-    // Get routing accuracy analysis from complexity analyzer - Phase 2.2.4
     const routingAccuracy = await complexityAnalyzer.getRoutingAccuracyByComplexity();
 
     return {
@@ -506,3 +671,4 @@ Provide a concise, practical response for ${request.expected_output_type}.`;
 }
 
 export const enhancedProposerService = EnhancedProposerService.getInstance();
+

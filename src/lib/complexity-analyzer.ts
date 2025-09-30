@@ -475,4 +475,39 @@ export class ComplexityAnalyzer {
   }
 }
 
+
+// ========== TYPESCRIPT ERROR PARSING (Phase 2.2.6) ==========
+
+export interface TypeScriptError {
+  file: string;
+  line: number;
+  column: number;
+  code: string;
+  message: string;
+  fullText: string;
+}
+
+export function parseTypeScriptErrors(tscOutput: string): TypeScriptError[] {
+  const errors: TypeScriptError[] = [];
+  
+  // TypeScript compiler format: file.ts(line,col): error TS#### message
+  // Example: src/test.ts(10,5): error TS2304: Cannot find name 'undefinedVar'.
+  const errorPattern = /^(.+?)\((\d+),(\d+)\):\s+error\s+(TS\d+):\s+(.+)$/gm;
+  
+  let match;
+  while ((match = errorPattern.exec(tscOutput)) !== null) {
+    errors.push({
+      file: match[1].trim(),
+      line: parseInt(match[2], 10),
+      column: parseInt(match[3], 10),
+      code: match[4],
+      message: match[5].trim(),
+      fullText: match[0]
+    });
+  }
+  
+  return errors;
+}
+
 export const complexityAnalyzer = ComplexityAnalyzer.getInstance();
+
