@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
             'anthropic-version': '2023-06-01'
           },
           body: JSON.stringify({
-            model: 'claude-sonnet-4-20250514',
+            model: 'claude-sonnet-4-5-20250929',
             max_tokens: 10,
             messages: [{ role: 'user', content: 'Test' }]
           })
@@ -72,7 +72,7 @@ export async function GET(request: NextRequest) {
         anthropic: {
           configured: anthropicKey ? `${anthropicKey.substring(0, 15)}...` : 'NOT_SET',
           status: anthropicStatus,
-          modelUsed: 'claude-sonnet-4-20250514'
+          modelUsed: 'claude-sonnet-4-5-20250929'
         },
         openai: {
           configured: openaiKey ? `${openaiKey.substring(0, 12)}...` : 'NOT_SET',

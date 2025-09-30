@@ -338,7 +338,7 @@ Analyze the contracts and code changes for breaking changes.`;
       providers: {
         anthropic: { 
           configured: !!this.anthropicApiKey,
-          model: 'claude-sonnet-4-20250514'
+          model: 'claude-sonnet-4-5-20250929'
         },
         openai: {
           configured: !!this.openaiApiKey,
@@ -389,7 +389,7 @@ Analyze the contracts and code changes for breaking changes.`;
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
+        model: 'claude-sonnet-4-5-20250929',
         max_tokens: request.maxTokens || 4000,
         temperature: request.temperature || 0.3,
         system: systemMessage?.content || '',
@@ -540,7 +540,7 @@ Analyze the contracts and code changes for breaking changes.`;
   private async getPrimaryProposer(): Promise<ProposerConfig> {
     return {
       id: "a40c5caf-b0fb-4a8b-a544-ca82bb2ab939",
-      name: "claude-sonnet-4-20250514",
+      name: "claude-sonnet-4-5-20250929",
       provider: "anthropic",
       endpoint: "https://api.anthropic.com/v1/messages",
       context_limit: 200000,

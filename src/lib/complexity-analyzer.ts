@@ -67,12 +67,12 @@ export class ComplexityAnalyzer {
 
   // Context window limits for memory pressure calculation
   private readonly CONTEXT_LIMITS = {
-    'claude-sonnet-4': 200000,
+    'claude-sonnet-4-5': 200000,
     'gpt-4o-mini': 128000
   };
 
   private readonly USABLE_CONTEXT_RATIO = 0.80; // 20% safety margin
-  // Hard Stop Keywords - Force claude-sonnet-4 regardless of complexity
+  // Hard Stop Keywords - Force claude-sonnet-4-5 regardless of complexity
   private readonly HARD_STOP_KEYWORDS = {
     security: [
       'authentication',
@@ -452,9 +452,9 @@ export class ComplexityAnalyzer {
   }
 
   private wasRoutingCorrect(complexity: number, proposer: string, fallback: boolean): boolean {
-    // Simple heuristic: low complexity should use gpt-4o-mini, high should use claude-sonnet-4
+    // Simple heuristic: low complexity should use gpt-4o-mini, high should use claude-sonnet-4-5
     if (complexity < 0.3 && proposer === 'gpt-4o-mini' && !fallback) return true;
-    if (complexity >= 0.3 && proposer === 'claude-sonnet-4') return true;
+    if (complexity >= 0.3 && proposer === 'claude-sonnet-4-5') return true;
     return false;
   }
 

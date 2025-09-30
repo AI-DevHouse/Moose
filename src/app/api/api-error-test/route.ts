@@ -29,7 +29,7 @@ export async function GET() {
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
+        model: 'claude-sonnet-4-5-20250929',
         max_tokens: 100,
         temperature: 0.1,
         messages: [

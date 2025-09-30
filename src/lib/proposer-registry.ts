@@ -142,7 +142,7 @@ export class ProposerRegistry {
     
     // Hard Stop: Force claude-sonnet-4 for security/architecture (if budget allows)
     if (hard_stop_required && dailyTotal < budgetLimits.daily_hard_cap) {
-      const claudeSonnet = activeProposers.find(p => p.name === 'claude-sonnet-4');
+      const claudeSonnet = activeProposers.find(p => p.name === 'claude-sonnet-4-5');
       if (claudeSonnet) {
         return {
           selected_proposer: claudeSonnet.name,

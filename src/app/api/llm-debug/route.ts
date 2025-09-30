@@ -39,7 +39,7 @@ export async function GET() {
       // Create a mock proposer for debugging
       const proposer = {
         id: "debug",
-        name: "claude-sonnet-4",
+        name: "claude-sonnet-4-5",
         provider: "anthropic" as const,
         endpoint: "https://api.anthropic.com/v1/messages",
         context_limit: 200000,
