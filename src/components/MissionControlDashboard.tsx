@@ -18,6 +18,7 @@ import {
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 import { dashboardApi } from '@/lib/dashboard-api';
 import AuthButton from '@/components/AuthButton';
+import { TechnicalSpec, DecompositionOutput } from '@/types/architect';
 
 // Types for Moose system data
 interface WorkOrder {
@@ -174,6 +175,7 @@ disconnect() {
 }
 
 export default function MissionControlDashboard() {
+  const [activeTab, setActiveTab] = useState('dashboard');
   const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
   const [systemStatus, setSystemStatus] = useState<SystemStatus[]>([]);
   const [budgetData, setBudgetData] = useState<BudgetData | null>(null);
@@ -188,6 +190,11 @@ export default function MissionControlDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [wsConnected, setWsConnected] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+
+  // Upload Spec tab state
+  const [specInput, setSpecInput] = useState('');
+  const [decomposition, setDecomposition] = useState<DecompositionOutput | null>(null);
+  const [decomposing, setDecomposing] = useState(false);
 
   const wsClient = useRef<SimpleWebSocketClient | null>(null);
 
@@ -345,25 +352,25 @@ export default function MissionControlDashboard() {
 
     try {
       const success = await dashboardApi.resolveEscalation(
-        selectedEscalation.id, 
+        selectedEscalation.id,
         escalationResolution.resolution
       );
-      
+
       if (success) {
         // Update escalations list
-        setEscalations(prev => prev.map(esc => 
-          esc.id === selectedEscalation.id 
+        setEscalations(prev => prev.map(esc =>
+          esc.id === selectedEscalation.id
             ? { ...esc, status: 'resolved' as const, resolution_notes: escalationResolution.resolution }
             : esc
         ));
-        
+
         // Update work order status if needed
-        setWorkOrders(prev => prev.map(wo => 
-          wo.id === selectedEscalation.work_order_id 
+        setWorkOrders(prev => prev.map(wo =>
+          wo.id === selectedEscalation.work_order_id
             ? { ...wo, status: 'processing' as const }
             : wo
         ));
-        
+
         setShowEscalationModal(false);
         setSelectedEscalation(null);
         setEscalationResolution({ resolution: '', assignedTo: '' });
@@ -373,6 +380,60 @@ export default function MissionControlDashboard() {
     } catch (err) {
       console.error('Error resolving escalation:', err);
       alert('Failed to resolve escalation');
+    }
+  };
+
+  // Handle spec decomposition
+  const handleDecomposeSpec = async () => {
+    if (!specInput.trim()) {
+      alert('Please provide a technical specification');
+      return;
+    }
+
+    // Parse spec input (expecting markdown format)
+    const lines = specInput.trim().split('\n');
+    const spec: TechnicalSpec = {
+      feature_name: lines[0]?.replace(/^#\s*/, '') || 'Untitled Feature',
+      objectives: [],
+      constraints: [],
+      acceptance_criteria: []
+    };
+
+    // Simple parser - look for sections
+    let currentSection = '';
+    for (const line of lines.slice(1)) {
+      if (line.toLowerCase().includes('objective')) currentSection = 'objectives';
+      else if (line.toLowerCase().includes('constraint')) currentSection = 'constraints';
+      else if (line.toLowerCase().includes('acceptance')) currentSection = 'acceptance_criteria';
+      else if (line.startsWith('-') || line.startsWith('*')) {
+        const item = line.replace(/^[-*]\s*/, '').trim();
+        if (item && currentSection) {
+          spec[currentSection as keyof Pick<TechnicalSpec, 'objectives' | 'constraints' | 'acceptance_criteria'>].push(item);
+        }
+      }
+    }
+
+    setDecomposing(true);
+    setError(null);
+
+    try {
+      const response = await fetch('/api/architect/decompose', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(spec)
+      });
+
+      if (!response.ok) {
+        throw new Error(`Decomposition failed: ${response.statusText}`);
+      }
+
+      const result: DecompositionOutput = await response.json();
+      setDecomposition(result);
+    } catch (err) {
+      console.error('Decomposition error:', err);
+      setError(err instanceof Error ? err.message : 'Failed to decompose specification');
+    } finally {
+      setDecomposing(false);
     }
   };
 
@@ -473,6 +534,32 @@ export default function MissionControlDashboard() {
           </div>
         </div>
 
+        {/* Tab Navigation */}
+        <div className="mb-6 border-b border-gray-200">
+          <nav className="-mb-px flex space-x-8">
+            <button
+              onClick={() => setActiveTab('dashboard')}
+              className={`${
+                activeTab === 'dashboard'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
+            >
+              Dashboard
+            </button>
+            <button
+              onClick={() => setActiveTab('upload-spec')}
+              className={`${
+                activeTab === 'upload-spec'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
+            >
+              Upload Spec
+            </button>
+          </nav>
+        </div>
+
         {/* Error Banner */}
         {error && (
           <div className="mb-6 bg-red-50 border border-red-200 rounded-md p-4">
@@ -489,9 +576,12 @@ export default function MissionControlDashboard() {
           </div>
         )}
 
-        {/* Key Metrics Cards */}
-        {dashboardMetrics && (
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        {/* Dashboard Tab Content */}
+        {activeTab === 'dashboard' && (
+          <>
+            {/* Key Metrics Cards */}
+            {dashboardMetrics && (
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
             <div className="bg-white rounded-lg shadow p-6">
               <div className="flex items-center">
                 <div className="flex-shrink-0">
@@ -748,6 +838,175 @@ export default function MissionControlDashboard() {
             </table>
           </div>
         </div>
+          </>
+        )}
+
+        {/* Upload Spec Tab Content */}
+        {activeTab === 'upload-spec' && (
+          <div className="space-y-6">
+            {/* Spec Input Section */}
+            <div className="bg-white rounded-lg shadow p-6">
+              <h3 className="text-lg font-medium text-gray-900 mb-4">Technical Specification</h3>
+              <p className="text-sm text-gray-600 mb-4">
+                Provide a technical specification in markdown format. The Architect will decompose it into 3-8 Work Orders.
+              </p>
+              <textarea
+                className="w-full border border-gray-300 rounded-md px-3 py-2 h-64 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder={`# Feature Name
+
+## Objectives
+- Objective 1
+- Objective 2
+
+## Constraints
+- Constraint 1
+- Constraint 2
+
+## Acceptance Criteria
+- Criterion 1
+- Criterion 2`}
+                value={specInput}
+                onChange={(e) => setSpecInput(e.target.value)}
+              />
+              <div className="mt-4 flex justify-end space-x-3">
+                <button
+                  onClick={() => {
+                    setSpecInput('');
+                    setDecomposition(null);
+                  }}
+                  className="px-4 py-2 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50"
+                >
+                  Clear
+                </button>
+                <button
+                  onClick={handleDecomposeSpec}
+                  disabled={decomposing || !specInput.trim()}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                >
+                  {decomposing ? (
+                    <>
+                      <ArrowPathIcon className="w-4 h-4 mr-2 animate-spin" />
+                      Decomposing...
+                    </>
+                  ) : (
+                    <>
+                      <DocumentTextIcon className="w-4 h-4 mr-2" />
+                      Decompose Specification
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Decomposition Results */}
+            {decomposition && (
+              <>
+                {/* Summary */}
+                <div className="bg-white rounded-lg shadow p-6">
+                  <h3 className="text-lg font-medium text-gray-900 mb-4">Decomposition Summary</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <p className="text-2xl font-bold text-blue-600">{decomposition.work_orders.length}</p>
+                      <p className="text-sm text-gray-600">Work Orders</p>
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold text-green-600">${decomposition.total_estimated_cost.toFixed(2)}</p>
+                      <p className="text-sm text-gray-600">Estimated Cost</p>
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold text-purple-600">
+                        {decomposition.work_orders.filter(wo => wo.risk_level === 'high').length}
+                      </p>
+                      <p className="text-sm text-gray-600">High Risk WOs</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Work Orders List */}
+                <div className="bg-white rounded-lg shadow overflow-hidden">
+                  <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+                    <h3 className="text-lg font-medium text-gray-900">Work Orders</h3>
+                    <button
+                      className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+                      onClick={() => alert('Director approval flow will be implemented next')}
+                    >
+                      Submit to Director
+                    </button>
+                  </div>
+                  <div className="divide-y divide-gray-200">
+                    {decomposition.work_orders.map((wo, index) => (
+                      <div key={index} className="p-6 hover:bg-gray-50">
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex-1">
+                            <div className="flex items-center space-x-3 mb-2">
+                              <span className="font-medium text-gray-900">WO-{index}</span>
+                              <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getRiskLevelColor(wo.risk_level)}`}>
+                                {wo.risk_level}
+                              </span>
+                              <span className="text-sm text-gray-500">
+                                ~{wo.context_budget_estimate} tokens
+                              </span>
+                            </div>
+                            <h4 className="text-lg font-medium text-gray-900 mb-2">{wo.title}</h4>
+                            <p className="text-sm text-gray-600 mb-3">{wo.description}</p>
+
+                            {/* Acceptance Criteria */}
+                            <div className="mb-3">
+                              <p className="text-sm font-medium text-gray-700 mb-1">Acceptance Criteria:</p>
+                              <ul className="list-disc list-inside text-sm text-gray-600 space-y-1">
+                                {wo.acceptance_criteria.map((criterion, i) => (
+                                  <li key={i}>{criterion}</li>
+                                ))}
+                              </ul>
+                            </div>
+
+                            {/* Files in Scope */}
+                            {wo.files_in_scope.length > 0 && (
+                              <div className="mb-3">
+                                <p className="text-sm font-medium text-gray-700 mb-1">Files in Scope:</p>
+                                <div className="flex flex-wrap gap-2">
+                                  {wo.files_in_scope.map((file, i) => (
+                                    <span key={i} className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded">
+                                      {file}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Dependencies */}
+                            {wo.dependencies.length > 0 && (
+                              <div>
+                                <p className="text-sm font-medium text-gray-700 mb-1">Dependencies:</p>
+                                <div className="flex flex-wrap gap-2">
+                                  {wo.dependencies.map((dep, i) => (
+                                    <span key={i} className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
+                                      WO-{dep}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Decomposition Documentation */}
+                <div className="bg-white rounded-lg shadow p-6">
+                  <h3 className="text-lg font-medium text-gray-900 mb-4">Decomposition Documentation</h3>
+                  <div className="prose prose-sm max-w-none">
+                    <pre className="whitespace-pre-wrap text-sm text-gray-700 bg-gray-50 p-4 rounded">
+                      {decomposition.decomposition_doc}
+                    </pre>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        )}
 
         {/* Create Work Order Modal */}
         {showCreateWorkOrder && (
