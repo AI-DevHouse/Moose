@@ -195,6 +195,9 @@ export default function MissionControlDashboard() {
   const [specInput, setSpecInput] = useState('');
   const [decomposition, setDecomposition] = useState<DecompositionOutput | null>(null);
   const [decomposing, setDecomposing] = useState(false);
+  const [featureName, setFeatureName] = useState('');
+  const [submittingToDirector, setSubmittingToDirector] = useState(false);
+  const [directorDecision, setDirectorDecision] = useState<any>(null);
 
   const wsClient = useRef<SimpleWebSocketClient | null>(null);
 
@@ -392,8 +395,11 @@ export default function MissionControlDashboard() {
 
     // Parse spec input (expecting markdown format)
     const lines = specInput.trim().split('\n');
+    const extractedFeatureName = lines[0]?.replace(/^#\s*/, '') || 'Untitled Feature';
+    setFeatureName(extractedFeatureName);
+
     const spec: TechnicalSpec = {
-      feature_name: lines[0]?.replace(/^#\s*/, '') || 'Untitled Feature',
+      feature_name: extractedFeatureName,
       objectives: [],
       constraints: [],
       acceptance_criteria: []
@@ -434,6 +440,54 @@ export default function MissionControlDashboard() {
       setError(err instanceof Error ? err.message : 'Failed to decompose specification');
     } finally {
       setDecomposing(false);
+    }
+  };
+
+  // Handle submit to Director
+  const handleSubmitToDirector = async () => {
+    if (!decomposition || !featureName) {
+      alert('No decomposition available to submit');
+      return;
+    }
+
+    setSubmittingToDirector(true);
+    setError(null);
+
+    try {
+      const response = await fetch('/api/director/approve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          decomposition,
+          feature_name: featureName
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Director approval failed');
+      }
+
+      const result = await response.json();
+      setDirectorDecision(result.decision);
+
+      // Show result to user
+      if (result.decision.auto_approved) {
+        alert(`✅ Auto-approved! ${result.work_order_ids?.length || 0} Work Orders created.`);
+        // Clear form after successful approval
+        setSpecInput('');
+        setDecomposition(null);
+        setFeatureName('');
+        setDirectorDecision(null);
+      } else if (result.decision.requires_human_approval) {
+        // Don't clear form - human needs to review
+        alert(`⚠️ Human approval required. ${result.decision.reasoning}`);
+      }
+    } catch (err) {
+      console.error('Director submission error:', err);
+      setError(err instanceof Error ? err.message : 'Failed to submit to Director');
+    } finally {
+      setSubmittingToDirector(false);
     }
   };
 
@@ -927,10 +981,20 @@ export default function MissionControlDashboard() {
                   <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
                     <h3 className="text-lg font-medium text-gray-900">Work Orders</h3>
                     <button
-                      className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
-                      onClick={() => alert('Director approval flow will be implemented next')}
+                      className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                      onClick={handleSubmitToDirector}
+                      disabled={submittingToDirector || !!directorDecision}
                     >
-                      Submit to Director
+                      {submittingToDirector ? (
+                        <>
+                          <ArrowPathIcon className="w-4 h-4 mr-2 animate-spin" />
+                          Submitting...
+                        </>
+                      ) : directorDecision ? (
+                        directorDecision.auto_approved ? '✅ Approved' : '⚠️ Review Required'
+                      ) : (
+                        'Submit to Director'
+                      )}
                     </button>
                   </div>
                   <div className="divide-y divide-gray-200">
