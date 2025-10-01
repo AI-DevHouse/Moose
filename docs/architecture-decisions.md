@@ -9,7 +9,7 @@
 ```
 HUMAN
   ↓ uploads spec, reviews escalations, approves high-risk
-ARCHITECT (Phase 2.0 - API done, ~30%)
+ARCHITECT (Phase 2.0 - ✅ Complete)
   ↓ decompose spec → Work Orders
 DIRECTOR (Phase 2.1 - rename from "Manager LLM")
   ↓ governance, risk assessment, approval
@@ -29,7 +29,7 @@ CLIENT MANAGER (Phase 2.5 - planned)
 
 ## Agent Responsibilities
 
-### ARCHITECT (Phase 2.0 - ~30% complete)
+### ARCHITECT (Phase 2.0 - ✅ Complete)
 
 **Purpose:** Strategic decomposition of specs → Work Orders
 
@@ -61,9 +61,9 @@ CLIENT MANAGER (Phase 2.5 - planned)
 **Status:**
 - ✅ API complete (`/api/architect/decompose`)
 - ✅ Tested: OAuth spec → 8 WOs, $11.30
-- ⏳ Database migration (5 new work_orders columns)
-- ⏳ UI integration (Upload Spec tab)
-- ⏳ Director approval flow
+- ✅ Database migration (5 new work_orders columns)
+- ✅ UI integration (Upload Spec tab)
+- ✅ Director approval flow
 
 **Cost:** $11.30/decomposition, $226-$452/month at 1-2 calls/day (75-150% of £300 LLM budget) - acceptable for low-frequency high-stakes decisions
 
@@ -77,7 +77,11 @@ CLIENT MANAGER (Phase 2.5 - planned)
 - Writes to: work_orders (creates initial records)
 - References: contracts (for boundary validation)
 
-**Files:** `src/lib/architect-service.ts`, `src/types/architect.ts`, `src/app/api/architect/decompose/route.ts`
+**Files:**
+- `src/lib/architect-decomposition-rules.ts` (7535 lines) - Centralized decomposition logic
+- `src/lib/architect-service.ts` (2511 lines) - Orchestration layer
+- `src/types/architect.ts` (737 lines) - Type definitions
+- `src/app/api/architect/decompose/route.ts` - API endpoint
 
 ---
 
@@ -123,49 +127,49 @@ CLIENT MANAGER (Phase 2.5 - planned)
 - Writes: decision_logs, updates work_orders.status
 - References: playbook_memory for trust patterns
 
-**Files:** `src/lib/llm-service.ts` (PENDING RENAME to director-service.ts), `src/lib/contract-validator.ts`
+**Files:**
+- `src/lib/director-risk-assessment.ts` - Centralized risk assessment logic
+- `src/lib/director-service.ts` (216 lines) - Director approval orchestration
+- `src/lib/llm-service.ts` (615 lines) - LEGACY, still used by `/api/llm/*` endpoints
+- `src/lib/contract-validator.ts` - Contract validation
+- `src/app/api/director/approve/route.ts` - Approval endpoint
 
-**Current Status:** Exists as "Manager LLM" in Phase 2.1, needs role clarity update
+**Current Status:** ✅ Complete - Director service implemented with centralized risk assessment
 
 ---
 
-### MANAGER (Phase 4.1 - Partial in proposer-registry.ts)
+### MANAGER (Phase 4.1 - ✅ Complete)
 
 **Purpose:** Tactical runtime coordination and resource management
 
 **Responsibilities:**
 - Receive approved Work Orders from Director
 - Context-aware routing to appropriate Proposer based on:
-  - Complexity analysis (7 factors)
-  - Historical success patterns (outcome_vectors)
+  - Complexity analysis (7 factors) - max complexity ceiling approach
+  - Cost optimization (select cheapest among candidates)
   - Current budget constraints (system_config)
   - Proposer availability and capability (proposer_configs)
-  - Hard Stop keyword detection (security/architecture)
-- Predictive resource allocation:
-  - Estimate token usage from historical data
-  - Predict execution time
-  - Forecast cost per Work Order
+  - Hard Stop keyword detection (20 keywords: 12 security + 8 architecture)
 - Budget enforcement (three-tier system):
-  - Soft cap ($20 daily default): Alert Client Manager, continue
+  - Soft cap ($20 daily): Warning status, continue normally
   - Hard cap ($50 daily): Force cheapest model (gpt-4o-mini)
   - Emergency kill ($100 daily): Stop all operations, escalate
-  - Hard Stop override: security/architecture forces claude-sonnet-4-5 even if over budget
-- Retry ladder with pattern-aware re-prompting:
-  - Attempt 1: Standard prompt
-  - Attempt 2: Add failure context from attempt 1
-  - Attempt 3: Switch model or escalate
-- Real-time capacity management:
-  - Monitor concurrent Work Orders
-  - Load balance across available Proposers
-  - Queue orders when capacity constrained
-- Track performance metrics per Proposer
+  - Hard Stop override: security/architecture forces claude-sonnet-4-5 unless over budget
+- Retry ladder with pattern-aware model switching:
+  - Attempt 1 → 2: Same model with failure context added
+  - Attempt 2 → 3: Switch to higher capability model (gpt-4o-mini → claude-sonnet-4-5)
+  - Attempt 3+: Escalate to Client Manager
+- Track performance metrics per Proposer (success rate, avg cost, execution time)
+
+**Hard Stop Keywords (20 total):**
+- Security (12): SQL injection, XSS, CSRF, authentication, authorization, encryption, password hashing, API keys, secrets management, access control, input validation, sanitization
+- Architecture (8): API contract, schema change, breaking change, database migration, event schema, integration contract, system design, architectural decision
 
 **Key Outputs:**
-- Routing decisions to Proposers (stored in routing_metadata)
+- Routing decisions to Proposers (stored in work_orders.metadata)
 - Retry strategies based on failure patterns
-- Resource allocation adjustments
-- Budget alerts and enforcement actions
-- Performance analytics
+- Budget enforcement actions
+- Performance analytics per proposer
 
 **Does NOT:**
 - Create or decompose Work Orders (Architect's job)
@@ -176,13 +180,22 @@ CLIENT MANAGER (Phase 2.5 - planned)
 - Apply code to repository (Orchestrator's job)
 
 **Database Tables:**
-- Reads: work_orders, proposer_configs, outcome_vectors, system_config, cost_tracking
-- Writes: routing metadata to work_orders.metadata
+- Reads: work_orders, proposer_configs, system_config, cost_tracking, outcome_vectors
+- Writes: work_orders.metadata (routing_metadata)
 - Queries: Daily cost totals from cost_tracking for budget enforcement
 
-**Files:** `src/lib/proposer-registry.ts` (PENDING RENAME to manager-service.ts), `src/lib/config-services.ts`
+**API Endpoints:**
+- POST `/api/manager` - Route Work Order to Proposer
+- GET `/api/manager?work_order_id=xxx&current_proposer=xxx&attempt=N` - Get retry strategy
 
-**Current Status:** Routing logic exists in Phase 2.2, needs consolidation into Manager role
+**Files:**
+- `src/lib/manager-routing-rules.ts` - Centralized routing logic (371 lines)
+- `src/lib/manager-service.ts` - Orchestration only (202 lines)
+- `src/app/api/manager/route.ts` - API endpoints (95 lines)
+
+**Status:** ✅ Complete with 100% test coverage (7/7 custom tests + 18/18 integration tests passing)
+
+**Note:** `proposer-registry.ts` still contains old routing logic (lines 110-245). Future refactor will migrate `enhanced-proposer-service.ts` to call Manager instead.
 
 ---
 
@@ -218,10 +231,10 @@ CLIENT MANAGER (Phase 2.5 - planned)
 - Receive routed Work Orders from Manager
 - Perform complexity analysis using 7 factors
 - Generate complete, deployable code (not instructions - actual code)
-- Self-refinement (Phase 2.2.6 - NEXT PHASE):
+- Self-refinement (Phase 2.2.6 - ✅ Complete):
   - Detect quality issues: TS compilation errors, contract violations, logic inconsistencies
   - Regenerate with learned context from failures
-  - Maximum 2-3 refinement attempts per Work Order
+  - 3-cycle adaptive prompting with early abort on zero progress
   - Feed successful refinement patterns to playbook_memory
   - Cost tracking per refinement cycle
 - Cost tracking per generation + refinement attempts
@@ -249,9 +262,14 @@ CLIENT MANAGER (Phase 2.5 - planned)
 - Writes: cost_tracking, outcome_vectors, updates to work_orders.metadata
 - Updates: pattern_confidence_scores after successful patterns
 
-**Files:** `src/lib/enhanced-proposer-service.ts`, `src/lib/complexity-analyzer.ts`, `src/lib/claude-sonnet-proposer.ts`
+**Files:**
+- `src/lib/proposer-refinement-rules.ts` - Centralized 3-cycle refinement logic
+- `src/lib/enhanced-proposer-service.ts` (467 lines) - Orchestration layer
+- `src/lib/complexity-analyzer.ts` - 7-factor complexity analysis
+- `src/lib/claude-sonnet-proposer.ts` - Claude proposer implementation
+- `src/app/api/proposer-enhanced/route.ts` - Enhanced API endpoint
 
-**Current Status:** Exists in Phase 2.2 with complexity routing, Hard Stops, budget gates operational. Self-refinement (2.2.6) is next phase.
+**Current Status:** ✅ Complete - Operational with complexity routing, Hard Stops, budget gates, and 3-cycle self-refinement
 
 ---
 
@@ -353,6 +371,12 @@ CLIENT MANAGER (Phase 2.5 - planned)
 - Notifies Client Manager on failures
 
 **Phase Consolidation:** Combines Phase 2.3 (Basic Orchestrator) and Phase 3.2 (Aider Integration) into single unified execution infrastructure
+
+**Prerequisites:** ✅ Complete - Database migration finished, all Architect columns available
+
+**Implementation Plan:** See `docs/Technical Specification - Orchestrator.txt` for detailed 4-phase implementation guide (estimated 5-7 hours)
+
+**Current Status:** Ready to implement - All prerequisites met, technical specification complete
 
 ---
 
@@ -635,23 +659,30 @@ export interface ProposerOutputV1 {
 ```
 src/
   lib/
-    architect-service.ts         (NEW - spec decomposition)
-    complexity-analyzer.ts       (MODIFIED - parseTypeScriptErrors + Sonnet 4.5)
-    enhanced-proposer-service.ts (MODIFIED - self-refinement)
-    llm-service.ts              (PENDING RENAME → director-service.ts)
-    proposer-registry.ts        (PENDING RENAME → manager-service.ts)
-    contract-validator.ts       (existing, 17 TS errors pre-existing)
-    config-services.ts          (existing, budget management)
+    architect-decomposition-rules.ts  (✅ 7535 lines - centralized decomposition logic)
+    architect-service.ts              (✅ 2511 lines - orchestration layer)
+    director-risk-assessment.ts       (✅ centralized risk assessment logic)
+    director-service.ts               (✅ 216 lines - approval orchestration)
+    manager-routing-rules.ts          (✅ 371 lines - centralized routing logic)
+    manager-service.ts                (✅ 202 lines - coordination orchestration)
+    proposer-refinement-rules.ts      (✅ centralized 3-cycle refinement logic)
+    enhanced-proposer-service.ts      (✅ 467 lines - code generation orchestration)
+    complexity-analyzer.ts            (✅ 7-factor analysis + parseTypeScriptErrors)
+    llm-service.ts                    (LEGACY - 615 lines, used by /api/llm/*)
+    contract-validator.ts             (existing, 1 pre-existing TS error)
+    config-services.ts                (existing, budget management)
   app/api/
-    architect/decompose/route.ts (NEW - decomposition endpoint)
-    proposer-enhanced/route.ts  (calls executeWithMonitoring)
-    llm/                        (PENDING RENAME → director/)
+    architect/decompose/route.ts      (✅ decomposition endpoint)
+    director/approve/route.ts         (✅ approval endpoint)
+    manager/route.ts                  (✅ routing + retry endpoints)
+    proposer-enhanced/route.ts        (✅ enhanced generation with refinement)
+    llm/                              (LEGACY endpoints)
   types/
-    architect.ts                (NEW - TechnicalSpec, WorkOrder, DecompositionOutput)
-    orchestrator.ts             (PENDING - Phase 2.3)
+    architect.ts                      (✅ 737 lines - TechnicalSpec, WorkOrder, DecompositionOutput)
+    supabase.ts                       (✅ updated with 5 Architect columns)
   components/
-    MissionControlDashboard.tsx (PENDING - needs Architect upload UI)
-.temp-refinement/               (runtime, self-refinement temp files)
+    MissionControlDashboard.tsx       (✅ includes Upload Spec tab)
+.temp-refinement/                     (runtime, self-refinement temp files)
 ```
 
 ---

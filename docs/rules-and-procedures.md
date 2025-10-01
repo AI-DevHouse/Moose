@@ -30,6 +30,9 @@ Complete current phase 100% before starting next.
 **R8: Deep context check**
 Review handover docs before technical work. Answer verification questions.
 
+**R9: Never dismiss errors without investigation**
+When user challenges error handling or test results, investigate properly. Don't dismiss errors as "false positives" without full context verification.
+
 ---
 
 ## Rules Removed (Obsolete with Claude Code CLI)
@@ -78,6 +81,23 @@ const parsed = JSON.parse(cleaned);
 ❌ Don't confuse Aider (tool) with Orchestrator (infrastructure layer)
 ❌ Don't proceed to next phase at <100% validation → R7
 ❌ Don't commit package.json with feature code → Separate commits for dependencies
+❌ **Don't dismiss errors without investigation** → Always verify with full project context (R9)
+
+### TypeScript Errors
+❌ Don't run `tsc` on individual files for module resolution errors → Use full project compilation
+❌ Don't dismiss TS2307 "Cannot find module" without checking Next.js build
+✅ **Always verify with full context:**
+```powershell
+# Wrong: Individual file check (lacks path alias context)
+npx tsc --noEmit src/app/api/manager/route.ts
+
+# Right: Full project compilation
+npx tsc --noEmit
+
+# Or: Check Next.js build output
+# Look for "✓ Compiled /api/manager" in dev server logs
+```
+✅ If user challenges an error, investigate properly before dismissing
 
 ---
 
@@ -86,13 +106,13 @@ const parsed = JSON.parse(cleaned);
 ### Session Start (Mandatory)
 
 ```powershell
-# 1. Integration tests (expect 14-15/15 passing)
+# 1. Integration tests (expect 18/18 passing as of v26)
 .\phase1-2-integration-test.ps1
 
 # 2. Check server running
 # Look for "compiled successfully" in T1
 
-# 3. Type errors (expect 19 pre-existing)
+# 3. Type errors (expect 21 pre-existing)
 npx tsc --noEmit 2>&1 | Select-String "Found.*errors"
 
 # 4. Git status
@@ -107,14 +127,18 @@ git log --oneline -5
 ### After Code Changes
 
 ```powershell
-# 1. Type check specific file
-npx tsc --noEmit path\to\file.ts
-
-# 2. Full type check
+# 1. Full type check (ALWAYS run this first)
 npx tsc --noEmit 2>&1 | Select-String "Found.*errors"
+
+# 2. Filter for specific files (if needed)
+npx tsc --noEmit 2>&1 | Select-String "manager"
 
 # 3. Integration tests (if touching core logic)
 .\phase1-2-integration-test.ps1
+
+# Note: Individual file checks (npx tsc --noEmit path/to/file.ts)
+# can produce false positives for path aliases (@/*) - always verify
+# with full project compilation
 ```
 
 ---

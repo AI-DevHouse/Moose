@@ -1,0 +1,610 @@
+Moose Agent Organizational Hierarchy & Responsibilities
+FINAL CONSOLIDATED STRUCTURE (2025-09-29)
+________________________________________
+ARCHITECT (Phase 2.0 - NEW)
+Purpose: Strategic decomposition of technical specifications into executable Work Orders
+Responsibilities:
+•	Receive technical specification from human via Mission Control
+•	Analyze complexity, scope, and context requirements
+•	Estimate token/context limits per chunk to prevent agent memory overflow
+•	Map dependencies between components (what must be sequential vs parallelizable)
+•	Define Work Order boundaries (feature scope, file scope, risk-isolated changes)
+•	Create decomposition documentation: 
+o	Dependency graph
+o	Integration points
+o	Chunking rationale
+o	Sequencing requirements
+•	Output structured Work Orders with clear acceptance criteria
+•	Provide shared reference documentation to prevent context drift across agents
+Key Outputs:
+•	Work Order queue with dependencies mapped
+•	Decomposition documentation accessible to all agents
+•	Context budget allocation per Work Order
+•	Integration contract specifications
+Does NOT:
+•	Approve or assess risk (Director's job)
+•	Execute code generation (Proposer's job)
+•	Handle runtime coordination (Manager's job)
+•	Make escalation decisions (Client Manager's job)
+•	Apply code to repository (Orchestrator's job)
+Database Tables:
+•	Writes to: work_orders (creates initial records)
+•	References: contracts (for boundary validation)
+________________________________________
+DIRECTOR (Phase 2.1) - Senior Governance
+Purpose: Senior governance, risk assessment, and approval authority
+Responsibilities:
+•	Receive Work Orders from Architect
+•	Validate against contracts using contract-validator.ts: 
+o	Detect breaking changes
+o	Verify API compatibility
+o	Check domain model consistency
+•	Risk assessment per Work Order: 
+o	Low: Config changes, documentation, non-breaking additions
+o	Medium: Schema changes, new APIs, refactoring
+o	High: Breaking changes, architecture modifications, security changes
+•	Decision logging with reasoning (full audit trail)
+•	Progressive trust system: 
+o	Track pattern confidence scores
+o	Auto-approve low-risk orders when confidence >0.95
+o	Require human approval for medium/high risk
+•	Route high-risk Work Orders to human approval queue in Mission Control
+•	Hand approved Work Orders to Manager for execution coordination
+•	Monitor approval patterns to adjust trust thresholds
+Key Outputs:
+•	Approved/rejected Work Orders with justification
+•	Risk classifications (Low/Medium/High)
+•	Decision audit trail with reasoning
+•	Approval workflow state changes
+Does NOT:
+•	Decompose technical specs (Architect's job)
+•	Generate code (Proposer's job)
+•	Handle escalations (Client Manager's job)
+•	Coordinate runtime execution (Manager's job)
+•	Route to specific Proposers (Manager's job)
+•	Apply code changes (Orchestrator's job)
+Database Tables:
+•	Reads: work_orders, contracts, pattern_confidence_scores
+•	Writes: decision_logs, updates work_orders.status
+•	References: playbook_memory for trust patterns
+Current Implementation: Exists as "Manager LLM" in Phase 2.1, needs role clarity update
+________________________________________
+MANAGER (Phase 4.1) - Tactical Coordination
+Purpose: Tactical runtime coordination and resource management
+Responsibilities:
+•	Receive approved Work Orders from Director
+•	Context-aware routing to appropriate Proposer based on: 
+o	Complexity analysis (7 factors)
+o	Historical success patterns (outcome_vectors)
+o	Current budget constraints (system_config)
+o	Proposer availability and capability (proposer_configs)
+o	Hard Stop keyword detection (security/architecture)
+•	Predictive resource allocation: 
+o	Estimate token usage from historical data
+o	Predict execution time
+o	Forecast cost per Work Order
+•	Budget enforcement (three-tier system): 
+o	Soft cap ($20 daily default): Alert Client Manager, continue
+o	Hard cap ($50 daily): Force cheapest model (gpt-4o-mini)
+o	Emergency kill ($100 daily): Stop all operations, escalate
+o	Hard Stop override: security/architecture forces claude-sonnet-4 even if over budget
+•	Retry ladder with pattern-aware re-prompting: 
+o	Attempt 1: Standard prompt
+o	Attempt 2: Add failure context from attempt 1
+o	Attempt 3: Switch model or escalate
+•	Real-time capacity management: 
+o	Monitor concurrent Work Orders
+o	Load balance across available Proposers
+o	Queue orders when capacity constrained
+•	Track performance metrics per Proposer
+Key Outputs:
+•	Routing decisions to Proposers (stored in routing_metadata)
+•	Retry strategies based on failure patterns
+•	Resource allocation adjustments
+•	Budget alerts and enforcement actions
+•	Performance analytics
+Does NOT:
+•	Create or decompose Work Orders (Architect's job)
+•	Approve Work Orders (Director's job)
+•	Generate code (Proposer's job)
+•	Escalate to humans (Client Manager's job)
+•	Make risk assessments (Director's job)
+•	Apply code to repository (Orchestrator's job)
+Database Tables:
+•	Reads: work_orders, proposer_configs, outcome_vectors, system_config, cost_tracking
+•	Writes: routing metadata to work_orders.metadata
+•	Queries: Daily cost totals from cost_tracking for budget enforcement
+Current Implementation: Routing logic exists in Phase 2.2 (proposer-registry.ts), needs consolidation into Manager role
+________________________________________
+PROPOSERS (Phase 2.2) - Code Generation
+Purpose: Code generation with quality self-refinement
+Models in Registry:
+Claude Sonnet 4.5 (Primary)
+•	Complexity threshold: 1.0 (handles all complexity levels)
+•	Cost: $3.00/1M input tokens, $15.00/1M output tokens
+•	Strengths: Complex logic, architecture, security, multi-step reasoning
+•	Use cases: Architecture changes, security fixes, complex integrations
+•	Hard Stop enforcement: Forced for security + architecture keywords
+GPT-4o-mini (Fallback)
+•	Complexity threshold: 0.3 (simple tasks only)
+•	Cost: $0.15/1M input tokens, $0.60/1M output tokens
+•	Strengths: Simple CRUD, config changes, documentation, cost optimization
+•	Use cases: Low-complexity work, budget-constrained operations
+Responsibilities:
+•	Receive routed Work Orders from Manager
+•	Complexity analysis using 7 factors: 
+1.	Architectural impact: Changes to system structure
+2.	Integration points: Number of systems/APIs affected
+3.	Data transformations: Complex data manipulation required
+4.	Error handling requirements: Exception scenarios to cover
+5.	Testing complexity: Test cases needed
+6.	Security implications: Auth, encryption, input validation
+7.	Performance considerations: Scalability, optimization needs
+•	Generate complete, deployable code (not instructions - actual code)
+•	Self-refinement (Phase 2.2.6 - NEXT PHASE): 
+o	Detect quality issues: 
+	TypeScript compilation errors
+	Contract violations
+	Logic inconsistencies
+o	Regenerate with learned context from failures
+o	Maximum 2-3 refinement attempts per Work Order
+o	Feed successful refinement patterns to playbook_memory
+o	Cost tracking per refinement cycle
+•	Parallel mode (Phase 2.2.7 - FUTURE): 
+o	Medium-risk orders: claude-sonnet-4 and gpt-4o-mini compete
+o	Orchestrator tests both outputs
+o	Best solution (quality + cost) wins
+•	Cost tracking per generation + refinement attempts
+•	Hard Stop enforcement: 20 keywords force claude-sonnet-4: 
+o	Security (12): SQL injection, XSS, CSRF, authentication, authorization, encryption, password hashing, API keys, secrets management, access control, input validation, sanitization
+o	Architecture (8): API contract, schema change, breaking change, database migration, event schema, integration contract, system design, architectural decision
+Key Outputs:
+•	Complete code with file paths and diffs
+•	Complexity analysis metadata (ComplexityAnalysis interface)
+•	Cost breakdown (per-token pricing)
+•	Refinement history (attempts, issues found, fixes applied)
+•	Routing justification (why this model was selected)
+Does NOT:
+•	Decide routing (Manager's job)
+•	Apply code to repo (Orchestrator's job)
+•	Validate execution results (Sentinel's job via Orchestrator)
+•	Approve Work Orders (Director's job)
+•	Handle escalations (Client Manager's job)
+Database Tables:
+•	Reads: work_orders, proposer_configs, playbook_memory
+•	Writes: cost_tracking, outcome_vectors, updates to work_orders.metadata
+•	Updates: pattern_confidence_scores after successful patterns
+Current Implementation: Exists in Phase 2.2 with complexity routing, Hard Stops, budget gates operational. Self-refinement (2.2.6) is next phase.
+________________________________________
+ORCHESTRATOR (Phase 2.3/3.2 - CONSOLIDATED) - Execution Infrastructure
+Purpose: Aider-based execution infrastructure that applies Proposer code to repository
+NOT AN AGENT - This is infrastructure/tooling built on Aider CLI:
+Components:
+1.	GitHub Actions workflows (CI/CD orchestration)
+2.	Aider CLI (git-aware code application engine)
+3.	PR management scripts (metadata, auto-merge logic)
+4.	Container infrastructure (ephemeral execution environments)
+Responsibilities:
+•	Receive generated code from Proposers
+•	Spin up ephemeral Aider instances in containers: 
+o	Isolated git environment per Work Order
+o	Clean state (no cross-contamination)
+o	Resource limits (CPU, memory, timeout)
+•	Apply code via Aider CLI: 
+o	Aider receives Proposer's code/instructions
+o	Makes git-aware edits to repository files
+o	Validates changes can be applied cleanly
+o	Reports conflicts or issues
+•	Live environment feedback via Aider: 
+o	Check current file structure (what actually exists)
+o	Verify imports resolve (dependencies available)
+o	Test if code compiles (TypeScript/language checks)
+o	Query actual state vs Proposer assumptions
+o	Feed discrepancies back to Proposer for refinement
+•	Branch management: 
+o	Create feature branches: feature/wo-[id]-[description]
+o	Apply commits with descriptive messages
+o	Push to remote repository
+•	Pull Request creation with enhanced metadata: 
+o	Risk level (from Director)
+o	Proposer used (model name)
+o	Complexity score (0.0-1.0)
+o	Work Order ID (traceability)
+o	Cost tracking (dollars spent)
+o	Hard Stop flag (if applicable)
+•	Trigger GitHub Actions workflows: 
+o	Unit tests
+o	Integration tests
+o	Build validation
+o	Linting/formatting checks
+•	Auto-merge logic for low-risk PRs: 
+o	Wait for Sentinel approval (all checks pass)
+o	Verify risk_level = "low"
+o	Check pattern confidence >0.95
+o	Execute merge if conditions met
+•	Rollback capability: 
+o	Revert bundled changes on failure
+o	Clean rollback without conflicts
+o	Notify affected agents
+•	Collect and report execution results: 
+o	Success/failure status
+o	Test results
+o	Build logs
+o	Performance metrics
+•	Teardown ephemeral environments after completion
+Aider-Specific Capabilities:
+•	Git-aware editing: Understands repo structure, makes targeted changes
+•	Live state queries: Can check what files exist, what imports are available
+•	Conflict detection: Identifies merge conflicts before they reach GitHub
+•	Atomic operations: Changes applied as coherent units
+•	Rollback support: Clean undo of changes if needed
+Key Outputs:
+•	Feature branches (tracked in github_events)
+•	Pull requests with metadata (work_orders.github_pr_url)
+•	GitHub Actions triggers
+•	Deployment logs
+•	Test results for Sentinel
+•	Live environment reports (current state vs assumptions)
+•	Rollback operations when needed
+Does NOT:
+•	Make approval decisions (Director's job)
+•	Generate code (Proposer's job)
+•	Evaluate quality (Sentinel's job - though Sentinel analyzes Orchestrator outputs)
+•	Route Work Orders (Manager's job)
+•	Handle escalations (Client Manager's job)
+Database Tables:
+•	Reads: work_orders
+•	Writes: github_events, updates work_orders (github_pr_number, github_pr_url, github_branch)
+•	Writes: outcome_vectors (execution metrics)
+Integration Points:
+•	Receives code from Proposers
+•	Spins up Aider CLI in containers
+•	Aider provides live feedback to Proposers (for refinement)
+•	Triggers GitHub Actions
+•	Reports results to Sentinel (via Actions outcomes)
+•	Notifies Client Manager on failures
+Phase Consolidation: Combines Phase 2.3 (Basic Orchestrator) and Phase 3.2 (Aider Integration) into single unified execution infrastructure
+________________________________________
+SENTINEL (Phase 3.1) - Adaptive Quality Gates
+Purpose: Adaptive quality gates with false-positive learning
+Responsibilities:
+•	Parse GitHub Actions results from Orchestrator executions
+•	Interpret test outcomes (not just pass/fail binary): 
+o	Pass: All tests passed
+o	Fail: Real failures requiring attention
+o	Flaky: Known intermittent failures (false positives)
+•	Adaptive thresholds based on historical baselines: 
+o	Calculate ±5% variance from outcome_vectors
+o	Adjust pass thresholds per test suite
+o	Account for environmental fluctuations
+•	False-positive pattern learning: 
+o	Track tests with high flake rates (>10%)
+o	Identify environmental issues (timeouts, race conditions)
+o	Build ignore patterns for known false positives
+o	Store patterns in pattern_confidence_scores
+•	Custom rule synthesis (project-specific quality rules): 
+o	Learn from repeated failure patterns
+o	Generate custom validation rules
+o	Store in playbook_memory for reuse
+•	Severity drift detection: 
+o	Monitor quality trends over time
+o	Alert when quality degrades >10% from baseline
+o	Trigger preventive escalations
+•	Concurrent validation streams: 
+o	Handle multiple PRs in parallel
+o	Isolate results per Work Order
+o	Prevent cross-contamination
+•	Hard fail detection → trigger Client Manager escalation: 
+o	Repeated failures after retries
+o	Critical test failures
+o	Security/compliance violations
+•	Learn from human override decisions: 
+o	Track when humans merge despite warnings
+o	Adjust thresholds based on overrides
+o	Reduce false-positive rate over time
+Key Outputs:
+•	Pass/fail decisions per Work Order
+•	Quality metrics (test coverage, performance, security)
+•	False-positive patterns (stored for future reference)
+•	Escalation triggers to Client Manager
+•	Custom validation rules
+•	Quality trend reports
+Does NOT:
+•	Generate code (Proposer's job)
+•	Create escalation options (Client Manager's job)
+•	Apply fixes (Orchestrator's job)
+•	Make approval decisions (Director's job)
+•	Route Work Orders (Manager's job)
+Database Tables:
+•	Reads: github_events (Actions results), outcome_vectors (historical baselines)
+•	Writes: outcome_vectors (new execution results)
+•	Writes: pattern_confidence_scores (false-positive patterns)
+•	Writes: playbook_memory (custom rules)
+•	Triggers: escalations (on hard fails)
+Integration Points:
+•	Receives GitHub Actions results via Orchestrator
+•	Analyzes test outcomes
+•	Notifies Orchestrator: approve auto-merge or block
+•	Escalates to Client Manager on hard failures
+•	Feeds learning patterns to playbook_memory
+________________________________________
+CLIENT MANAGER (Phase 2.X - NEW) - Human Interface
+Purpose: Human interface for exception handling and escalations
+Responsibilities:
+•	Monitor all agent execution states across the system: 
+o	Watch work_orders table for stuck/failed states
+o	Track escalations table for new entries
+o	Monitor cost_tracking for budget anomalies
+o	Observe pattern_confidence_scores for quality degradation
+•	Detect unresolvable issues: 
+o	Proposer exhausts retries after self-refinement (2+ attempts failed)
+o	Sentinel hard failures (repeated test failures, >3 cycles)
+o	Budget overruns beyond delegated authority (approaching emergency_kill)
+o	Conflicting requirements discovered mid-execution
+o	Unforeseen technical blockers (dependencies unavailable, API changes)
+o	Contract violations that can't be auto-resolved
+o	Aider reports irreconcilable state (file conflicts, broken repo)
+•	Formulate resolution options (typically 2-4 alternatives): 
+o	Option A: Retry with different approach (different model, different strategy)
+o	Option B: Pivot technical solution (alternative architecture)
+o	Option C: Amend earlier Work Orders (fix root cause upstream)
+o	Option D: Abort and redesign (escalate to Architect for re-decomposition)
+•	Cost/risk/timeline analysis per option: 
+o	Estimated additional cost
+o	Success probability based on historical data
+o	Time to resolution
+o	Risk of compounding issues
+•	Generate recommendation with clear reasoning: 
+o	Preferred option with justification
+o	Trade-offs of each alternative
+o	Confidence level in recommendation
+•	Present to human via Mission Control with full context: 
+o	Failure history (all attempts + results)
+o	Cost spent so far
+o	Architect's original decomposition (for context)
+o	Relevant logs and metrics
+o	Visual timeline of escalation
+•	Execute human's decision: 
+o	Amend Work Orders (update work_orders table)
+o	Reallocate resources (change proposer_configs)
+o	Trigger rollbacks (via Orchestrator)
+o	Abort operations (mark work_orders as failed)
+o	Request Architect re-decomposition
+•	Learn from human decisions: 
+o	Store resolution patterns in escalation_scripts (hypothetical table)
+o	Track which options humans prefer
+o	Improve future recommendations
+o	Identify automation opportunities (repeated manual interventions)
+•	Track intervention patterns: 
+o	What categories of issues escalate most?
+o	Which agents trigger escalations?
+o	What resolution patterns succeed?
+o	Where can automation reduce escalations?
+Key Outputs:
+•	Escalation summaries with full context
+•	Option analysis (2-4 alternatives with cost/risk/time)
+•	Recommendations with reasoning and confidence level
+•	Decision execution confirmations
+•	Learning patterns for future escalations
+•	Intervention trend reports
+Does NOT:
+•	Make final decisions on escalated issues (human's job - Client Manager only recommends)
+•	Generate code (Proposer's job)
+•	Decompose specs (Architect's job)
+•	Approve Work Orders (Director's job)
+•	Execute deployments (Orchestrator infrastructure)
+•	Evaluate test results (Sentinel's job)
+Database Tables:
+•	Reads: All tables (needs full system visibility)
+•	Writes: escalations (creates escalation records)
+•	Writes: escalation_scripts (hypothetical - stores learned resolution patterns)
+•	Updates: work_orders.status when executing human decisions
+•	References: decision_logs, outcome_vectors, cost_tracking for context
+User Interface:
+•	Mission Control escalation queue
+•	Real-time alerts for critical issues
+•	Option presentation with visual decision tree
+•	One-click decision execution
+•	Escalation history view
+________________________________________
+COMPLETE WORKFLOW HIERARCHY
+┌──────────────────────────────────────────────────────────────┐
+│ HUMAN                                                         │
+│ • Uploads technical specification                             │
+│ • Reviews escalations from Client Manager (with options)      │
+│ • Approves high-risk Work Orders from Director                │
+│ • Makes final decisions on escalated issues                   │
+└────────────────────────┬─────────────────────────────────────┘
+                         ↓
+┌──────────────────────────────────────────────────────────────┐
+│ ARCHITECT (Phase 2.0 - NOT YET IMPLEMENTED)                   │
+│ Strategic Decomposition Agent                                 │
+│ • Analyzes spec complexity & scope                            │
+│ • Maps dependencies (sequential vs parallel)                  │
+│ • Estimates context/token budgets per chunk                   │
+│ • Creates Work Orders with acceptance criteria                │
+│ • Outputs: WO queue + decomposition documentation             │
+│                                                               │
+│ CURRENT: Human manually creates Work Orders                   │
+└────────────────────────┬─────────────────────────────────────┘
+                         ↓
+┌──────────────────────────────────────────────────────────────┐
+│ DIRECTOR (Phase 2.1 - IMPLEMENTED as "Manager LLM")           │
+│ Senior Governance Agent                                       │
+│ • Contract validation (breaking change detection)             │
+│ • Risk assessment (Low/Medium/High)                           │
+│ • Progressive trust auto-approval (confidence >0.95)          │
+│ • High-risk → human approval queue                            │
+│ • Outputs: Approved WOs with risk classification              │
+│                                                               │
+│ FILES: src/lib/llm-service.ts, src/lib/contract-validator.ts │
+└────────────────────────┬─────────────────────────────────────┘
+                         ↓
+┌──────────────────────────────────────────────────────────────┐
+│ MANAGER (Phase 4.1 - PARTIAL via proposer-registry.ts)        │
+│ Tactical Coordination Agent                                   │
+│ • Context-aware routing (complexity + keywords)               │
+│ • Budget enforcement (soft $20/hard $50/emergency $100)       │
+│ • Retry ladder with pattern-aware prompting                   │
+│ • Capacity management & load balancing                        │
+│ • Outputs: Routed WOs to appropriate Proposers                │
+│                                                               │
+│ FILES: src/lib/proposer-registry.ts, src/lib/config-services.ts│
+└────────────────────────┬─────────────────────────────────────┘
+                         ↓
+┌──────────────────────────────────────────────────────────────┐
+│ PROPOSERS (Phase 2.2 - IMPLEMENTED)                           │
+│ Code Generation Agents                                        │
+│ • Claude Sonnet 4: complexity ≥1.0, all Hard Stops            │
+│ • GPT-4o-mini: complexity <0.3, simple tasks                  │
+│ • Complexity analysis (7 factors)                             │
+│ • Self-refinement (Phase 2.2.6 - NEXT PHASE)                  │
+│ • Hard Stop enforcement (20 security/architecture keywords)   │
+│ • Outputs: Complete code with metadata                        │
+│                                                               │
+│ FILES: src/lib/enhanced-proposer-service.ts,                  │
+│        src/lib/complexity-analyzer.ts,                        │
+│        src/lib/claude-sonnet-proposer.ts                      │
+└────────────────────────┬─────────────────────────────────────┘
+                         ↓
+┌──────────────────────────────────────────────────────────────┐
+│ ORCHESTRATOR (Phase 2.3/3.2 - NOT YET IMPLEMENTED)            │
+│ Aider-based Execution Infrastructure (NOT an agent)           │
+│ • Spins up ephemeral Aider containers                         │
+│ • Aider applies code with git-aware editing                   │
+│ • Aider queries live environment state                        │
+│ • Aider feeds discrepancies back to Proposers                 │
+│ • Creates branches: feature/wo-[id]-[description]             │
+│ • Creates PRs with metadata (risk, proposer, cost)            │
+│ • Triggers GitHub Actions                                     │
+│ • Auto-merge low-risk after Sentinel pass                     │
+│ • Outputs: Deployed code, test triggers, live feedback        │
+│                                                               │
+│ CURRENT: Manual git operations                                │
+└────────────────────────┬─────────────────────────────────────┘
+                         ↓
+┌──────────────────────────────────────────────────────────────┐
+│ GitHub Actions (CI/CD)                                        │
+│ • Runs tests (unit, integration, E2E)                         │
+│ • Executes builds                                             │
+│ • Performs linting/formatting checks                          │
+│ • Reports results                                             │
+└────────────────────────┬─────────────────────────────────────┘
+                         ↓
+┌──────────────────────────────────────────────────────────────┐
+│ SENTINEL (Phase 3.1 - NOT YET IMPLEMENTED)                    │
+│ Adaptive Quality Gates Agent                                  │
+│ • Parses GitHub Actions results                               │
+│ • Adaptive thresholds (±5% historical baseline)               │
+│ • False-positive learning (ignore flaky tests)                │
+│ • Custom rule synthesis (project-specific rules)              │
+│ • Hard fail → escalate to Client Manager                      │
+│ • Outputs: Pass/fail, quality metrics, escalation triggers    │
+│                                                               │
+│ CURRENT: Manual review of Actions results                     │
+└────────────────────────┬─────────────────────────────────────┘
+                         ↓
+                   ┌─────┴─────┐
+                   │  SUCCESS  │  or  │  FAILURE  │
+                   └───────────┘      └─────┬─────┘
+                                             ↓
+┌──────────────────────────────────────────────────────────────┐
+│ CLIENT MANAGER (Phase 2.X - NOT YET IMPLEMENTED)              │
+│ Human Interface Agent for Escalations                         │
+│ • Monitors all agent states (detects unresolvable issues)     │
+│ • Formulates 2-4 resolution options                           │
+│ • Cost/risk/timeline analysis per option                      │
+│ • Generates recommendation with reasoning                     │
+│ • Presents to human via Mission Control                       │
+│ • Executes human's decision                                   │
+│ • Learns from interventions (reduces future escalations)      │
+│                                                               │
+│ CURRENT: Manual intervention via Mission Control UI           │
+└────────────────────────┬─────────────────────────────────────┘
+                         ↓
+                    Back to Human
+________________________________________
+FEEDBACK LOOPS & LEARNING
+Self-Refinement Loop (Proposer ↔ Orchestrator/Aider):
+Proposer generates code
+    ↓
+Orchestrator/Aider applies + checks live state
+    ↓
+Discrepancy detected (missing import, wrong file path, etc.)
+    ↓
+Aider reports back to Proposer
+    ↓
+Proposer refines with live context (max 2-3 attempts)
+    ↓
+Success → store pattern in playbook_memory
+Quality Learning Loop (Sentinel → System):
+Sentinel detects false positive (flaky test)
+    ↓
+Pattern stored in pattern_confidence_scores
+    ↓
+Future executions ignore known flaky tests
+    ↓
+Reduces unnecessary escalations
+Escalation Learning Loop (Client Manager → System):
+Issue escalated to human
+    ↓
+Human selects resolution option
+    ↓
+Client Manager stores decision pattern
+    ↓
+Similar future issues: Client Manager recommends proven solution
+    ↓
+Eventually: automate resolution (no escalation needed)
+Budget Learning Loop (Manager → Proposers):
+Manager tracks cost per Work Order type
+    ↓
+Learns which tasks can use cheaper models
+    ↓
+Adjusts routing thresholds over time
+    ↓
+Reduces costs while maintaining quality
+________________________________________
+KEY ARCHITECTURAL PRINCIPLES
+1.	Specialist Job Descriptions: Each agent has clear, non-overlapping responsibilities
+2.	Context Isolation: Agents maintain only necessary context to prevent memory overflow
+3.	Ephemeral Execution: Aider instances spun up/torn down per Work Order (no persistent state)
+4.	Progressive Autonomy: Director auto-approves trusted patterns (confidence >0.95), escalates edge cases
+5.	Learning Loops: All agents feed patterns to shared memory (playbook_memory, pattern_confidence_scores)
+6.	Budget Enforcement: 3-tier system ($20 soft/$50 hard/$100 emergency) with graceful degradation
+7.	Hard Stop Override: Security/architecture keywords force best model even over budget
+8.	Human-in-the-Loop: Client Manager provides clear options + recommendations, never makes final decisions
+9.	Live Feedback: Aider eliminates stale assumptions by querying actual environment state
+10.	Adaptive Quality: Sentinel learns false positives and adjusts thresholds over time
+________________________________________
+CURRENT IMPLEMENTATION STATUS (v22)
+✓ Completed (15/15 integration tests passing):
+•	Phase 1.1-1.3: Mission Control, Data Infrastructure, GitHub Integration
+•	Phase 2.1: Director (as "Manager LLM") - basic functionality
+•	Phase 2.2.1-2.2.5: Proposer Registry, routing, complexity analysis, Hard Stops
+•	Phase 2.2.8: Budget management (ConfigService, budget gates)
+🚀 Next Phase (Ready to Implement):
+•	Phase 2.2.6: Self-refinement within Work Order (Proposer quality loops)
+⏳ Pending Implementation:
+•	Phase 2.0: Architect agent (decomposition strategy)
+•	Phase 2.2.7: Parallel mode (Proposer competition)
+•	Phase 2.3/3.2: Orchestrator infrastructure (Aider-based execution)
+•	Phase 2.X: Client Manager agent (escalation handling)
+•	Phase 3.1: Sentinel (adaptive quality gates)
+•	Phase 4.1: Manager enhancements (tactical coordination - currently partial)
+________________________________________
+DATABASE SCHEMA SUPPORT
+All agents integrate with Supabase tables:
+•	work_orders - Work Order lifecycle tracking
+•	contracts - API/domain contract validation
+•	proposer_configs - Model registry and capabilities
+•	decision_logs - Director approval audit trail
+•	cost_tracking - Budget monitoring and enforcement
+•	outcome_vectors - Historical performance metrics
+•	pattern_confidence_scores - Trust and learning patterns
+•	playbook_memory - Successful patterns and fixes
+•	escalations - Unresolved issues requiring human intervention
+•	github_events - Repository activity tracking
+•	system_config - Runtime configuration (budget limits, thresholds)
+________________________________________
+This document represents the complete agreed architectural structure for the Moose system with consolidated Orchestrator/Aider execution infrastructure (2025-09-29).
+
