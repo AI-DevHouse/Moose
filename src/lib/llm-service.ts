@@ -1,5 +1,7 @@
 // src/lib/llm-service.ts - PROPERLY ALIGNED WITH EXISTING INTERFACES
-import { ProposerConfig } from '@/types/supabase';
+import { Tables } from '@/types/supabase';
+
+export type ProposerConfig = Tables<'proposer_configs'>;
 import { 
   LLMRequest, 
   LLMResponse, 

@@ -33,6 +33,12 @@ Review handover docs before technical work. Answer verification questions.
 **R9: Never dismiss errors without investigation**
 When user challenges error handling or test results, investigate properly. Don't dismiss errors as "false positives" without full context verification.
 
+**R10: Verify before assuming**
+- Before writing tests: curl the endpoint, document actual response
+- Before writing DB queries: check src/types/supabase.ts for column names
+- Before using metadata fields: read the actual metadata structure from DB
+- Never assume field names - always verify against live system
+
 ---
 
 ## Rules Removed (Obsolete with Claude Code CLI)
@@ -75,6 +81,19 @@ const parsed = JSON.parse(cleaned);
 ✅ Include concrete examples (positive + negative)
 ✅ Use try-catch for complex validations
 
+### Schema Mismatches
+❌ Don't assume field names (e.g., `is_running`) - check actual API response
+❌ Don't write DB queries without checking supabase.ts types first
+❌ Don't write tests before curling the endpoint
+✅ **Always regenerate types at session start:**
+```powershell
+npx supabase gen types typescript --project-id qclxdnbvoruvqnhsshjr > src/types/supabase.ts
+```
+✅ **Before writing tests, document actual response:**
+```powershell
+curl http://localhost:3000/api/your-endpoint | python -m json.tool
+```
+
 ### General
 ❌ Don't build infrastructure before validating concepts → **FOUND.PRINCIPLE**
 ❌ Don't assume file contents → Always Read first (R2)
@@ -106,16 +125,19 @@ npx tsc --noEmit
 ### Session Start (Mandatory)
 
 ```powershell
-# 1. Integration tests (expect 18/18 passing as of v26)
-.\phase1-2-integration-test.ps1
+# 1. Regenerate Supabase types (verify schema matches code)
+npx supabase gen types typescript --project-id qclxdnbvoruvqnhsshjr > src/types/supabase.ts
 
-# 2. Check server running
-# Look for "compiled successfully" in T1
-
-# 3. Type errors (expect 21 pre-existing)
+# 2. Verify TypeScript compilation
 npx tsc --noEmit 2>&1 | Select-String "Found.*errors"
 
-# 4. Git status
+# 3. Integration tests (expect 20/20 passing as of v34)
+.\phase1-2-integration-test.ps1
+
+# 4. Check server running
+# Look for "compiled successfully" in T1
+
+# 5. Git status
 git status
 git log --oneline -5
 ```

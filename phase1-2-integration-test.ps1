@@ -105,9 +105,37 @@ Test-Endpoint "Hard Stop - Architecture" "forces claude-sonnet-4-5" {
     $r.data.proposer_used -eq "claude-sonnet-4-5" -and $r.data.complexity_analysis.hard_stop_required -eq $true
 }
 
+Write-Host "`n=== PHASE 2.2.6: Self-Refinement (3-Cycle) ===" -ForegroundColor Cyan
+Test-Endpoint "Refinement Metadata Present" "refinement_metadata exists" {
+    $r = Invoke-RestMethod -Uri "http://localhost:3000/api/proposer-enhanced" -Method POST -ContentType "application/json" -Body '{"task_description":"Create a TypeScript function","expected_output_type":"code","context":["test"]}' -TimeoutSec 180
+    $null -ne $r.data.refinement_metadata
+}
+
+Test-Endpoint "Refinement Uses 1-3 Cycles" "cycle count valid" {
+    $r = Invoke-RestMethod -Uri "http://localhost:3000/api/proposer-enhanced" -Method POST -ContentType "application/json" -Body '{"task_description":"Write a React component","expected_output_type":"code","context":["TypeScript"]}' -TimeoutSec 180
+    $r.data.refinement_metadata.refinement_count -ge 1 -and $r.data.refinement_metadata.refinement_count -le 3
+}
+
+Test-Endpoint "Refinement Reduces Errors" "improves code quality" {
+    $r = Invoke-RestMethod -Uri "http://localhost:3000/api/proposer-enhanced" -Method POST -ContentType "application/json" -Body '{"task_description":"Create a utility function","expected_output_type":"code","context":["test"]}' -TimeoutSec 180
+    $rm = $r.data.refinement_metadata
+    ($rm.initial_errors -eq 0) -or ($rm.final_errors -lt $rm.initial_errors)
+}
+
+Write-Host "`n=== PHASE 2.3: Orchestrator ===" -ForegroundColor Cyan
+Test-Endpoint "Orchestrator Status API" "status endpoint available" {
+    $r = Invoke-RestMethod -Uri http://localhost:3000/api/orchestrator
+    $r.success -eq $true -and $null -ne $r.status
+}
+
+Test-Endpoint "Orchestrator Health Check" "orchestrator inactive on startup" {
+    $r = Invoke-RestMethod -Uri http://localhost:3000/api/orchestrator
+    $r.status.polling -eq $false -and $r.status.executing_count -eq 0
+}
+
 Write-Host "`n=== CROSS-PHASE INTEGRATION ===" -ForegroundColor Cyan
 Test-Endpoint "End-to-End Flow" "complete integration" {
-    $r = Invoke-RestMethod -Uri "http://localhost:3000/api/proposer-enhanced" -Method POST -ContentType "application/json" -Body '{"task_description":"Integration test","expected_output_type":"code","context":["test"]}'
+    $r = Invoke-RestMethod -Uri "http://localhost:3000/api/proposer-enhanced" -Method POST -ContentType "application/json" -Body '{"task_description":"Integration test","expected_output_type":"code","context":["test"]}' -TimeoutSec 180
     $r.success -eq $true -and $r.data.proposer_used -ne $null -and $r.data.cost -ne $null
 }
 

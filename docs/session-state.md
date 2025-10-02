@@ -392,12 +392,14 @@ gh auth status   # Should be authenticated
 ## Session Start Checklist
 
 1. [ ] **READ CRITICAL HANDOVER PROTOCOL ABOVE** - Know when/how to update docs
-2. [ ] Run integration tests: `.\phase1-2-integration-test.ps1` (expect 18/18 passing)
-3. [ ] Verify server running (T1: "compiled successfully")
-4. [ ] Answer all 16 verification questions above (2 new questions added in v32)
-5. [ ] Check git status
-6. [ ] Review [known-issues.md](known-issues.md) for active problems
-7. [ ] Decide: Next priority (Orchestrator E2E testing - prerequisites need installation first)
+2. [ ] **Regenerate Supabase types:** `npx supabase gen types typescript --project-id qclxdnbvoruvqnhsshjr > src/types/supabase.ts`
+3. [ ] **Verify TypeScript:** `npx tsc --noEmit` (expect 0 errors as of v34)
+4. [ ] Run integration tests: `.\phase1-2-integration-test.ps1` (expect 20/20 passing as of v34)
+5. [ ] Verify server running (T1: "compiled successfully")
+6. [ ] Answer all 20 verification questions above
+7. [ ] Check git status
+8. [ ] Review [known-issues.md](known-issues.md) for active problems
+9. [ ] Decide: Next priority
 
 ## Session End Checklist (AT 80-85% CONTEXT)
 

@@ -1,5 +1,8 @@
 // src/types/llm.ts
-import { Contract } from './supabase';
+import { Tables } from './supabase';
+
+// Contract type derived from database schema
+export type Contract = Tables<'contracts'>;
 
 export type LLMProvider = 'anthropic' | 'openai';
 

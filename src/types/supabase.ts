@@ -466,11 +466,16 @@ export type Database = {
       }
       work_orders: {
         Row: {
+          acceptance_criteria: Json | null
           actual_cost: number | null
+          architect_version: string | null
           completed_at: string | null
+          context_budget_estimate: number | null
           created_at: string
+          decomposition_doc: string | null
           description: string
           estimated_cost: number
+          files_in_scope: Json | null
           github_branch: string | null
           github_pr_number: number | null
           github_pr_url: string | null
@@ -484,11 +489,16 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          acceptance_criteria?: Json | null
           actual_cost?: number | null
+          architect_version?: string | null
           completed_at?: string | null
+          context_budget_estimate?: number | null
           created_at?: string
+          decomposition_doc?: string | null
           description: string
           estimated_cost?: number
+          files_in_scope?: Json | null
           github_branch?: string | null
           github_pr_number?: number | null
           github_pr_url?: string | null
@@ -502,11 +512,16 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          acceptance_criteria?: Json | null
           actual_cost?: number | null
+          architect_version?: string | null
           completed_at?: string | null
+          context_budget_estimate?: number | null
           created_at?: string
+          decomposition_doc?: string | null
           description?: string
           estimated_cost?: number
+          files_in_scope?: Json | null
           github_branch?: string | null
           github_pr_number?: number | null
           github_pr_url?: string | null
@@ -701,16 +716,8 @@ export type CompositeTypes<
     ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
     : never
 
-
-// Type aliases for convenient imports
-export type ProposerConfig = Tables<'proposer_configs'>
-export type Contract = Tables<'contracts'>
-export type WorkOrder = Tables<'work_orders'>
-export type GitHubEvent = Tables<'github_events'>
-export type Escalation = Tables<'escalations'>
 export const Constants = {
   public: {
     Enums: {},
   },
 } as const
-
