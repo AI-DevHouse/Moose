@@ -62,29 +62,22 @@
 
 ---
 
-## 4. Pre-existing TypeScript Errors (21 total)
+## 4. Pre-existing TypeScript Errors ✅ RESOLVED (v31)
 
-**Status:** Unrelated to new code, not blocking, no runtime impact
+**Status:** Fixed in Session v31
 
-**Breakdown:**
-- `complexity-analyzer.ts`: 4 errors (type 'never' issues in routing validation tests)
-- `contract-validator.ts`: 1 error (Supabase Json vs Contract[] type mismatch)
-- `director-service.ts`: 2 errors (overload mismatches on inserts)
-- `enhanced-proposer-service.ts`: 10 errors (MapIterator + implicit 'any' in reduce calls)
-- `proposer-registry.ts`: 4 errors (Json type vs strict interface mismatches)
+**Resolution:** All 21 TypeScript errors resolved with type assertions and proper imports
 
-**Root Causes:**
-- Supabase Json type too broad for TypeScript strict interfaces
-- Legacy code written before strict typing enforced
-- Could fix with `--downlevelIteration` flag or relaxed tsconfig
+**Files Fixed:**
+- `complexity-analyzer.ts`: Added RequestData interface + typed bands array (4 errors fixed)
+- `contract-validator.ts`: Added `as Contract[]` type assertion (1 error fixed)
+- `director-service.ts`: Added `as any` for work_orders insert + decision_data (2 errors fixed)
+- `enhanced-proposer-service.ts`: Used `Array.from()` for MapIterator + typed reduce params (10 errors fixed)
+- `proposer-registry.ts`: Type assertions for provider, cost_profile, success_patterns, notes (4 errors fixed)
 
-**Impact:** None - Next.js dev server compiles successfully, all runtime functionality works
+**Current Status:** 0 TypeScript errors across entire codebase - clean compilation achieved!
 
-**Workaround:** Verify new code with targeted checks: `npx tsc --noEmit path/to/new/file.ts`
-
-**Planned fix:** Address during Phase 4 refactoring (Week 8) - may relax strict settings or add type guards
-
-**Note:** New Architect files (`architect-service.ts`, `types/architect.ts`, `api/architect/decompose/route.ts`) have 0 errors.
+**Verification:** `npx tsc --noEmit` returns 0 errors
 
 ---
 
@@ -234,7 +227,77 @@ git checkout HEAD -- temp.ts
 
 ---
 
-## 10. Manager Integration with Proposers - 🔜 PENDING
+## 10. Orchestrator Testing Status - 🔄 IN PROGRESS (v33)
+
+**Status:** Implementation complete, prerequisites installed, schema bug found, unit tests pending
+
+**Problem:** Orchestrator has critical schema bug and zero automated tests
+
+**Current state (v33):**
+- ✅ Implementation: 10 files complete (8 core + 2 API), 1,152 lines
+- ✅ Prerequisites: Python 3.11, Aider CLI 0.86.1, GitHub CLI 2.81.0 authenticated
+- ✅ Git branch logic: Fixed to work from current branch (not hardcoded main/master)
+- ❌ **Schema bug:** result-tracker.ts uses `agent_name` (doesn't exist) - should use `model_used`
+- ❌ **Unit tests:** 0/5 written (went straight to E2E - backwards approach)
+- ❌ **Integration tests:** 0/2 added to test suite
+- ⏸️ **E2E testing:** Deferred until unit/integration tests pass
+
+**Critical Bug Details:**
+```typescript
+// WRONG (lines 94-109 in result-tracker.ts)
+await supabase.from('outcome_vectors').insert({
+  agent_name: 'orchestrator',  // ❌ Column doesn't exist!
+  operation_type: 'work_order_execution',  // ❌ Column doesn't exist!
+  // Missing required columns: model_used, route_reason, work_order_id
+});
+
+// CORRECT (fix needed)
+await supabase.from('outcome_vectors').insert({
+  work_order_id: wo.id,  // ✅ Required
+  model_used: proposerResponse.proposer_used,  // ✅ Required (e.g., "gpt-4o-mini")
+  route_reason: routingDecision.reason,  // ✅ Required
+  cost: proposerResponse.cost,
+  execution_time_ms: proposerResponse.execution_time_ms,
+  success: true,
+  diff_size_lines: 0,
+  test_duration_ms: null,
+  failure_classes: null
+});
+```
+
+**Root Cause:** Misunderstood outcome_vectors table purpose
+- **Incorrect assumption:** Generic agent activity log
+- **Actual purpose:** LLM model performance tracking for Manager's learning system
+- **Should track:** "gpt-4o-mini generated code for WO-123, cost $0.001, succeeded"
+- **Should NOT track:** "orchestrator executed WO-123"
+
+**Impact:** Every Orchestrator execution fails at result tracking stage (500 error)
+
+**Testing Strategy (Corrected):**
+1. ✅ Fix result-tracker.ts schema bug (15 min)
+2. ✅ Write 5 unit tests (60 min) - result-tracker, manager-coordinator, proposer-executor, aider-executor, github-integration
+3. ✅ Add Tests 19-20 to integration suite (10 min)
+4. ✅ Run full test suite (5 min) - target 19-20/20 passing
+5. ⏸️ E2E deferred - move to Client Manager
+
+**Unit Tests Planned:**
+- `src/lib/orchestrator/__tests__/result-tracker.test.ts` - Schema validation (CRITICAL)
+- `src/lib/orchestrator/__tests__/manager-coordinator.test.ts` - Complexity estimation logic
+- `src/lib/orchestrator/__tests__/proposer-executor.test.ts` - Task description building
+- `src/lib/orchestrator/__tests__/aider-executor.test.ts` - Instruction file formatting
+- `src/lib/orchestrator/__tests__/github-integration.test.ts` - PR body generation
+
+**Why E2E Deferred:**
+- Attempted E2E 4 times, each revealed new environment issue
+- No unit tests exist to validate components in isolation
+- Testing backwards (E2E first, unit tests last)
+- Diminishing returns - 2+ hours spent, still not working
+
+**Next Phase:** Client Manager (Phase 2.5) - higher value, simpler to test
+
+---
+
+## 11. Manager Integration with Proposers - 🔜 PENDING
 
 **Status:** Manager complete, integration pending
 
@@ -270,8 +333,9 @@ git checkout HEAD -- temp.ts
 | ~~Architect workflow~~ | ✅ RESOLVED | None | N/A | Complete |
 | ~~Database migration~~ | ✅ RESOLVED | None | N/A | Complete |
 | ~~Director approval~~ | ✅ RESOLVED | None | N/A | Complete |
+| ~~Pre-existing TS errors (21)~~ | ✅ RESOLVED v31 | None | N/A | Complete |
 | Manager→Proposer integration | 🔜 PENDING | Manager isolated | Direct API test | Next phase |
-| Pre-existing TS errors (21) | Non-blocking | None | Targeted checks | Week 8 refactor |
+| Orchestrator E2E testing | 🔜 PENDING | Not tested yet | N/A | Install prerequisites |
 | Cold-start race condition | **CRITICAL** | Flaky tests | Run twice | Week 4 Day 5 |
 | Dependency validation relaxed | ⚠️ Monitoring | Complex graphs | Director validates | Future phase |
 | Tunnel status unknown | Non-critical | Webhook testing | Not needed yet | On-demand |

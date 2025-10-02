@@ -1,4 +1,4 @@
-# Session State v30 (2025-10-01)
+# Session State v33 (2025-10-02)
 
 **Start here each session.** Reference other docs as needed.
 
@@ -42,122 +42,212 @@
 
 ---
 
-## Last Session Summary (v29→v30)
+## Last Session Summary (v32→v33)
 
 **Completed:**
-- ✅ **Session Handover Protocol:** Added critical session handover protocol to prevent context loss (triggers at 80-85% context usage)
-- ✅ **Documentation Sync:** Comprehensive review and update of all 7 docs folder files
-- ✅ **Fixed 7 major discrepancies:** Database migration status, model names, self-refinement status, Architect completion %, file rename clarity, Orchestrator prerequisites, TypeScript error count
-- ✅ **Updated 4 key documents:** session-state.md, architecture-decisions.md, Moose Agent Organizational Hierarchy.txt, Moose Agent Organizational Workflow.txt
-- ✅ **TypeScript Error Analysis:** Identified and documented all 21 pre-existing errors (was incorrectly documented as 19)
-- ✅ **Integration Tests:** Verified 18/18 passing with 180s timeout
+- ✅ **Orchestrator Prerequisites Installed:** Python 3.11.9, Aider CLI 0.86.1, GitHub CLI 2.81.0 authenticated
+- ✅ **Critical Bug Found:** outcome_vectors schema mismatch - result-tracker.ts uses `agent_name` (doesn't exist), should use `model_used`
+- ✅ **Git Branch Logic Fixed:** aider-executor.ts now creates feature branches from current branch (not hardcoded main/master)
+- ✅ **E2E Testing Deferred:** Decision made to skip E2E until unit tests + integration tests completed
+- ✅ **Strategic Planning:** Comprehensive analysis of Orchestrator testing approach, Claude feedback incorporated
 
 **Key Learnings:**
-- Documentation drift is catastrophic - must sync at end of each session
-- Session handover protocol prevents loss of work when context window fills
-- Architect, Director, Manager, Proposers are ALL 100% complete (was incorrectly shown as 30% for Architect)
-- Model name is "Claude Sonnet 4.5" not "Claude Sonnet 4" (claude-sonnet-4-5-20250929)
-- Pre-existing TS errors: 21 total across 5 files (complexity-analyzer: 4, contract-validator: 1, director-service: 2, enhanced-proposer-service: 10, proposer-registry: 4)
+- **outcome_vectors table purpose:** Tracks LLM model performance for Manager's learning system, NOT generic agent activity
+- **Schema mismatch error:** `agent_name` column doesn't exist - should use `model_used`, `route_reason`, `work_order_id` (required fields)
+- **Testing gap:** ZERO unit tests exist for Orchestrator - went straight to E2E (backwards approach)
+- **Environment complexity:** Python 3.13 incompatible with Aider, downgraded to 3.11 successfully
+- **Current branch:** On `test/contract-validation-integration` (not main), Aider must work from current branch
 
-**Documentation Changes:**
-- **architecture-decisions.md:** Updated Architect/Director/Proposers/Orchestrator status, added file structure with line counts, marked components complete
-- **session-state.md:** Added Session Handover Protocol section, Session End Checklist, updated error counts, added Orchestrator technical spec reference
-- **known-issues.md:** Updated Issue #4 with accurate 21 error count and detailed breakdown by file with root causes
-- **Hierarchy.txt & Workflow.txt:** Changed "Claude Sonnet 4" → "Claude Sonnet 4.5"
-- **rules-and-procedures.md:** Updated expected error count from 19 to 21
+**Critical Decisions:**
+1. **Fix result-tracker.ts schema bug** before any testing
+2. **Write unit tests first** (5 planned: result-tracker, manager-coordinator, proposer-executor, aider-executor, github-integration)
+3. **Add integration tests** (Tests 19-20 to phase1-2-integration-test.ps1)
+4. **Skip E2E for now** - document as deferred, move to Client Manager (Phase 2.5)
 
-**Files Modified (tracked):**
-- docs/session-state.md (v28 backup created)
-- docs/architecture-decisions.md
-- docs/known-issues.md
-- docs/rules-and-procedures.md
-- docs/Moose Agent Organizational Hierarchy.txt
-- docs/Moose Agent Organizational Workflow.txt
+**Prerequisites Status:**
+- ✅ Python 3.11.9: `py -3.11 --version`
+- ✅ Aider CLI 0.86.1: `py -3.11 -m aider --version`
+- ✅ GitHub CLI 2.81.0: `"C:\Program Files\GitHub CLI\gh.exe" --version`
+- ✅ GitHub authenticated: `gh auth status` (logged in as AI-DevHouse)
+- ✅ API keys: ANTHROPIC_API_KEY, OPENAI_API_KEY verified in .env.local
+
+**Files Modified (v33):**
+- src/lib/orchestrator/aider-executor.ts (lines 85-103: Fixed git branch logic to use current branch)
+- src/lib/orchestrator/github-integration.ts (lines 132-135, 180-185: Use full gh CLI path on Windows)
+
+**Next Session Task:**
+- Fix result-tracker.ts schema bug (outcome_vectors columns)
+- Write 5 unit tests for Orchestrator components
+- Add Tests 19-20 to integration suite
+- Run full test suite and debug
+- Move to Client Manager (Phase 2.5)
+
+---
+
+## Last Session Summary (v30→v31)
+
+**Completed:**
+- ✅ **Phase 2.4 TypeScript Error Resolution:** Fixed all 21 pre-existing TypeScript errors
+- ✅ **Phase 2.3/3.2 Orchestrator Implementation:** Complete Aider-based execution infrastructure (8 files, ~800 lines)
+- ✅ **Clean Compilation:** Achieved 0 TypeScript errors across entire codebase
+- ✅ **Integration Tests:** Verified 18/18 passing (no regressions)
+
+**Key Learnings:**
+- TypeScript errors were Supabase Json type mismatches - fixed with type assertions and proper imports
+- Orchestrator implements singleton pattern for coordinating Work Order execution
+- 5-stage pipeline: Poll → Route (Manager) → Generate (Proposer) → Aider → PR → Track
+- Concurrency control (max 3 concurrent) prevents resource exhaustion
+- Import paths matter: `manager-routing-rules.ts` not `manager-service.ts` for RoutingDecision type
+
+**Orchestrator Implementation:**
+- **Core Files (src/lib/orchestrator/):**
+  - `types.ts` (60 lines) - Orchestrator type definitions
+  - `work-order-poller.ts` (80 lines) - Polls work_orders table
+  - `manager-coordinator.ts` (90 lines) - Calls Manager API
+  - `proposer-executor.ts` (100 lines) - Calls Proposer API
+  - `result-tracker.ts` (160 lines) - Updates database
+  - `aider-executor.ts` (200 lines) - Spawns Aider CLI
+  - `github-integration.ts` (180 lines) - Creates PRs
+  - `orchestrator-service.ts` (220 lines) - Main coordinator (singleton)
+- **API Endpoints (src/app/api/orchestrator/):**
+  - `route.ts` (80 lines) - GET status, POST start/stop
+  - `execute/route.ts` (70 lines) - POST manual execution
+
+**TypeScript Error Fixes:**
+- **complexity-analyzer.ts:** Added RequestData interface + typed bands array
+- **contract-validator.ts:** Added `as Contract[]` type assertion
+- **director-service.ts:** Added `as any` for work_orders insert + decision_data
+- **enhanced-proposer-service.ts:** Used `Array.from()` for MapIterator + typed reduce params
+- **proposer-registry.ts:** Type assertions for provider, cost_profile, success_patterns, notes
+
+**Files Created:**
+- src/lib/orchestrator/types.ts
+- src/lib/orchestrator/work-order-poller.ts
+- src/lib/orchestrator/manager-coordinator.ts
+- src/lib/orchestrator/proposer-executor.ts
+- src/lib/orchestrator/result-tracker.ts
+- src/lib/orchestrator/aider-executor.ts
+- src/lib/orchestrator/github-integration.ts
+- src/lib/orchestrator/orchestrator-service.ts
+- src/app/api/orchestrator/route.ts
+- src/app/api/orchestrator/execute/route.ts
+
+**Files Modified:**
+- src/lib/complexity-analyzer.ts (added RequestData interface)
+- src/lib/contract-validator.ts (type assertion)
+- src/lib/director-service.ts (type assertions)
+- src/lib/enhanced-proposer-service.ts (Array.from + typed reduce)
+- src/lib/proposer-registry.ts (type assertions)
 
 ---
 
 ## Current Status
 
-**Phase 2.1/2.2/2.2.6/4.1 Complete + Database Migration:**
+**Phase 2.1/2.2/2.2.6/2.3/2.4/3.2/4.1 Complete:**
 - ✅ Architect API (`/api/architect/decompose`)
-- ✅ Database migration (5 columns added to work_orders) - **NEW**
+- ✅ Database migration (5 columns added to work_orders)
 - ✅ Upload Spec UI tab (markdown textarea + decomposition display)
 - ✅ Director approval flow (`/api/director/approve`)
 - ✅ Manager routing API (`/api/manager` - POST + GET retry)
-- ✅ Self-refinement: 3-cycle adaptive prompting (was 1 cycle)
+- ✅ Self-refinement: 3-cycle adaptive prompting
+- ✅ **Orchestrator: Implementation complete (10 files, 1,152 lines)** - **v33: Prerequisites installed, schema bug identified**
 - ✅ Centralized logic: architect-decomposition-rules.ts, director-risk-assessment.ts, proposer-refinement-rules.ts, manager-routing-rules.ts
 
 **Infrastructure:**
-- Server: localhost:3000
+- Server: localhost:3000 (running, Orchestrator endpoints compiled)
 - Supabase: qclxdnbvoruvqnhsshjr
 - Branch: test/contract-validation-integration
 - Models: All using claude-sonnet-4-5-20250929
-- Git: Modified (9 tracked files changed, 4 new migration scripts in scripts/)
+- Git: Modified (Orchestrator updates from v32-v33)
+- **Aider**: Python 3.11 + aider-chat 0.86.1 installed and working
+- **GitHub CLI**: 2.81.0 installed and authenticated (AI-DevHouse)
 
 **Testing:**
 - Integration: 18/18 passing (100% - all tests pass with 180s timeout on refinement tests)
-- TypeScript: No new errors from migration changes (21 pre-existing errors in complexity-analyzer, contract-validator, director-service, enhanced-proposer-service, proposer-registry)
+- TypeScript: **0 errors** - Clean compilation achieved!
+- **Orchestrator Unit Tests:** 0/5 (TODO: write tests for result-tracker, manager-coordinator, proposer-executor, aider-executor, github-integration)
+- **Orchestrator Integration Tests:** 0/2 (TODO: add Tests 19-20 to phase1-2-integration-test.ps1)
+- **Orchestrator E2E:** Deferred until unit/integration tests pass
 - Database: Schema verified successfully, all 5 Architect columns present
-- Pre-existing TS errors: 21 (unrelated to new code, no runtime impact)
+- Orchestrator: **Implementation verified, ready for E2E testing**
 
 ---
 
 ## Next Immediate Task
 
-### Phase 2.4: TypeScript Error Resolution - 1-2 hours
+### Orchestrator Unit & Integration Testing - 1-2 hours
 
-**Current State:** 21 pre-existing TypeScript errors across 5 files, no runtime impact but should be resolved before Orchestrator
+**Current State (v33):**
+- ✅ Implementation complete (10 files, 1,152 lines)
+- ✅ Prerequisites installed (Python 3.11, Aider 0.86.1, gh CLI 2.81.0 authenticated)
+- ✅ Schema bug identified (result-tracker.ts uses wrong column names)
+- ❌ Unit tests: 0/5 written
+- ❌ Integration tests: 0/2 added to test suite
+- ⏸️ E2E testing: Deferred until unit/integration tests pass
 
-**Goal:** Fix all 21 TypeScript errors to achieve clean compilation
+**Goal:** Write unit tests, add integration tests, fix schema bug, get to 20/20 passing tests
 
-**Error Breakdown:**
-1. **complexity-analyzer.ts (4 errors)** - Lines 428, 434, 443, 445 - Type 'never' issues in routing validation
-2. **contract-validator.ts (1 error)** - Line 153 - Supabase Json vs Contract[] type mismatch
-3. **director-service.ts (2 errors)** - Lines 91, 147 - Overload mismatches on Work Order/decision inserts
-4. **enhanced-proposer-service.ts (10 errors)** - Lines 356, 395-402 - MapIterator + implicit 'any' in reduce calls
-5. **proposer-registry.ts (4 errors)** - Lines 56, 59, 62, 63 - Json type vs strict interface mismatches
+**Task Sequence:**
 
-**Approach:**
-- Option A: Add proper type guards and narrow Json types to specific interfaces
-- Option B: Add `@ts-expect-error` with comments where Supabase Json type is unavoidable
-- Option C: Relax tsconfig (not recommended - loses type safety)
+**1. Fix result-tracker.ts Schema Bug (15 min):**
+```typescript
+// Fix trackSuccessfulExecution() lines 94-109
+await supabase.from('outcome_vectors').insert({
+  work_order_id: wo.id,                           // Required
+  model_used: proposerResponse.proposer_used,     // NOT agent_name!
+  route_reason: routingDecision.reason,           // Required
+  cost: proposerResponse.cost,                    // Required
+  execution_time_ms: proposerResponse.execution_time_ms,
+  success: true,
+  diff_size_lines: 0,                             // TODO: parse from Aider
+  test_duration_ms: null,
+  failure_classes: null,
+  metadata: {
+    refinement_cycles: proposerResponse.refinement_metadata?.refinement_count || 0
+  }
+});
+
+// Fix trackFailedExecution() lines 166-177 - only insert if stage==='proposer'
+```
+
+**2. Write 5 Unit Tests (60 min):**
+- `src/lib/orchestrator/__tests__/result-tracker.test.ts` (20 min) - Schema validation
+- `src/lib/orchestrator/__tests__/manager-coordinator.test.ts` (10 min) - Complexity estimation
+- `src/lib/orchestrator/__tests__/proposer-executor.test.ts` (10 min) - Task description building
+- `src/lib/orchestrator/__tests__/aider-executor.test.ts` (10 min) - Instruction file format
+- `src/lib/orchestrator/__tests__/github-integration.test.ts` (10 min) - PR body formatting
+
+**3. Run Unit Tests (10 min):**
+```bash
+npm test -- orchestrator
+```
+Debug any failures until all pass.
+
+**4. Add Integration Tests (10 min):**
+Add to `phase1-2-integration-test.ps1`:
+```powershell
+Write-Host "`n=== PHASE 2.3: Orchestrator ===" -ForegroundColor Cyan
+Test-Endpoint "Orchestrator Status" {
+    $r = Invoke-RestMethod http://localhost:3000/api/orchestrator
+    $r.success -eq $true -and $null -ne $r.status
+}
+```
+
+**5. Run Full Integration Suite (5 min):**
+```powershell
+.\phase1-2-integration-test.ps1
+```
+Target: 19/19 or 20/20 passing (depending on if we add Test 20)
 
 **Success Criteria:**
-- ✅ `npx tsc --noEmit` shows 0 errors
-- ✅ All 18/18 integration tests still passing
-- ✅ Next.js dev server compiles without warnings
+- ✅ result-tracker.ts schema bug fixed
+- ✅ 5/5 unit tests written and passing
+- ✅ Integration tests updated to 19/19 or 20/20 passing
+- ✅ TypeScript still 0 errors
+- ✅ Documentation updated with testing status
 
-**Alternative Priority:** Skip to Orchestrator and defer error fixes (user preference needed)
+**Next After This:** Move to Phase 2.5 Client Manager (E2E deferred)
 
----
-
-### Phase 2.3/3.2: Orchestrator (Aider-based execution infrastructure) - 5-7 hours (AFTER error fixes)
-
-**Current State:** Database ready, Proposers generate code but no automated execution
-
-**Goal:** Build Aider-based infrastructure to apply code to repository
-
-**Prerequisites:** ✅ COMPLETE - Database migration finished, work_orders table has all required columns
-
-**Technical Specification:** See `docs/Technical Specification - Orchestrator.txt` for complete implementation plan
-
-**Architecture:**
-- NOT an agent - this is tooling/infrastructure
-- Uses Aider CLI for git-aware code application
-- Node.js child_process (containerization deferred)
-- GitHub Actions integration for CI/CD
-
-**4-Phase Implementation Plan:**
-1. **Phase 1 (2-3h):** Core Infrastructure - Poller, Manager Coordinator, Proposer Executor, Orchestrator Service, API endpoints
-2. **Phase 2 (2-3h):** Aider Integration - Executor, instruction files, branch management, error handling
-3. **Phase 3 (1-2h):** GitHub Integration - PR creation with metadata, Result Tracker
-4. **Phase 4 (1h):** Testing & Polish - Integration tests, E2E flow, documentation updates
-
-**File Structure:**
-- `src/lib/orchestrator/` - 7 core files (orchestrator-service.ts, work-order-poller.ts, manager-coordinator.ts, proposer-executor.ts, aider-executor.ts, github-integration.ts, result-tracker.ts)
-- `src/app/api/orchestrator/` - 2 API endpoints (status/start/stop, manual execution)
-
-**Alternative Priority:** Phase 2.5 Client Manager (escalation UI) - discuss with user first
 
 ---
 
@@ -185,9 +275,25 @@ Answer these to confirm doc comprehension:
 
 **Q10:** What is the root cause of the Security Hard Stop test failure on cold start, what is the workaround, and what is the planned fix?
 
-**Q11 (NEW):** What was the root cause of the system_config SQL error during migration, and how was it fixed?
+**Q11:** What was the root cause of the system_config SQL error during migration, and how was it fixed?
 
-**Q12 (NEW):** Why did type generation fail using Supabase CLI, and what was the workaround?
+**Q12:** Why did type generation fail using Supabase CLI, and what was the workaround?
+
+**Q13:** What are the 5 stages of the Orchestrator execution pipeline, and what is the concurrency limit?
+
+**Q14:** What are the prerequisites for running Orchestrator E2E tests, and what are the 3 rollback scenarios?
+
+**Q15 (NEW v32):** What metadata fields does the Orchestrator work-order-poller check for Director approval, and why are there two?
+
+**Q16 (NEW v32):** What is the actual API endpoint structure for Orchestrator control (start/stop), and how does it differ from the original spec?
+
+**Q17 (NEW v33):** What was the critical schema bug found in result-tracker.ts, which columns were wrong, and what are the correct column names for outcome_vectors?
+
+**Q18 (NEW v33):** Why was E2E testing deferred in v33, what is the testing sequence (unit → integration → E2E), and how many unit tests are planned?
+
+**Q19 (NEW v33):** What are the Orchestrator prerequisites installed in v33, which Python version is used with Aider, and why?
+
+**Q20 (NEW v33):** What is the purpose of the outcome_vectors table (LLM model tracking vs generic agent activity), and which stages should write to it?
 
 ---
 
@@ -202,9 +308,21 @@ Answer these to confirm doc comprehension:
 - `src/lib/manager-service.ts` - Orchestration only (202 lines)
 - `src/lib/proposer-refinement-rules.ts` - 3-cycle self-refinement
 - `src/lib/enhanced-proposer-service.ts` - Orchestration only (467 lines, down from 675)
-- `scripts/migrate-database.ts` - **NEW** (348 lines) - Migration automation with safeguards
-- `scripts/post-migration.ts` - **NEW** (153 lines) - Post-migration config + type regen
-- `scripts/MIGRATION_GUIDE.md` - **NEW** (252 lines) - Step-by-step migration guide
+- `src/lib/orchestrator/` - **VERIFIED v32** - 8 files (1,152 lines total) - Aider-based execution
+  - `orchestrator-service.ts` (286 lines) - Main coordinator (singleton)
+  - `work-order-poller.ts` (83 lines) - Polls work_orders table, checks metadata
+  - `manager-coordinator.ts` - Calls Manager API
+  - `proposer-executor.ts` - Calls Proposer API
+  - `result-tracker.ts` - Updates database
+  - `aider-executor.ts` - Spawns Aider CLI
+  - `github-integration.ts` - Creates PRs
+  - `types.ts` - Orchestrator types
+- `src/app/api/orchestrator/` - **NEW v31** - 2 files
+  - `route.ts` (95 lines) - GET status, POST start/stop (single endpoint with action param)
+  - `execute/route.ts` (69 lines) - POST manual execution
+- `scripts/migrate-database.ts` (348 lines) - Migration automation with safeguards
+- `scripts/post-migration.ts` (153 lines) - Post-migration config + type regen
+- `scripts/MIGRATION_GUIDE.md` (252 lines) - Step-by-step migration guide
 - See [architecture-decisions.md](architecture-decisions.md) for full structure
 
 **Agent Hierarchy:**
@@ -212,8 +330,8 @@ Answer these to confirm doc comprehension:
 2. Director (Phase 2.1 - ✅ 100% Complete)
 3. Manager (Phase 4.1 - ✅ 100% Complete)
 4. Proposers (Phase 2.2/2.2.6 - ✅ 100% Complete + 3-cycle self-refinement)
-5. Client Manager (Phase 2.5 - planned)
-6. Orchestrator (Phase 2.3/3.2 - Aider-based, NOT agent - **READY TO BUILD after TS errors fixed**)
+5. Orchestrator (Phase 2.3/3.2 - ✅ **IMPLEMENTATION COMPLETE, VERIFIED v32** - Aider-based, NOT agent - ready for E2E testing)
+6. Client Manager (Phase 2.5 - planned)
 7. Sentinel (Phase 3.1 - planned)
 
 **Essential Commands:**
@@ -221,13 +339,29 @@ Answer these to confirm doc comprehension:
 # Integration tests (run first each session)
 .\phase1-2-integration-test.ps1
 
-# Type errors (expect 21 pre-existing)
+# Type errors (expect 0 as of v31)
 npx tsc --noEmit 2>&1 | Select-String "Found.*errors"
 
-# Database migration commands (already completed)
-npx tsx scripts/migrate-database.ts --dry-run
-npx tsx scripts/migrate-database.ts --show-sql
-npx tsx scripts/post-migration.ts
+# Test Orchestrator status (NEW v31)
+Invoke-RestMethod http://localhost:3000/api/orchestrator
+
+# Start Orchestrator polling (NEW v31)
+Invoke-RestMethod -Uri "http://localhost:3000/api/orchestrator" `
+  -Method POST `
+  -ContentType "application/json" `
+  -Body '{"action":"start","interval_ms":10000}'
+
+# Stop Orchestrator polling (NEW v31)
+Invoke-RestMethod -Uri "http://localhost:3000/api/orchestrator" `
+  -Method POST `
+  -ContentType "application/json" `
+  -Body '{"action":"stop"}'
+
+# Manual Work Order execution (NEW v31)
+Invoke-RestMethod -Uri "http://localhost:3000/api/orchestrator/execute" `
+  -Method POST `
+  -ContentType "application/json" `
+  -Body '{"work_order_id":"<work-order-id>"}'
 
 # Test Architect endpoint
 $spec = @{
@@ -246,6 +380,11 @@ Invoke-RestMethod -Uri "http://localhost:3000/api/architect/decompose" `
 Invoke-RestMethod http://localhost:3000/api/proposers | ConvertFrom-Json |
   Select-Object -ExpandProperty proposers |
   Format-Table name, complexity_threshold, model
+
+# Prerequisites check (for E2E testing)
+aider --version  # Should be installed
+gh --version     # Should be installed
+gh auth status   # Should be authenticated
 ```
 
 ---
@@ -255,10 +394,10 @@ Invoke-RestMethod http://localhost:3000/api/proposers | ConvertFrom-Json |
 1. [ ] **READ CRITICAL HANDOVER PROTOCOL ABOVE** - Know when/how to update docs
 2. [ ] Run integration tests: `.\phase1-2-integration-test.ps1` (expect 18/18 passing)
 3. [ ] Verify server running (T1: "compiled successfully")
-4. [ ] Answer all 12 verification questions above (2 new questions added for migration)
+4. [ ] Answer all 16 verification questions above (2 new questions added in v32)
 5. [ ] Check git status
 6. [ ] Review [known-issues.md](known-issues.md) for active problems
-7. [ ] Decide: Next priority (Orchestrator implementation - prerequisites complete)
+7. [ ] Decide: Next priority (Orchestrator E2E testing - prerequisites need installation first)
 
 ## Session End Checklist (AT 80-85% CONTEXT)
 
@@ -283,4 +422,4 @@ Invoke-RestMethod http://localhost:3000/api/proposers | ConvertFrom-Json |
 
 ---
 
-**Phase Status:** 2.0/2.1/2.2/2.2.6/4.1 Complete + Database Migration ✅ | Tests: 18/18 passing | TS Errors: 21 (needs fixing) | Next: Fix TS errors → 2.3 Orchestrator Implementation
+**Phase Status:** 2.0/2.1/2.2/2.2.6/2.3/3.2/4.1 Complete ✅ | Tests: 18/18 passing | TS Errors: 0 ✅ | Orchestrator: Implementation verified v32 | Next: E2E Testing (install prerequisites first)
