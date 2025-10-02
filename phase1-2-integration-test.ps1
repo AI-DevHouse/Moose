@@ -133,6 +133,21 @@ Test-Endpoint "Orchestrator Health Check" "orchestrator inactive on startup" {
     $r.status.polling -eq $false -and $r.status.executing_count -eq 0
 }
 
+Write-Host "`n=== PHASE 3.1: Sentinel ===" -ForegroundColor Cyan
+Test-Endpoint "Health Check Endpoint" "health endpoint returns ok" {
+    $r = Invoke-RestMethod -Uri http://localhost:3000/api/health
+    $r.status -eq "ok" -and $null -ne $r.timestamp
+}
+
+Test-Endpoint "Sentinel Webhook Auth" "rejects unauthenticated requests" {
+    try {
+        Invoke-RestMethod -Uri http://localhost:3000/api/sentinel -Method POST -ContentType "application/json" -Body '{"test":"data"}' -ErrorAction Stop
+        $false
+    } catch {
+        $_.Exception.Response.StatusCode -eq 401
+    }
+}
+
 Write-Host "`n=== CROSS-PHASE INTEGRATION ===" -ForegroundColor Cyan
 Test-Endpoint "End-to-End Flow" "complete integration" {
     $r = Invoke-RestMethod -Uri "http://localhost:3000/api/proposer-enhanced" -Method POST -ContentType "application/json" -Body '{"task_description":"Integration test","expected_output_type":"code","context":["test"]}' -TimeoutSec 180
