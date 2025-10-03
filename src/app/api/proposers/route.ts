@@ -1,21 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { proposerRegistry, ProposerConfig } from '@/lib/proposer-registry';
+import { getOrCache, cache } from '@/lib/cache';
 
 export async function GET() {
   try {
-    await proposerRegistry.initialize();
-    const proposers = proposerRegistry.listActiveProposers();
-    
+    // Cache proposers list for 60 seconds (they rarely change)
+    const proposers = await getOrCache(
+      'proposers-list',
+      60 * 1000, // 60 seconds TTL
+      async () => {
+        await proposerRegistry.initialize();
+        return proposerRegistry.listActiveProposers();
+      }
+    );
+
     return NextResponse.json({
       success: true,
       proposers,
-      count: proposers.length
+      count: proposers.length,
+      cached: true // Indicate response may be cached
     });
   } catch (error) {
     console.error('Error fetching proposers:', error);
     return NextResponse.json(
-      { 
-        success: false, 
+      {
+        success: false,
         error: 'Failed to fetch proposers',
         details: error instanceof Error ? error.message : 'Unknown error'
       },
@@ -58,7 +67,10 @@ export async function POST(request: NextRequest) {
     };
 
     await proposerRegistry.registerProposer(proposerConfig);
-    
+
+    // Invalidate cache after modification
+    cache.invalidate('proposers-list');
+
     return NextResponse.json({
       success: true,
       message: 'Proposer registered successfully',
@@ -100,7 +112,10 @@ export async function PUT(request: NextRequest) {
       };
 
       await proposerRegistry.registerProposer(correctedConfig);
-      
+
+      // Invalidate cache after modification
+      cache.invalidate('proposers-list');
+
       return NextResponse.json({
         success: true,
         message: "Fixed proposer configuration to gpt-4o-mini",

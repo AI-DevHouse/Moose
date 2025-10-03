@@ -1,0 +1,132 @@
+{
+  "timestamp": "2025-10-03T17:02:12.635Z",
+  "version": "v41",
+  "supabase_project": "qclxdnbvoruvqnhsshjr",
+  "system_config": [
+    {
+      "id": "31b1ccaa-b6da-4838-8ae0-2fb32dbc51b6",
+      "config_key": "routing_config",
+      "config_value": {
+        "enable_hard_stops": true,
+        "enable_parallel_mode": false
+      },
+      "config_type": "routing",
+      "description": "Routing behavior flags",
+      "updated_by": null,
+      "updated_at": "2025-09-29T11:06:43.115914+00:00",
+      "created_at": "2025-09-29T11:06:43.115914+00:00"
+    },
+    {
+      "id": "e1987925-cd5a-4247-8dcf-92cd60868318",
+      "config_key": "budget_limits",
+      "config_value": {
+        "daily_hard_cap": 50,
+        "daily_soft_cap": 20,
+        "emergency_kill": 100,
+        "monthly_target": 500,
+        "monthly_hard_cap": 600
+      },
+      "config_type": "budget",
+      "description": "Cost control thresholds in USD",
+      "updated_by": "api_user",
+      "updated_at": "2025-09-29T13:11:37.704+00:00",
+      "created_at": "2025-09-29T11:06:43.115914+00:00"
+    },
+    {
+      "id": "dd9f52f0-152c-4cae-b42b-268e528ffcd9",
+      "config_key": "orchestrator_enabled",
+      "config_value": false,
+      "config_type": "boolean",
+      "description": "Enable/disable Orchestrator automatic polling",
+      "updated_by": null,
+      "updated_at": "2025-10-01T16:49:54.933031+00:00",
+      "created_at": "2025-10-01T16:49:54.933031+00:00"
+    },
+    {
+      "id": "f4a1aeff-a023-4a31-9557-b60b9033eef1",
+      "config_key": "orchestrator_polling_interval_ms",
+      "config_value": 10000,
+      "config_type": "number",
+      "description": "Polling interval in milliseconds",
+      "updated_by": null,
+      "updated_at": "2025-10-01T16:49:54.933031+00:00",
+      "created_at": "2025-10-01T16:49:54.933031+00:00"
+    },
+    {
+      "id": "5a528b57-8809-4e5a-bdfb-ab0107ba6282",
+      "config_key": "orchestrator_max_concurrent",
+      "config_value": 3,
+      "config_type": "number",
+      "description": "Maximum concurrent Work Order executions",
+      "updated_by": null,
+      "updated_at": "2025-10-01T16:49:54.933031+00:00",
+      "created_at": "2025-10-01T16:49:54.933031+00:00"
+    },
+    {
+      "id": "663e6847-d470-40cd-8010-1448f63a2b43",
+      "config_key": "orchestrator_aider_timeout_ms",
+      "config_value": 300000,
+      "config_type": "number",
+      "description": "Aider execution timeout (5 minutes)",
+      "updated_by": null,
+      "updated_at": "2025-10-01T16:49:54.933031+00:00",
+      "created_at": "2025-10-01T16:49:54.933031+00:00"
+    }
+  ],
+  "proposer_configs": [
+    {
+      "id": "f4b60e1b-e375-4796-aaa6-cdcc445a05b7",
+      "name": "gpt-4o-mini",
+      "provider": "openai",
+      "endpoint": "https://api.openai.com/v1/chat/completions",
+      "context_limit": 128000,
+      "cost_profile": {
+        "currency": "USD",
+        "input_cost_per_token": 1.5e-7,
+        "output_cost_per_token": 6e-7
+      },
+      "strengths": [
+        "fast-execution",
+        "simple-tasks",
+        "cost-effective"
+      ],
+      "complexity_threshold": 0.3,
+      "success_patterns": null,
+      "notes": "Cost-optimized fallback (44x cheaper than reasoning models)",
+      "is_active": true,
+      "created_at": "2025-09-18T10:43:10.919718+00:00",
+      "updated_at": "2025-09-29T12:50:35.241147+00:00"
+    },
+    {
+      "id": "a40c5caf-b0fb-4a8b-a544-ca82bb2ab939",
+      "name": "claude-sonnet-4-5",
+      "provider": "anthropic",
+      "endpoint": "claude-sonnet-4-5-20250929",
+      "context_limit": 200000,
+      "cost_profile": {
+        "input_cost_per_token": 0.000003,
+        "output_cost_per_token": 0.000015
+      },
+      "strengths": [
+        "high-quality-code",
+        "multi-file-reasoning",
+        "consistent-diffs"
+      ],
+      "complexity_threshold": 1,
+      "success_patterns": null,
+      "notes": "Primary proposer for complex work",
+      "is_active": true,
+      "created_at": "2025-09-18T10:43:10.919718+00:00",
+      "updated_at": "2025-09-29T12:50:35.241147+00:00"
+    }
+  ],
+  "contracts": [],
+  "metadata": {
+    "exported_by": "export-config.ts",
+    "table_counts": {
+      "system_config": 6,
+      "proposer_configs": 2,
+      "contracts": 0
+    }
+  }
+}

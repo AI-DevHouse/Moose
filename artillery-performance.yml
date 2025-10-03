@@ -1,0 +1,97 @@
+config:
+  target: "http://localhost:3000"
+  phases:
+    - duration: 60
+      arrivalRate: 5
+      name: "Warm up"
+    - duration: 120
+      arrivalRate: 10
+      name: "Sustained load"
+    - duration: 60
+      arrivalRate: 20
+      name: "Peak load"
+  processor: "./artillery-processor.js"
+  plugins:
+    expect: {}
+  ensure:
+    maxErrorRate: 5  # Max 5% error rate
+    p95: 200  # 95th percentile under 200ms
+    p99: 500  # 99th percentile under 500ms
+
+scenarios:
+  # Critical Path 1: Health & Status Endpoints (Read-heavy, should be fast)
+  - name: "Health Check"
+    weight: 20
+    flow:
+      - get:
+          url: "/api/health"
+          expect:
+            - statusCode: 200
+            - contentType: json
+            - hasProperty: status
+
+  - name: "Admin Health Dashboard"
+    weight: 15
+    flow:
+      - get:
+          url: "/api/admin/health"
+          expect:
+            - statusCode: 200
+            - contentType: json
+
+  - name: "Budget Status"
+    weight: 15
+    flow:
+      - get:
+          url: "/api/budget-status"
+          expect:
+            - statusCode: 200
+            - contentType: json
+
+  # Critical Path 2: Work Order Operations (Core functionality)
+  - name: "List Work Orders"
+    weight: 20
+    flow:
+      - get:
+          url: "/api/work-orders"
+          expect:
+            - statusCode: 200
+            - contentType: json
+
+  - name: "Dashboard Metrics"
+    weight: 10
+    flow:
+      - get:
+          url: "/api/dashboard/metrics"
+          expect:
+            - statusCode: 200
+            - contentType: json
+
+  # Critical Path 3: System Configuration (Frequently accessed)
+  - name: "System Config"
+    weight: 10
+    flow:
+      - get:
+          url: "/api/config"
+          expect:
+            - statusCode: 200
+            - contentType: json
+
+  - name: "Proposers List"
+    weight: 5
+    flow:
+      - get:
+          url: "/api/proposers"
+          expect:
+            - statusCode: 200
+            - contentType: json
+
+  # Critical Path 4: Escalations (User-facing)
+  - name: "List Escalations"
+    weight: 5
+    flow:
+      - get:
+          url: "/api/escalations"
+          expect:
+            - statusCode: 200
+            - contentType: json

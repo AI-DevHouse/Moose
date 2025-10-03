@@ -46,35 +46,43 @@
 
 ## Last Session Summary (v41→v42)
 
-**✅ PRIORITY 2 COMPLETE: Contract Validation in Refinement Loop**
+**✅ PRIORITY 5 COMPLETE: Integration & Hardening (Tasks 1-3)**
 
 **Completed:**
-- ✅ **Contract Validation Integrated** - Week 4 D4-5 deliverable #1 complete
-- ✅ **Moved contract validation into refinement loop** - Now validates BEFORE cycle 1 and after each cycle
-- ✅ **Contract violations added to refinement prompts** - LLM sees violations and fixes them
-- ✅ **All tests passing** - 49/49 tests (100%): 39 orchestrator + 10 failure-modes
-- ✅ **Fixed .env.local issue** - Environment variables now loading correctly
+- ✅ **Task 5.1: Performance Profiling** - Artillery setup, all endpoints <200ms (P95: 130ms)
+- ✅ **Task 5.2: Backup Procedures** - Config export/restore scripts, procedures documented
+- ✅ **Task 5.3: Security Hardening** - Rate limiting, input sanitization, security audit
 
-**Implementation Details:**
-- **proposer-refinement-rules.ts** (90 lines changed):
-  - Updated `RefinementResult` interface to track contract violations per cycle
-  - Added `validateContract` callback parameter to `attemptSelfRefinement()`
-  - Initial contract validation before refinement cycles start
-  - Contract validation after each refinement cycle (cycles 1, 2, 3)
-  - Contract violation details added to refinement prompts
-- **enhanced-proposer-service.ts** (80 lines changed):
-  - Created `validateContractCallback` function
-  - Passes callback to refinement function
-  - Removed duplicate post-refinement validation code (now in loop)
-  - Extracts final contract validation from refinement metadata
+**Performance Profiling (5.1):**
+- Artillery 2.0.26 installed, 1,200+ requests tested
+- P95: 130ms ✅ (target <200ms), P99: 233ms ✅ (target <500ms)
+- Database indexes created (5 indexes for slow queries)
+- Caching added (`src/lib/cache.ts`, `/api/proposers` cached 60s)
+- Files: artillery-performance.yml, scripts/create-performance-indexes.sql, docs/performance-baseline.md
+
+**Backup Procedures (5.2):**
+- Export script: `npm run backup:config` (exports system_config, proposer_configs, contracts)
+- Restore script: `npm run restore:config --input <file> [--dry-run]`
+- 4 rollback scenarios documented (5-60 min RTO)
+- Files: scripts/export-config.ts (157 lines), scripts/restore-config.ts (199 lines), docs/backup-procedures.md (500+ lines)
+
+**Security Hardening (5.3):**
+- Rate limiter: `src/lib/rate-limiter.ts` (230 lines) - Single-user, LLM quota protection
+- Input sanitizer: `src/lib/input-sanitizer.ts` (360 lines) - SQL injection, XSS, path traversal
+- Rate limits adjusted for single-user: Architect 4 req/min (TPM-limited), Internal 1000 req/min
+- Security audit: 5 vulnerabilities found in Client Manager API, all fixed
+- Files: docs/security-procedures.md (600+ lines), docs/security-audit-client-manager.md (400+ lines)
+
+**Key Changes:**
+- Rate limits now match LLM API quotas (Claude: 4 RPM for 30k TPM, OpenAI: 500 RPM)
+- `/api/architect/decompose` secured: rate limited (4/min) + input validated + security check
+- `/api/client-manager/escalate` secured: rate limited (1000/min) + UUID validated + audit logged
 
 **Test Results:**
 - TypeScript: 0 errors ✅
 - All tests: 49/49 passing (100%) ✅
-- Orchestrator tests: 39/39 ✅
-- Failure-modes tests: 10/10 ✅ (fixed by adding .env.local)
-
-**Key Achievement:** Contract violations now detected and fixed during refinement cycles, not after all cycles complete
+- Performance: P95 130ms, P99 233ms ✅
+- Backup/restore: Tested successfully ✅
 
 ## Previous Session Summary (v40→v41)
 
@@ -165,16 +173,16 @@
 
 ## Next Immediate Task
 
-### 🎯 Priority 5: Integration & Hardening (3-4 days) - **NEXT ON CRITICAL PATH**
+### 🎯 Priority 5.4: Ops Documentation (0.5-1 day) - **NEXT ON CRITICAL PATH**
 
-**Context:** Contract validation complete. System ready for production hardening.
+**Context:** Performance, backup, and security complete. Need operational documentation for deployment.
 
 **Tasks (Execute in order):**
-1. **Performance Profiling** (1 day)
-   - Profile all API endpoints with Artillery or k6
-   - Verify <200ms response time for critical paths
-   - Index slow database queries
-   - Add caching for frequently-read data (system_config, proposer_configs)
+1. **Deployment Procedures** (2 hours)
+   - Document Vercel deployment steps
+   - Environment variable configuration
+   - Supabase project setup
+   - First-time deployment checklist
 
 2. **Backup Procedures** (0.5 days)
    - Configure daily Supabase backups
@@ -268,11 +276,14 @@ npx supabase gen types typescript --project-id qclxdnbvoruvqnhsshjr > src/types/
 git status
 ```
 
-### Key Files (Updated v41)
+### Key Files (Updated v42)
 ```
 Core Architecture:
 - src/lib/architect-decomposition-rules.ts (7,535 lines) - Spec→WO decomposition
 - src/lib/director-risk-assessment.ts - Governance & approval
+- src/lib/rate-limiter.ts (230 lines) - Single-user LLM quota protection
+- src/lib/input-sanitizer.ts (360 lines) - SQL/XSS/path traversal prevention
+- src/lib/cache.ts (107 lines) - In-memory cache with TTL
 - src/lib/manager-routing-rules.ts (371 lines) - Routing logic
 - src/lib/proposer-refinement-rules.ts (375 lines) - 3-cycle self-refinement + contract validation
 - src/lib/enhanced-proposer-service.ts (609 lines) - Code generation orchestration + contract callback

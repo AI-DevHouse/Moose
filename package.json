@@ -7,7 +7,11 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "perf:test": "artillery run artillery-performance.yml",
+    "perf:report": "artillery run --output report.json artillery-performance.yml && artillery report report.json",
+    "backup:config": "tsx scripts/export-config.ts",
+    "restore:config": "tsx scripts/restore-config.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.65.0",
@@ -34,6 +38,7 @@
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "@vitest/ui": "^3.2.4",
+    "artillery": "^2.0.26",
     "autoprefixer": "^10.0.1",
     "dotenv": "^17.2.3",
     "eslint": "^8",
