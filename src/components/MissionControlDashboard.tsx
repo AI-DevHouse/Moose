@@ -19,6 +19,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { dashboardApi } from '@/lib/dashboard-api';
 import AuthButton from '@/components/AuthButton';
 import { TechnicalSpec, DecompositionOutput } from '@/types/architect';
+import { MonitoringDashboard } from '@/components/MonitoringDashboard';
 
 // Types for Moose system data
 interface WorkOrder {
@@ -198,6 +199,13 @@ export default function MissionControlDashboard() {
   const [featureName, setFeatureName] = useState('');
   const [submittingToDirector, setSubmittingToDirector] = useState(false);
   const [directorDecision, setDirectorDecision] = useState<any>(null);
+
+  // Escalations tab state
+  const [selectedEscalationForDetails, setSelectedEscalationForDetails] = useState<string | null>(null);
+  const [escalationDetails, setEscalationDetails] = useState<any>(null);
+  const [loadingEscalationDetails, setLoadingEscalationDetails] = useState(false);
+  const [executingDecision, setExecutingDecision] = useState(false);
+  const [decisionNotes, setDecisionNotes] = useState('');
 
   const wsClient = useRef<SimpleWebSocketClient | null>(null);
 
@@ -443,6 +451,55 @@ export default function MissionControlDashboard() {
     }
   };
 
+  // Handle loading escalation details
+  const handleLoadEscalationDetails = async (escalationId: string) => {
+    setLoadingEscalationDetails(true);
+    setSelectedEscalationForDetails(escalationId);
+
+    try {
+      const details = await dashboardApi.getEscalationResolutions(escalationId);
+      setEscalationDetails(details);
+    } catch (err) {
+      console.error('Error loading escalation details:', err);
+      setError('Failed to load escalation details');
+    } finally {
+      setLoadingEscalationDetails(false);
+    }
+  };
+
+  // Handle executing escalation decision
+  const handleExecuteDecision = async (optionId: string) => {
+    if (!selectedEscalationForDetails) return;
+
+    setExecutingDecision(true);
+    setError(null);
+
+    try {
+      const success = await dashboardApi.executeEscalationDecision(
+        selectedEscalationForDetails,
+        optionId,
+        'human-user', // TODO: Get from auth context
+        decisionNotes
+      );
+
+      if (success) {
+        alert(`✅ Decision executed successfully! Option ${optionId} applied.`);
+        setSelectedEscalationForDetails(null);
+        setEscalationDetails(null);
+        setDecisionNotes('');
+        // Refresh escalations list
+        loadDashboardData();
+      } else {
+        alert('Failed to execute decision');
+      }
+    } catch (err) {
+      console.error('Error executing decision:', err);
+      setError('Failed to execute escalation decision');
+    } finally {
+      setExecutingDecision(false);
+    }
+  };
+
   // Handle submit to Director
   const handleSubmitToDirector = async () => {
     if (!decomposition || !featureName) {
@@ -602,6 +659,21 @@ export default function MissionControlDashboard() {
               Dashboard
             </button>
             <button
+              onClick={() => setActiveTab('escalations')}
+              className={`${
+                activeTab === 'escalations'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center`}
+            >
+              Escalations
+              {dashboardMetrics && dashboardMetrics.pendingEscalations > 0 && (
+                <span className="ml-2 bg-red-500 text-white rounded-full px-2 py-0.5 text-xs font-bold">
+                  {dashboardMetrics.pendingEscalations}
+                </span>
+              )}
+            </button>
+            <button
               onClick={() => setActiveTab('upload-spec')}
               className={`${
                 activeTab === 'upload-spec'
@@ -610,6 +682,16 @@ export default function MissionControlDashboard() {
               } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
             >
               Upload Spec
+            </button>
+            <button
+              onClick={() => setActiveTab('health')}
+              className={`${
+                activeTab === 'health'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
+            >
+              Health Monitor
             </button>
           </nav>
         </div>
@@ -895,6 +977,262 @@ export default function MissionControlDashboard() {
           </>
         )}
 
+        {/* Escalations Tab Content */}
+        {activeTab === 'escalations' && (
+          <div className="space-y-6">
+            {/* Escalations Queue */}
+            <div className="bg-white rounded-lg shadow overflow-hidden">
+              <div className="px-6 py-4 border-b border-gray-200">
+                <h3 className="text-lg font-medium text-gray-900">Open Escalations</h3>
+                <p className="text-sm text-gray-600 mt-1">
+                  Work Orders requiring human decision-making
+                </p>
+              </div>
+
+              {escalations.filter(esc => esc.status === 'open' || esc.status === 'in_progress').length === 0 ? (
+                <div className="px-6 py-12 text-center">
+                  <CheckCircleIcon className="w-12 h-12 mx-auto text-green-500 mb-4" />
+                  <p className="text-gray-600">No pending escalations - All systems running smoothly!</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-gray-200">
+                  {escalations
+                    .filter(esc => esc.status === 'open' || esc.status === 'in_progress')
+                    .map((escalation) => (
+                      <div key={escalation.id} className="p-6 hover:bg-gray-50">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center space-x-3 mb-2">
+                              <ExclamationTriangleIcon className="w-6 h-6 text-red-500" />
+                              <h4 className="text-lg font-medium text-gray-900">
+                                {escalation.work_orders?.title || 'Unknown Work Order'}
+                              </h4>
+                              <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                escalation.status === 'open' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'
+                              }`}>
+                                {escalation.status}
+                              </span>
+                            </div>
+
+                            <p className="text-sm text-gray-600 mb-3">
+                              <span className="font-medium">Reason:</span> {escalation.reason}
+                            </p>
+
+                            <div className="flex items-center space-x-4 text-xs text-gray-500 mb-4">
+                              <span>Work Order: {escalation.work_order_id.substring(0, 8)}</span>
+                              <span>•</span>
+                              <span>Created: {new Date(escalation.created_at).toLocaleString()}</span>
+                              {escalation.work_orders?.risk_level && (
+                                <>
+                                  <span>•</span>
+                                  <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getRiskLevelColor(escalation.work_orders.risk_level)}`}>
+                                    {escalation.work_orders.risk_level} risk
+                                  </span>
+                                </>
+                              )}
+                            </div>
+
+                            <button
+                              onClick={() => handleLoadEscalationDetails(escalation.id)}
+                              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm font-medium"
+                            >
+                              View Resolution Options
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              )}
+            </div>
+
+            {/* Escalation Details Modal */}
+            {selectedEscalationForDetails && (
+              <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+                <div className="relative top-10 mx-auto p-6 border w-[90%] max-w-5xl shadow-lg rounded-md bg-white mb-10">
+                  <div className="flex justify-between items-center mb-6">
+                    <h3 className="text-2xl font-bold text-gray-900">Escalation Resolution Options</h3>
+                    <button
+                      onClick={() => {
+                        setSelectedEscalationForDetails(null);
+                        setEscalationDetails(null);
+                        setDecisionNotes('');
+                      }}
+                      className="text-gray-400 hover:text-gray-600"
+                    >
+                      <XMarkIcon className="w-6 h-6" />
+                    </button>
+                  </div>
+
+                  {loadingEscalationDetails ? (
+                    <div className="text-center py-12">
+                      <ArrowPathIcon className="w-8 h-8 animate-spin text-blue-600 mx-auto mb-4" />
+                      <p className="text-gray-600">Loading resolution options...</p>
+                    </div>
+                  ) : escalationDetails ? (
+                    <div className="space-y-6">
+                      {/* Context Summary */}
+                      {escalationDetails.recommendation?.context_summary && (
+                        <div className="bg-gray-50 rounded-lg p-6">
+                          <h4 className="text-lg font-medium text-gray-900 mb-4">Context Summary</h4>
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <div>
+                              <p className="text-sm text-gray-600">Total Cost Spent</p>
+                              <p className="text-xl font-bold text-red-600">
+                                ${escalationDetails.recommendation.context_summary.total_cost_spent.toFixed(2)}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-600">Total Attempts</p>
+                              <p className="text-xl font-bold text-gray-900">
+                                {escalationDetails.recommendation.context_summary.total_attempts}
+                              </p>
+                            </div>
+                            <div className="col-span-2">
+                              <p className="text-sm text-gray-600">Failure Pattern</p>
+                              <p className="text-sm font-medium text-gray-900">
+                                {escalationDetails.recommendation.context_summary.failure_pattern}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* AI Recommendation */}
+                      {escalationDetails.recommendation && (
+                        <div className="bg-blue-50 border-l-4 border-blue-500 rounded-lg p-6">
+                          <div className="flex items-start">
+                            <div className="flex-shrink-0">
+                              <CheckCircleIcon className="w-6 h-6 text-blue-600" />
+                            </div>
+                            <div className="ml-3 flex-1">
+                              <h4 className="text-lg font-medium text-blue-900 mb-2">
+                                AI Recommendation: Option {escalationDetails.recommendation.recommended_option_id}
+                              </h4>
+                              <p className="text-sm text-blue-800 mb-2">
+                                {escalationDetails.recommendation.reasoning}
+                              </p>
+                              <div className="flex items-center space-x-2">
+                                <span className="text-xs text-blue-700">Confidence:</span>
+                                <div className="flex-1 max-w-xs bg-blue-200 rounded-full h-2">
+                                  <div
+                                    className="bg-blue-600 h-2 rounded-full"
+                                    style={{ width: `${escalationDetails.recommendation.confidence * 100}%` }}
+                                  />
+                                </div>
+                                <span className="text-xs font-medium text-blue-900">
+                                  {(escalationDetails.recommendation.confidence * 100).toFixed(0)}%
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Resolution Options */}
+                      {escalationDetails.recommendation?.trade_offs && (
+                        <div>
+                          <h4 className="text-lg font-medium text-gray-900 mb-4">Resolution Options</h4>
+                          <div className="space-y-4">
+                            {escalationDetails.recommendation.trade_offs.map((option: any) => {
+                              const isRecommended = option.option_id === escalationDetails.recommendation.recommended_option_id;
+                              return (
+                                <div
+                                  key={option.option_id}
+                                  className={`border rounded-lg p-6 ${
+                                    isRecommended ? 'border-blue-500 bg-blue-50' : 'border-gray-200'
+                                  }`}
+                                >
+                                  <div className="flex items-start justify-between mb-4">
+                                    <div className="flex-1">
+                                      <div className="flex items-center space-x-3 mb-2">
+                                        <h5 className="text-lg font-semibold text-gray-900">
+                                          Option {option.option_id}
+                                        </h5>
+                                        {isRecommended && (
+                                          <span className="inline-flex px-3 py-1 text-xs font-semibold rounded-full bg-blue-600 text-white">
+                                            ⭐ Recommended
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                    <button
+                                      onClick={() => handleExecuteDecision(option.option_id)}
+                                      disabled={executingDecision}
+                                      className={`px-4 py-2 rounded-md text-sm font-medium ${
+                                        isRecommended
+                                          ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                                          : 'bg-gray-600 hover:bg-gray-700 text-white'
+                                      } disabled:opacity-50 disabled:cursor-not-allowed`}
+                                    >
+                                      {executingDecision ? 'Executing...' : 'Execute This Option'}
+                                    </button>
+                                  </div>
+
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    {/* Pros */}
+                                    <div>
+                                      <h6 className="text-sm font-medium text-green-700 mb-2 flex items-center">
+                                        <CheckCircleIcon className="w-4 h-4 mr-1" />
+                                        Pros
+                                      </h6>
+                                      <ul className="space-y-1">
+                                        {option.pros?.map((pro: string, idx: number) => (
+                                          <li key={idx} className="text-sm text-gray-700 flex items-start">
+                                            <span className="text-green-500 mr-2">✓</span>
+                                            <span>{pro}</span>
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    </div>
+
+                                    {/* Cons */}
+                                    <div>
+                                      <h6 className="text-sm font-medium text-red-700 mb-2 flex items-center">
+                                        <ExclamationTriangleIcon className="w-4 h-4 mr-1" />
+                                        Cons
+                                      </h6>
+                                      <ul className="space-y-1">
+                                        {option.cons?.map((con: string, idx: number) => (
+                                          <li key={idx} className="text-sm text-gray-700 flex items-start">
+                                            <span className="text-red-500 mr-2">✗</span>
+                                            <span>{con}</span>
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Decision Notes */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Decision Notes (Optional)
+                        </label>
+                        <textarea
+                          className="w-full border border-gray-300 rounded-md px-3 py-2 h-24 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          placeholder="Add any notes about your decision..."
+                          value={decisionNotes}
+                          onChange={(e) => setDecisionNotes(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-center py-12 text-gray-500">
+                      <p>No details available</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Upload Spec Tab Content */}
         {activeTab === 'upload-spec' && (
           <div className="space-y-6">
@@ -1070,6 +1408,11 @@ export default function MissionControlDashboard() {
               </>
             )}
           </div>
+        )}
+
+        {/* Health Monitor Tab Content */}
+        {activeTab === 'health' && (
+          <MonitoringDashboard />
         )}
 
         {/* Create Work Order Modal */}

@@ -1,5 +1,7 @@
 # Architecture Decisions
 
+**Last Updated:** 2025-10-03 13:30:00 UTC (v38 - Error Handling & Resilience Complete)
+
 **Master reference.** Aligned with "Basic Agent Architecture(2).txt".
 
 ---
@@ -195,7 +197,7 @@ CLIENT MANAGER (Phase 2.5 - planned)
 
 **Status:** ✅ Complete with 100% test coverage (7/7 custom tests + 18/18 integration tests passing)
 
-**Note:** `proposer-registry.ts` still contains old routing logic (lines 110-245). Future refactor will migrate `enhanced-proposer-service.ts` to call Manager instead.
+**Integration:** ✅ **v36 COMPLETE** - Proposer service now calls Manager API for all routing decisions. Old routing logic removed from `proposer-registry.ts` (135 lines cleaned up).
 
 ---
 
@@ -451,9 +453,18 @@ CLIENT MANAGER (Phase 2.5 - planned)
 
 ---
 
-### CLIENT MANAGER (Phase 2.5 - Planned)
+### CLIENT MANAGER (Phase 2.5 - ✅ COMPLETE v35-v37)
 
 **Purpose:** Human interface for exception handling and escalations
+
+**Implementation Status (v35→v37):**
+- ✅ Escalation detection (7 trigger types) - v35
+- ✅ Resolution option generation (5 strategies) - v35
+- ✅ AI recommendations with cost-efficiency scoring - v35
+- ✅ Historical learning from past escalations - v35
+- ✅ 3 API endpoints (escalate, resolutions, execute) - v35
+- ✅ **Mission Control Escalation UI COMPLETE** - v37
+- ✅ Schema bug fixed (cost_tracking → outcome_vectors) - v37
 
 **Responsibilities:**
 - Monitor all agent execution states across the system:
@@ -529,12 +540,26 @@ CLIENT MANAGER (Phase 2.5 - planned)
 - Updates: work_orders.status when executing human decisions
 - References: decision_logs, outcome_vectors, cost_tracking for context
 
-**User Interface:**
-- Mission Control escalation queue
-- Real-time alerts for critical issues
-- Option presentation with visual decision tree
-- One-click decision execution
-- Escalation history view
+**User Interface (v37 - COMPLETE):**
+- ✅ Mission Control escalation queue with badge notification
+- ✅ Real-time updates (5-second polling)
+- ✅ Full-screen modal with resolution options and pros/cons visualization
+- ✅ One-click decision execution with optional human notes
+- ✅ AI recommendation highlighting (blue border + star)
+- ✅ Context summary (cost spent, attempts, failure pattern)
+- ✅ Confidence visualization (progress bar)
+
+**Files Implemented (v35→v37):**
+- `src/types/client-manager.ts` (94 lines) - v35
+- `src/lib/client-manager-escalation-rules.ts` (361 lines) - v35
+- `src/lib/client-manager-service.ts` (367 lines) - v35, bug fix v37
+- `src/app/api/client-manager/escalate/route.ts` (25 lines) - v35
+- `src/app/api/client-manager/resolutions/[id]/route.ts` (23 lines) - v35
+- `src/app/api/client-manager/execute/route.ts` (46 lines) - v35
+- `src/lib/dashboard-api.ts` (+34 lines) - v37: Added getEscalationResolutions(), executeEscalationDecision()
+- `src/components/MissionControlDashboard.tsx` (+260 lines) - v37: Full escalation UI
+
+**Current Status:** Backend + UI complete, tested with live data, ready for E2E testing.
 
 ---
 
@@ -720,6 +745,126 @@ src/
 **One step only (R1):** Execute one action, then stop for verification.
 
 **100% validation (R7):** Complete current phase 100% before starting next.
+
+---
+
+## Version 38: Error Handling & Resilience (2025-10-03)
+
+### Phase 1: Error Audit & Escalation Enforcement ✅
+
+**Problem:** 84 catch blocks, many errors logged but not escalated to Client Manager
+
+**Solution:** Enforce consistent escalation for all critical errors
+
+**Implementation:**
+- All critical errors now escalate to `/api/client-manager/escalate`
+- Escalations create records in `escalations` table
+- Visible in Mission Control Dashboard → Escalations tab
+- Errors logged AND escalated for full visibility
+
+**Files Modified:**
+- Enhanced error handling across all agents
+- Result tracker escalates outcome vector write failures
+- Manager escalates budget/routing failures
+
+### Phase 2: Budget Race Condition Fix ✅
+
+**Problem:** Concurrent requests could exceed $100 daily budget limit
+
+**Solution:** PostgreSQL function with row-level locking
+
+**Implementation:**
+- Created `check_and_reserve_budget()` PostgreSQL function
+- Uses `SHARE ROW EXCLUSIVE` lock on `cost_tracking` table
+- Atomic check-and-reserve prevents race conditions
+- Budget reservations track estimated cost until actual cost known
+
+**Files Created:**
+- `scripts/create-budget-reservation-function.sql`
+
+**Test Results:**
+- ✅ Budget race condition test passing
+- ✅ Concurrent requests properly blocked at limit
+
+### Phase 3: Failure Mode Tests ✅
+
+**Problem:** 18/18 tests were happy path only, no failure mode coverage
+
+**Solution:** 10 comprehensive failure mode tests
+
+**Tests Implemented:**
+1. Outcome Vectors Write Failure
+2. Budget Race Condition
+3. Concurrent Metadata Updates
+4. Malformed LLM JSON Response
+5. Database Connection Failure
+6. GitHub Webhook Race Condition
+7. Invalid State Transition
+8. Aider Command Failure
+9. Sentinel Webhook Invalid Auth
+10. Stuck Work Orders Detection
+
+**Test Infrastructure:**
+- Created `vitest.config.ts` with test environment
+- Created `src/lib/__tests__/setup.ts` for .env.local loading
+- All tests execute full logic (not graceful skips)
+- Proper cleanup in afterEach
+
+**Test Results:** 10/10 passing in 3.18s
+
+### Phase 4: Monitoring & Observability ✅
+
+**Problem:** No visibility into system health, stuck work orders, or budget usage
+
+**Solution:** Health monitoring dashboard with real-time metrics
+
+**Implementation:**
+- **Health API Endpoint** (`/api/admin/health`)
+  - Monitors stuck work orders (>24 hours old)
+  - Tracks open escalations
+  - Reports daily budget usage
+  - Detects recent failures from outcome_vectors
+  - Returns work order state distribution
+
+- **Monitoring Dashboard Component** (`/components/MonitoringDashboard.tsx`)
+  - Real-time health status display
+  - Auto-refresh every 30 seconds
+  - Visual budget usage progress bar
+  - Detailed views for issues
+  - Built with Heroicons + Tailwind CSS
+
+- **Integration** with Mission Control Dashboard
+  - Added "Health Monitor" tab
+  - Accessible from main navigation
+  - Also available at `/admin/health`
+
+**Health Status Logic:**
+- ERROR: Stuck work orders OR pending escalations
+- WARNING: Budget >80% used OR >10 recent errors
+- HEALTHY: All systems operating normally
+
+### Key Metrics
+
+- **New Code:** ~400 lines (Health monitoring + integration)
+- **Total Implementation Time:** 4 phases completed
+- **Test Coverage:** 10 new failure mode tests, all passing
+- **Budget Protection:** PostgreSQL function prevents race conditions
+- **Error Visibility:** All critical errors escalate to Client Manager
+
+### Architecture Impact
+
+**No Breaking Changes:**
+- Leveraged existing Client Manager escalation system
+- Used existing `escalations` and `cost_tracking` tables
+- Enhanced existing error handling patterns
+- Added monitoring without changing core workflows
+
+**New Capabilities:**
+- Real-time system health visibility
+- Proactive detection of stuck work orders
+- Budget usage tracking and alerts
+- Comprehensive error escalation
+- Failure mode test coverage
 
 ---
 
