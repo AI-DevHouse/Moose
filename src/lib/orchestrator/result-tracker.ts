@@ -1,6 +1,7 @@
 // Result Tracker - Updates database with execution results
 
 import { createSupabaseServiceClient } from '@/lib/supabase';
+import { handleCriticalError } from '@/lib/error-escalation';
 import type { WorkOrder, AiderResult, GitHubPRResult } from './types';
 import type { EnhancedProposerResponse } from '@/lib/enhanced-proposer-service';
 import type { RoutingDecision } from '@/lib/manager-routing-rules';
@@ -111,8 +112,18 @@ export async function trackSuccessfulExecution(
       } as any);
 
     if (ovError) {
-      console.error('[ResultTracker] Error writing outcome_vectors:', ovError);
-      // Non-fatal, continue
+      await handleCriticalError({
+        component: 'ResultTracker',
+        operation: 'writeOutcomeVectors',
+        error: ovError as Error,
+        workOrderId: wo.id,
+        severity: 'critical',
+        metadata: {
+          proposer_used: proposerResponse.proposer_used,
+          cost: proposerResponse.cost
+        }
+      });
+      // Still continue execution - escalation notifies human but doesn't block
     }
 
     console.log(`[ResultTracker] Successfully tracked execution for WO ${wo.id}`);
@@ -190,7 +201,17 @@ export async function trackFailedExecution(
         } as any);
 
       if (ovError) {
-        console.error('[ResultTracker] Error writing outcome_vectors:', ovError);
+        await handleCriticalError({
+          component: 'ResultTracker',
+          operation: 'writeOutcomeVectorsFailure',
+          error: ovError as Error,
+          workOrderId: wo.id,
+          severity: 'critical',
+          metadata: {
+            stage,
+            proposer_used: proposerResponse.proposer_used
+          }
+        });
       }
     }
 

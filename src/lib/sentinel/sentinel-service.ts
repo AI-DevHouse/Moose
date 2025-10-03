@@ -12,6 +12,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { Octokit } from '@octokit/rest';
+import { handleCriticalError } from '@/lib/error-escalation';
 import { SentinelDecision, WorkflowResult, TestOutput, SentinelAnalysisRequest } from '@/types/sentinel';
 import { SentinelDecisionMaker } from './decision-maker';
 import { TestParser } from './test-parser';
@@ -178,7 +179,14 @@ export class SentinelService {
       .eq('id', work_order_id);
 
     if (error) {
-      console.error('[Sentinel] Error updating work order:', error);
+      await handleCriticalError({
+        component: 'Sentinel',
+        operation: 'updateWorkOrderStatus',
+        error: error as Error,
+        workOrderId: work_order_id,
+        severity: 'critical',
+        metadata: { decision }
+      });
       throw error;
     }
 
@@ -187,7 +195,6 @@ export class SentinelService {
 
   /**
    * Escalate to Client Manager for human review
-   * (Client Manager not implemented yet - log for now)
    */
   private async escalateToClientManager(
     work_order_id: string,
@@ -197,21 +204,57 @@ export class SentinelService {
     console.log(`  Reason: ${decision.escalation_reason}`);
     console.log(`  Confidence: ${decision.confidence}`);
 
-    // TODO: Implement Client Manager integration in Phase 2.5
-    // For now, just log the escalation
-    // Future: Call Client Manager API to generate resolution options
+    try {
+      // Call Client Manager to create escalation
+      const response = await fetch('http://localhost:3000/api/client-manager/escalate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ work_order_id })
+      });
 
-    // Update Work Order to indicate escalation needed
-    const { error } = await this.supabase
-      .from('work_orders')
-      .update({
-        status: 'needs_human_review',
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', work_order_id);
+      if (!response.ok) {
+        const error = await response.json();
 
-    if (error) {
-      console.error('[Sentinel] Error escalating work order:', error);
+        await handleCriticalError({
+          component: 'Sentinel',
+          operation: 'escalateToClientManager',
+          error: new Error(`Client Manager API returned ${response.status}: ${JSON.stringify(error)}`),
+          workOrderId: work_order_id,
+          severity: 'critical',
+          metadata: { decision, apiError: error }
+        });
+
+        // Fallback: Update Work Order to indicate escalation needed
+        await this.supabase
+          .from('work_orders')
+          .update({
+            status: 'needs_human_review',
+            metadata: {
+              sentinel_escalation_failed: true,
+              escalation_reason: decision.escalation_reason
+            } as any,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', work_order_id);
+
+        return;
+      }
+
+      const result = await response.json();
+      console.log(`[Sentinel] Escalation created: ${result.escalation.id}`);
+      console.log(`  Recommended option: ${result.recommendation.recommended_option_id}`);
+      console.log(`  Confidence: ${result.recommendation.confidence}`);
+    } catch (error) {
+      console.error('[Sentinel] Error calling Client Manager:', error);
+
+      // Fallback: Update Work Order status
+      await this.supabase
+        .from('work_orders')
+        .update({
+          status: 'needs_human_review',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', work_order_id);
     }
   }
 }

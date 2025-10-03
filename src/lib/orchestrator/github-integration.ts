@@ -1,0 +1,257 @@
+// GitHub Integration - Creates Pull Requests via gh CLI
+
+import { execSync } from 'child_process';
+import { handleCriticalError } from '@/lib/error-escalation';
+import type { WorkOrder, GitHubPRResult } from './types';
+import type { EnhancedProposerResponse } from '@/lib/enhanced-proposer-service';
+import type { RoutingDecision } from '@/lib/manager-routing-rules';
+
+/**
+ * Build PR body with metadata
+ *
+ * @param wo - Work Order
+ * @param routingDecision - Manager routing decision
+ * @param proposerResponse - Proposer response
+ * @returns Formatted PR body in markdown
+ */
+export function buildPRBody(
+  wo: WorkOrder,
+  routingDecision: RoutingDecision,
+  proposerResponse: EnhancedProposerResponse
+): string {
+  const parts = [];
+
+  parts.push(`## Work Order: ${wo.id}`);
+  parts.push('');
+  parts.push(`**Risk Level:** ${wo.risk_level}`);
+  parts.push(`**Proposer Used:** ${proposerResponse.proposer_used}`);
+  parts.push(`**Complexity Score:** ${routingDecision.routing_metadata?.complexity_score?.toFixed(2) || 'N/A'}`);
+  parts.push(`**Cost:** $${proposerResponse.cost.toFixed(4)}`);
+  parts.push(`**Hard Stop Required:** ${routingDecision.routing_metadata?.hard_stop_required ? 'Yes' : 'No'}`);
+
+  if (proposerResponse.refinement_metadata) {
+    parts.push(`**Refinement Cycles:** ${proposerResponse.refinement_metadata.refinement_count}`);
+    if (proposerResponse.refinement_metadata.final_errors !== undefined) {
+      parts.push(`**Final Error Count:** ${proposerResponse.refinement_metadata.final_errors}`);
+    }
+  }
+
+  parts.push('');
+  parts.push('## Description');
+  parts.push('');
+  parts.push(wo.description);
+  parts.push('');
+
+  if (wo.acceptance_criteria && wo.acceptance_criteria.length > 0) {
+    parts.push('## Acceptance Criteria');
+    parts.push('');
+    wo.acceptance_criteria.forEach((ac) => {
+      parts.push(`- [x] ${ac}`);
+    });
+    parts.push('');
+  }
+
+  if (wo.files_in_scope && wo.files_in_scope.length > 0) {
+    parts.push('## Files Modified');
+    parts.push('');
+    wo.files_in_scope.forEach(f => {
+      parts.push(`- \`${f}\``);
+    });
+    parts.push('');
+  }
+
+  parts.push('## Routing Decision');
+  parts.push('');
+  parts.push(`**Reason:** ${routingDecision.reason}`);
+  if (routingDecision.confidence !== undefined) {
+    parts.push(`**Confidence:** ${routingDecision.confidence.toFixed(2)}`);
+  }
+  parts.push('');
+
+  parts.push('## Metadata');
+  parts.push('');
+  parts.push('```json');
+  parts.push(JSON.stringify({
+    work_order_id: wo.id,
+    routing_metadata: routingDecision.routing_metadata,
+    proposer_metadata: {
+      cost: proposerResponse.cost,
+      token_usage: proposerResponse.token_usage,
+      execution_time_ms: proposerResponse.execution_time_ms,
+      refinement_metadata: proposerResponse.refinement_metadata
+    }
+  }, null, 2));
+  parts.push('```');
+  parts.push('');
+  parts.push('---');
+  parts.push('');
+  parts.push('🤖 Generated with [Moose Mission Control](https://github.com/AI-DevHouse/Moose)');
+
+  return parts.join('\n');
+}
+
+/**
+ * Push branch and create Pull Request
+ *
+ * Prerequisites:
+ * - GitHub CLI must be installed: gh --version
+ * - GitHub CLI must be authenticated: gh auth login
+ *
+ * @param wo - Work Order
+ * @param branchName - Feature branch name
+ * @param routingDecision - Manager routing decision
+ * @param proposerResponse - Proposer response
+ * @returns PR result with URL and number
+ */
+export async function pushBranchAndCreatePR(
+  wo: WorkOrder,
+  branchName: string,
+  routingDecision: RoutingDecision,
+  proposerResponse: EnhancedProposerResponse
+): Promise<GitHubPRResult> {
+  console.log(`[GitHubIntegration] Pushing branch and creating PR for WO ${wo.id}`);
+
+  try {
+    // 1. Push branch to remote
+    console.log(`[GitHubIntegration] Pushing branch: ${branchName}`);
+    execSync(`git push -u origin ${branchName}`, {
+      cwd: process.cwd(),
+      stdio: 'pipe'
+    });
+
+    // 2. Build PR title and body
+    const prTitle = `WO-${wo.id.substring(0, 8)}: ${wo.title}`;
+    const prBody = buildPRBody(wo, routingDecision, proposerResponse);
+
+    // 3. Create PR via gh CLI
+    console.log(`[GitHubIntegration] Creating PR: ${prTitle}`);
+
+    // Escape quotes in title and body for shell
+    const escapedTitle = prTitle.replace(/"/g, '\\"');
+    const escapedBody = prBody.replace(/"/g, '\\"').replace(/\n/g, '\\n');
+
+    // Try gh command (use full path on Windows if not in PATH)
+    const ghCommand = process.platform === 'win32'
+      ? '"C:\\Program Files\\GitHub CLI\\gh.exe"'
+      : 'gh';
+
+    const prOutput = execSync(
+      `${ghCommand} pr create --title "${escapedTitle}" --body "${escapedBody}" --head ${branchName}`,
+      {
+        cwd: process.cwd(),
+        encoding: 'utf-8',
+        stdio: 'pipe'
+      }
+    );
+
+    // 4. Extract PR URL from output (gh CLI outputs the URL on the last line)
+    const prUrl = prOutput.trim().split('\n').pop() || '';
+
+    console.log(`[GitHubIntegration] PR created: ${prUrl}`);
+
+    // 5. Get PR number
+    const prNumber = await getPRNumber(branchName);
+
+    return {
+      pr_url: prUrl,
+      pr_number: prNumber,
+      branch_name: branchName
+    };
+  } catch (error: any) {
+    await handleCriticalError({
+      component: 'GitHubIntegration',
+      operation: 'pushBranchAndCreatePR',
+      error: error,
+      workOrderId: wo.id,
+      severity: 'critical',
+      metadata: { branchName }
+    });
+
+    if (error.message.includes('gh: command not found') || error.message.includes('ENOENT')) {
+      throw new Error('GitHub CLI not found. Please install: https://cli.github.com/');
+    }
+
+    if (error.message.includes('authentication')) {
+      throw new Error('GitHub CLI not authenticated. Please run: gh auth login');
+    }
+
+    throw new Error(`Failed to create PR: ${error.message}`);
+  }
+}
+
+/**
+ * Get PR number for a branch
+ *
+ * @param branchName - Feature branch name
+ * @returns PR number
+ */
+async function getPRNumber(branchName: string): Promise<number> {
+  try {
+    // Try gh command (use full path on Windows if not in PATH)
+    const ghCommand = process.platform === 'win32'
+      ? '"C:\\Program Files\\GitHub CLI\\gh.exe"'
+      : 'gh';
+
+    const output = execSync(
+      `${ghCommand} pr list --head ${branchName} --json number --jq '.[0].number'`,
+      {
+        cwd: process.cwd(),
+        encoding: 'utf-8',
+        stdio: 'pipe'
+      }
+    );
+
+    const prNumber = parseInt(output.trim(), 10);
+
+    if (isNaN(prNumber)) {
+      throw new Error('Could not parse PR number');
+    }
+
+    return prNumber;
+  } catch (error: any) {
+    console.error('[GitHubIntegration] Error getting PR number:', error.message);
+    // Return 0 if we can't get the PR number (non-fatal)
+    return 0;
+  }
+}
+
+/**
+ * Rollback failed PR creation
+ *
+ * Deletes remote branch and local branch
+ *
+ * @param branchName - Feature branch to delete
+ */
+export function rollbackPR(branchName: string): void {
+  console.log(`[GitHubIntegration] Rolling back PR for branch: ${branchName}`);
+
+  try {
+    // Delete remote branch
+    try {
+      execSync(`git push origin --delete ${branchName}`, {
+        cwd: process.cwd(),
+        stdio: 'pipe'
+      });
+    } catch (e) {
+      console.warn('[GitHubIntegration] Remote branch does not exist or already deleted');
+    }
+
+    // Return to main
+    try {
+      execSync('git checkout main', { cwd: process.cwd(), stdio: 'pipe' });
+    } catch {
+      execSync('git checkout master', { cwd: process.cwd(), stdio: 'pipe' });
+    }
+
+    // Delete local branch
+    execSync(`git branch -D ${branchName}`, {
+      cwd: process.cwd(),
+      stdio: 'pipe'
+    });
+
+    console.log(`[GitHubIntegration] Rollback successful`);
+  } catch (error: any) {
+    console.error('[GitHubIntegration] Error during rollback:', error.message);
+    // Don't throw - rollback is best-effort
+  }
+}
