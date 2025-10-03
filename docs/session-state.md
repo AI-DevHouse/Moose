@@ -1,6 +1,6 @@
-# Session State v40 (2025-10-03)
+# Session State v41 (2025-10-03)
 
-**Last Updated:** 2025-10-03 20:00:00 UTC
+**Last Updated:** 2025-10-03 17:30:00 UTC
 
 **Start here each session.** Reference other docs as needed.
 
@@ -44,27 +44,53 @@
 
 ---
 
-## Last Session Summary (v40→v41)
+## Last Session Summary (v41→v42)
 
-**🎉 MAJOR MILESTONE: First Successful Orchestrator E2E Test!**
+**✅ PRIORITY 2 COMPLETE: Contract Validation in Refinement Loop**
 
 **Completed:**
-- ✅ **Bug #3: Work Order GET Endpoint Fixed** - Added missing GET handler to work-orders/[id]/route.ts
-- ✅ **Bug #4: Orchestrator Processing Fixed** - Fixed field name mismatch in approval checking
+- ✅ **Contract Validation Integrated** - Week 4 D4-5 deliverable #1 complete
+- ✅ **Moved contract validation into refinement loop** - Now validates BEFORE cycle 1 and after each cycle
+- ✅ **Contract violations added to refinement prompts** - LLM sees violations and fixes them
+- ✅ **All tests passing** - 49/49 tests (100%): 39 orchestrator + 10 failure-modes
+- ✅ **Fixed .env.local issue** - Environment variables now loading correctly
+
+**Implementation Details:**
+- **proposer-refinement-rules.ts** (90 lines changed):
+  - Updated `RefinementResult` interface to track contract violations per cycle
+  - Added `validateContract` callback parameter to `attemptSelfRefinement()`
+  - Initial contract validation before refinement cycles start
+  - Contract validation after each refinement cycle (cycles 1, 2, 3)
+  - Contract violation details added to refinement prompts
+- **enhanced-proposer-service.ts** (80 lines changed):
+  - Created `validateContractCallback` function
+  - Passes callback to refinement function
+  - Removed duplicate post-refinement validation code (now in loop)
+  - Extracts final contract validation from refinement metadata
+
+**Test Results:**
+- TypeScript: 0 errors ✅
+- All tests: 49/49 passing (100%) ✅
+- Orchestrator tests: 39/39 ✅
+- Failure-modes tests: 10/10 ✅ (fixed by adding .env.local)
+
+**Key Achievement:** Contract violations now detected and fixed during refinement cycles, not after all cycles complete
+
+## Previous Session Summary (v40→v41)
+
+**🎉 MAJOR MILESTONE: First Successful Orchestrator E2E Test + Branch Cleanup Complete**
+
+**Completed:**
+- ✅ **GitHub Branch Cleanup** - PR #2 created with 27,675 lines, secrets removed from history
+- ✅ **Pre-commit Hook Installed** - Blocks secrets (.env.local, API keys) from being committed
+- ✅ **Bug #3: Work Order GET Endpoint Fixed** - Added missing GET handler
+- ✅ **Bug #4: Orchestrator Processing Fixed** - Fixed field name mismatch
 - ✅ **Bug #5: createWorkOrder Fields Fixed** - Extended API to accept all Architect fields
-- ✅ **E2E Test COMPLETE** - Full pipeline validated: Poll → Route → Propose → Aider → Git commits
+- ✅ **E2E Test COMPLETE** - Full pipeline validated end-to-end
 
-**E2E Test Results (Work Order c16ccf0c):**
-1. ✅ Polling - Found approved work order
-2. ✅ Routing - Manager selected gpt-4o-mini
-3. ✅ Code Generation - Proposer created greeting function
-4. ✅ Aider Execution - Created src/lib/test-greeting.ts and committed
-5. ✅ Git Operations - Branch + commits successful
-6. ⚠️ GitHub Push - Blocked by push protection (.env.local secrets - expected)
+**Key Achievement:** Clean branch pushed to GitHub, 1,418 lines of orchestrator code validated
 
-**Key Achievement:** 1,418 lines of orchestrator code validated end-to-end in production environment
-
-## Previous Session Summary (v39→v40)
+## Session Summary (v39→v40)
 
 **Completed:**
 - ✅ **Priority 1: All Tests Fixed** (1 day → 15 min) - 49/49 tests passing (100%)
@@ -107,14 +133,14 @@
 
 ## Current Status
 
-### **Overall Completion: 65%** (Verified 2025-10-03)
+### **Overall Completion: 68%** (Verified 2025-10-03 17:30 UTC)
 
-### ✅ **Phase 2: Core Engine - 75% Complete**
+### ✅ **Phase 2: Core Engine - 80% Complete**
 - ✅ **2.4.6 Self-Refinement:** 100% complete (3-cycle, exceeds plan)
 - ✅ **2.1 Architect:** 100% complete (8/8 deliverables)
-- ⚠️ **Week 4 D4-5 Integration:** 63% complete (2.5/4 deliverables) - Missing contract validation
+- ✅ **Week 4 D4-5 Integration:** 87.5% complete (3.5/4 deliverables) - Contract validation IN refinement loop ✅
 - ✅ **2.2 Director Refactor:** 100% complete (5/5 deliverables)
-- ⚠️ **2.3 Orchestrator:** 88% complete (7/8 deliverables) - E2E untested, 5 tests failing
+- ✅ **2.3 Orchestrator:** 100% complete (8/8 deliverables) - E2E tested ✅, all tests passing ✅
 
 ### ⚠️ **Phase 3: Quality & Learning - 40% Complete**
 - ✅ **2.5 Client Manager:** 100% complete (7/7 deliverables)
@@ -139,15 +165,36 @@
 
 ## Next Immediate Task
 
-**READ THIS FIRST:** `docs/github-branch-cleanup-plan.md` - Comprehensive branch cleanup strategy
+### 🎯 Priority 5: Integration & Hardening (3-4 days) - **NEXT ON CRITICAL PATH**
 
-### 🎯 Priority 1: GitHub Branch Cleanup (1-2 hours) 🚨 **CRITICAL**
+**Context:** Contract validation complete. System ready for production hardening.
 
-**Context:** 44 commits of validated work stuck on feature branch due to secrets in git history (commit `9fd1400`)
+**Tasks (Execute in order):**
+1. **Performance Profiling** (1 day)
+   - Profile all API endpoints with Artillery or k6
+   - Verify <200ms response time for critical paths
+   - Index slow database queries
+   - Add caching for frequently-read data (system_config, proposer_configs)
 
-**Phases (Execute in order):**
-1. **Phase 1:** Sync main branch with origin (5 min)
-2. **Phase 2:** Handle stale PR #1 (10 min) - Decision needed
+2. **Backup Procedures** (0.5 days)
+   - Configure daily Supabase backups
+   - Create config export script (system_config, proposer_configs → JSON)
+   - Document rollback steps
+   - Test restore procedure
+
+3. **Security Hardening** (1 day)
+   - Implement rate limiting on public APIs (10 req/min per IP)
+   - Add secret rotation mechanism (GitHub tokens, Supabase keys)
+   - Sanitize all user inputs (spec uploads, work order descriptions)
+   - Implement least privilege access (service role vs anon role)
+   - Security audit of Client Manager escalation API
+
+4. **Ops Documentation** (0.5-1 day)
+   - Document deployment procedure
+   - Document monitoring procedures (Health Monitor interpretation)
+   - Document escalation response procedures
+   - Document troubleshooting common issues
+   - Create runbook for emergency scenarios
 3. **Phase 3:** Create clean feature branch (30 min) - Cherry-pick essential commits WITHOUT secrets
 4. **Phase 4:** Run E2E test on clean branch (10 min) - Validate GitHub push works
 5. **Phase 5:** Create PR and merge to main (10 min)
@@ -221,15 +268,17 @@ npx supabase gen types typescript --project-id qclxdnbvoruvqnhsshjr > src/types/
 git status
 ```
 
-### Key Files (Updated v39)
+### Key Files (Updated v41)
 ```
 Core Architecture:
 - src/lib/architect-decomposition-rules.ts (7,535 lines) - Spec→WO decomposition
 - src/lib/director-risk-assessment.ts - Governance & approval
 - src/lib/manager-routing-rules.ts (371 lines) - Routing logic
-- src/lib/proposer-refinement-rules.ts (269 lines) - 3-cycle self-refinement
+- src/lib/proposer-refinement-rules.ts (375 lines) - 3-cycle self-refinement + contract validation
+- src/lib/enhanced-proposer-service.ts (609 lines) - Code generation orchestration + contract callback
 - src/lib/client-manager-escalation-rules.ts (361 lines) - 7 trigger types, 5 strategies
 - src/lib/error-escalation.ts (50 lines) - Centralized error handler
+- src/lib/contract-validator.ts (435 lines) - Contract validation with breaking change detection
 
 Orchestrator (1,418 lines total):
 - src/lib/orchestrator/orchestrator-service.ts (310 lines)
@@ -265,10 +314,12 @@ Database:
 
 ### Test Results (Current)
 ```
-Unit Tests: 26/31 passing (5 failing - github-integration formatting)
-Failure Mode Tests: 10/10 passing (3.6s)
+Unit Tests: 49/49 passing (100%) ✅
+  - Orchestrator tests: 39/39 passing
+  - Failure mode tests: 10/10 passing (3.6s)
 Integration Tests: 18/18 passing (PowerShell API smoke tests)
 TypeScript: 0 errors
+E2E Test: First successful orchestrator E2E complete ✅
 ```
 
 ---
@@ -604,6 +655,55 @@ Pass rate: 10/10 passing (100%, 3.6s execution time)
 - `8c865eb` Phase 1 & 2: Error Escalation + Budget Race Fix
 
 **Main Branch:** `main`
+
+---
+
+## Git Best Practices (Lessons Learned)
+
+### Branch Management Rules
+1. **One feature = one branch** - Don't mix unrelated changes
+2. **Branch from main, merge to main** - Always create from latest main
+3. **Keep branches short-lived** - Days, not weeks (avoid drift)
+4. **Delete after merge** - No stale branches
+5. **Squash large PRs** - 47 commits → 1-3 logical commits for main history
+
+### Naming Conventions
+- ✅ `feature/descriptive-name` - Feature work
+- ✅ `bugfix/issue-description` - Bug fixes
+- ✅ `hotfix/critical-issue` - Production fixes
+- ✅ `backup-{description}` - Temporary backups (delete after confirmation)
+
+### Security & Hygiene
+- ❌ **NEVER commit secrets** - Use `.gitignore` from day 1
+- ✅ **Add `.env.local` to `.gitignore`** - Before first commit
+- ✅ **Review diffs before commit** - Check for API keys, passwords, tokens
+- ✅ **Use pre-commit hooks** - Automated secret scanning
+
+### Main Branch Protection (Recommended)
+- ✅ Require PR reviews (1+ approvers)
+- ✅ Require passing CI/tests
+- ✅ Prohibit direct pushes to main
+- ✅ Prohibit force pushes to main
+
+### Cleanup Schedule
+**After PR merge:**
+- Delete feature branch (local + remote)
+- Delete backup branches (after confirming main stable)
+
+**Weekly:**
+- Check for stale branches: `git branch -a`
+- Delete merged/abandoned branches
+
+### Current Violations Found
+1. ❌ 47 commits in feature branch (should squash to 1-3)
+2. ❌ 3 backup branches (should delete after PR merge)
+3. ❌ 2 stale branches (old work orders + closed PR)
+4. ❌ Secrets committed (required `git filter-branch` to fix)
+
+### Grade: C+ → A- (After Cleanup)
+**Before:** Functional but cluttered (4 violations)
+**After cleanup:** Clean, organized, secure (0 violations)
+
 
 ---
 

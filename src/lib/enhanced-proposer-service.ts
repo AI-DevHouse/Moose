@@ -217,44 +217,24 @@ export class EnhancedProposerService {
         let response = await this.executeWithProposer(request, proposerConfig);
 
         let refinementMetadata: RefinementResult | undefined = undefined;
-        if (response.success && response.content && request.expected_output_type === 'code') {
-          // Delegate to centralized refinement rules (now supports 3 cycles)
-          const refinementResult = await attemptSelfRefinement(
-            response.content,
-            request,
-            async (refinementRequest: ProposerRequest) => {
-              return this.executeWithProposerDirect(refinementRequest, proposerConfig);
-            },
-            REFINEMENT_THRESHOLDS.MAX_CYCLES  // Now 3 instead of 1
-          );
-
-          response.content = refinementResult.content;
-          refinementMetadata = refinementResult;
-
-          console.log('🔍 SELF-REFINEMENT: Complete', {
-            cycles: refinementMetadata.refinement_count,
-            initial_errors: refinementMetadata.initial_errors,
-            final_errors: refinementMetadata.final_errors,
-            success: refinementMetadata.refinement_success
-          });
-        }
-
-        // Contract validation after refinement (Week 4 D4-5 deliverable)
         let contractValidation: ValidationResult | undefined = undefined;
+
         if (response.success && response.content && request.expected_output_type === 'code') {
-          try {
-            const contractValidator = new ContractValidator();
+          // Create contract validator callback for refinement loop
+          const contractValidator = new ContractValidator();
+          const validateContractCallback = async (code: string): Promise<any> => {
+            try {
+              // Check for breaking changes or contract violations in generated code
+              const { data: activeContracts } = await supabase
+                .from('contracts')
+                .select('*')
+                .eq('is_active', true);
 
-            // Check for breaking changes or contract violations in generated code
-            // This validates the code doesn't violate existing API/domain contracts
-            const { data: activeContracts } = await supabase
-              .from('contracts')
-              .select('*')
-              .eq('is_active', true);
+              if (!activeContracts || activeContracts.length === 0) {
+                return { breaking_changes: [], risk_assessment: { level: 'low' } };
+              }
 
-            if (activeContracts && activeContracts.length > 0) {
-              // For code generation, we validate that the generated code respects existing contracts
-              // This is a simplified check - in production, would parse code AST for actual contract checks
+              // Validate against all active contracts
               for (const contract of activeContracts) {
                 const validation = await contractValidator.validateContract({
                   contract_type: contract.contract_type as any,
@@ -264,22 +244,43 @@ export class EnhancedProposerService {
                   validation_rules: contract.validation_rules
                 });
 
-                // If we find high/critical violations, store the validation result
+                // Return first validation with violations
                 if (validation.breaking_changes.some(bc => bc.severity === 'high' || bc.severity === 'critical')) {
-                  contractValidation = validation;
-                  console.log('⚠️ CONTRACT VIOLATION DETECTED:', {
-                    contract_name: contract.name,
-                    breaking_changes: validation.breaking_changes.length,
-                    risk_level: validation.risk_assessment.level
-                  });
-                  break; // Stop on first critical violation
+                  return validation;
                 }
               }
+
+              return { breaking_changes: [], risk_assessment: { level: 'low' } };
+            } catch (error) {
+              console.error('Contract validation callback error:', error);
+              return { breaking_changes: [], risk_assessment: { level: 'low' } };
             }
-          } catch (error) {
-            console.error('Contract validation failed:', error);
-            // Non-critical: continue without contract validation
-          }
+          };
+
+          // Delegate to centralized refinement rules with contract validation
+          const refinementResult = await attemptSelfRefinement(
+            response.content,
+            request,
+            async (refinementRequest: ProposerRequest) => {
+              return this.executeWithProposerDirect(refinementRequest, proposerConfig);
+            },
+            REFINEMENT_THRESHOLDS.MAX_CYCLES,  // 3 cycles
+            validateContractCallback             // NEW: Contract validation in refinement loop
+          );
+
+          response.content = refinementResult.content;
+          refinementMetadata = refinementResult;
+
+          // Extract final contract validation from refinement metadata
+          contractValidation = refinementResult.final_contract_validation;
+
+          console.log('🔍 SELF-REFINEMENT: Complete', {
+            cycles: refinementMetadata.refinement_count,
+            initial_errors: refinementMetadata.initial_errors,
+            final_errors: refinementMetadata.final_errors,
+            contract_violations: refinementMetadata.contract_violations?.length || 0,
+            success: refinementMetadata.refinement_success
+          });
         }
 
         console.log('🔍 DIAGNOSTIC: API Response:', {

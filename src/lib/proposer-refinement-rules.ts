@@ -30,12 +30,20 @@ export interface RefinementResult {
   final_errors: number;             // Ending error count
   refinement_success: boolean;      // Did we reduce errors?
   error_details: TypeScriptError[]; // Final remaining errors
-  cycle_history: Array<{            // NEW: Track each cycle
+  contract_violations?: Array<{     // NEW: Contract violations per cycle
+    cycle: number;
+    breaking_changes: number;
+    risk_level: 'low' | 'medium' | 'high' | 'critical';
+    violations: any[];
+  }>;
+  final_contract_validation?: any;  // Final contract validation result
+  cycle_history: Array<{            // Track each cycle
     cycle: number;
     errors_before: number;
     errors_after: number;
     improvement_rate: number;
     prompt_strategy: string;
+    contract_violations?: number;   // NEW: Contract violations in this cycle
   }>;
 }
 
@@ -93,11 +101,28 @@ export function buildRefinementPrompt(
   previousCode: string,
   errors: TypeScriptError[],
   cycleNumber: number,
-  cycleHistory: Array<{ cycle: number; errors_before: number; errors_after: number }>
+  cycleHistory: Array<{ cycle: number; errors_before: number; errors_after: number }>,
+  contractViolations?: Array<{ cycle: number; breaking_changes: number; risk_level: string; violations: any[] }>
 ): string {
   const errorSummary = errors.map(e =>
     `- Line ${e.line}, Column ${e.column}: ${e.code} - ${e.message}`
   ).join('\n');
+
+  // Contract violations summary
+  let contractSummary = '';
+  if (contractViolations && contractViolations.length > 0) {
+    const latestViolation = contractViolations[contractViolations.length - 1];
+    if (latestViolation.violations && latestViolation.violations.length > 0) {
+      contractSummary = `
+
+CONTRACT VIOLATIONS DETECTED (${latestViolation.risk_level.toUpperCase()} RISK):
+${latestViolation.violations.map((bc: any) =>
+  `- ${bc.type}: ${bc.impact_description}`
+).join('\n')}
+
+CRITICAL: Fix these contract violations or code will be rejected!`;
+    }
+  }
 
   // Cycle-specific prompting strategies
   let strategyGuidance = '';
@@ -147,7 +172,7 @@ IMPORTANT: Provide working code even if it means temporary compromises.`;
   return `${request.task_description}
 
 PREVIOUS ATTEMPT HAD ${errors.length} TYPESCRIPT ERRORS:
-${errorSummary}
+${errorSummary}${contractSummary}
 
 ${strategyGuidance}
 
@@ -176,12 +201,14 @@ export async function attemptSelfRefinement(
   originalContent: string,
   request: ProposerRequest,
   executeProposer: (request: ProposerRequest) => Promise<{ content: string }>,
-  maxCycles: number = REFINEMENT_THRESHOLDS.MAX_CYCLES
+  maxCycles: number = REFINEMENT_THRESHOLDS.MAX_CYCLES,
+  validateContract?: (code: string) => Promise<any>
 ): Promise<RefinementResult> {
   let currentContent = originalContent;
   let refinementCount = 0;
   let consecutiveZeroProgress = 0;
   const cycleHistory: RefinementResult['cycle_history'] = [];
+  const contractViolationHistory: RefinementResult['contract_violations'] = [];
 
   // Initial error check
   const initialErrors = await checkTypeScriptErrors(currentContent);
@@ -190,7 +217,28 @@ export async function attemptSelfRefinement(
 
   console.log('🔍 SELF-REFINEMENT: Initial TS check found', initialErrorCount, 'errors');
 
-  if (initialErrorCount === 0) {
+  // Initial contract validation check
+  let currentContractValidation: any = null;
+  if (validateContract) {
+    try {
+      currentContractValidation = await validateContract(currentContent);
+      if (currentContractValidation && currentContractValidation.breaking_changes.length > 0) {
+        contractViolationHistory.push({
+          cycle: 0,
+          breaking_changes: currentContractValidation.breaking_changes.length,
+          risk_level: currentContractValidation.risk_assessment.level,
+          violations: currentContractValidation.breaking_changes
+        });
+        console.log(`⚠️ SELF-REFINEMENT: Initial contract check found ${currentContractValidation.breaking_changes.length} violations (${currentContractValidation.risk_assessment.level} risk)`);
+      } else {
+        console.log('✅ SELF-REFINEMENT: Initial contract check passed');
+      }
+    } catch (error) {
+      console.error('Contract validation failed on initial check:', error);
+    }
+  }
+
+  if (initialErrorCount === 0 && (!currentContractValidation || currentContractValidation.breaking_changes.length === 0)) {
     return {
       content: currentContent,
       refinement_count: 0,
@@ -198,18 +246,24 @@ export async function attemptSelfRefinement(
       final_errors: 0,
       refinement_success: true,
       error_details: [],
+      contract_violations: contractViolationHistory,
+      final_contract_validation: currentContractValidation,
       cycle_history: []
     };
   }
 
   // Multi-cycle refinement loop
-  while (refinementCount < maxCycles && currentErrors.length > 0) {
+  while (refinementCount < maxCycles && (currentErrors.length > 0 || (currentContractValidation && currentContractValidation.breaking_changes.length > 0))) {
     refinementCount++;
     const errorsBefore = currentErrors.length;
+    const contractViolationsBefore = currentContractValidation?.breaking_changes.length || 0;
 
     console.log(`🔧 SELF-REFINEMENT: Cycle ${refinementCount}/${maxCycles}`);
-    console.log(`   Errors to fix: ${errorsBefore}`);
-    console.log(`   Top 3 errors: ${currentErrors.slice(0, 3).map(e => e.code).join(', ')}`);
+    console.log(`   TS Errors to fix: ${errorsBefore}`);
+    console.log(`   Contract violations to fix: ${contractViolationsBefore}`);
+    if (errorsBefore > 0) {
+      console.log(`   Top 3 TS errors: ${currentErrors.slice(0, 3).map(e => e.code).join(', ')}`);
+    }
 
     // Build cycle-specific prompt
     const refinementPrompt = buildRefinementPrompt(
@@ -217,7 +271,8 @@ export async function attemptSelfRefinement(
       currentContent,
       currentErrors,
       refinementCount,
-      cycleHistory
+      cycleHistory,
+      contractViolationHistory
     );
 
     // Execute refinement with proposer
@@ -232,9 +287,32 @@ export async function attemptSelfRefinement(
     const newErrors = await checkTypeScriptErrors(currentContent);
     const errorsAfter = newErrors.length;
     const errorsFixed = errorsBefore - errorsAfter;
-    const improvementRate = errorsFixed / errorsBefore;
+    const improvementRate = errorsBefore > 0 ? errorsFixed / errorsBefore : 0;
 
-    console.log(`   Result: ${errorsBefore} → ${errorsAfter} errors (${errorsFixed >= 0 ? 'fixed ' + errorsFixed : 'added ' + Math.abs(errorsFixed)})`);
+    console.log(`   TS Result: ${errorsBefore} → ${errorsAfter} errors (${errorsFixed >= 0 ? 'fixed ' + errorsFixed : 'added ' + Math.abs(errorsFixed)})`);
+
+    // Check contract violations
+    let contractViolationsAfter = 0;
+    if (validateContract) {
+      try {
+        currentContractValidation = await validateContract(currentContent);
+        contractViolationsAfter = currentContractValidation?.breaking_changes.length || 0;
+
+        if (contractViolationsAfter > 0) {
+          contractViolationHistory.push({
+            cycle: refinementCount,
+            breaking_changes: contractViolationsAfter,
+            risk_level: currentContractValidation.risk_assessment.level,
+            violations: currentContractValidation.breaking_changes
+          });
+          console.log(`   Contract Result: ${contractViolationsBefore} → ${contractViolationsAfter} violations (${contractViolationsBefore - contractViolationsAfter >= 0 ? 'fixed ' + (contractViolationsBefore - contractViolationsAfter) : 'added ' + Math.abs(contractViolationsBefore - contractViolationsAfter)})`);
+        } else {
+          console.log(`   Contract Result: ✅ No violations`);
+        }
+      } catch (error) {
+        console.error(`   Contract validation failed in cycle ${refinementCount}:`, error);
+      }
+    }
 
     // Track cycle history
     cycleHistory.push({
@@ -244,7 +322,8 @@ export async function attemptSelfRefinement(
       improvement_rate: improvementRate,
       prompt_strategy: refinementCount === 1 ? 'syntax_imports' :
                        refinementCount === 2 ? 'type_safety' :
-                       'aggressive_fixes'
+                       'aggressive_fixes',
+      contract_violations: contractViolationsAfter
     });
 
     currentErrors = newErrors;
@@ -271,11 +350,16 @@ export async function attemptSelfRefinement(
   }
 
   const refinementSuccess = currentErrors.length < initialErrorCount;
-  const finalErrorReduction = ((initialErrorCount - currentErrors.length) / initialErrorCount * 100).toFixed(0);
+  const finalErrorReduction = initialErrorCount > 0 ? ((initialErrorCount - currentErrors.length) / initialErrorCount * 100).toFixed(0) : '100';
+  const finalContractViolations = currentContractValidation?.breaking_changes.length || 0;
 
   console.log(`✅ SELF-REFINEMENT: Complete after ${refinementCount} cycles`);
-  console.log(`   Initial: ${initialErrorCount} errors → Final: ${currentErrors.length} errors`);
-  console.log(`   Overall improvement: ${finalErrorReduction}%`);
+  console.log(`   Initial: ${initialErrorCount} TS errors → Final: ${currentErrors.length} errors`);
+  console.log(`   Overall TS improvement: ${finalErrorReduction}%`);
+  if (validateContract) {
+    const initialContractViolations = contractViolationHistory[0]?.breaking_changes || 0;
+    console.log(`   Initial: ${initialContractViolations} contract violations → Final: ${finalContractViolations} violations`);
+  }
 
   return {
     content: currentContent,
@@ -284,6 +368,8 @@ export async function attemptSelfRefinement(
     final_errors: currentErrors.length,
     refinement_success: refinementSuccess,
     error_details: currentErrors,
+    contract_violations: contractViolationHistory,
+    final_contract_validation: currentContractValidation,
     cycle_history: cycleHistory
   };
 }
