@@ -139,25 +139,35 @@
 
 ## Next Immediate Task
 
-**READ THIS FIRST:** `docs/Project Plan (3) - Verified Status.txt` - Complete verified status with critical path
+**READ THIS FIRST:** `docs/github-branch-cleanup-plan.md` - Comprehensive branch cleanup strategy
 
-**Priority 1: Fix Failing Tests** (1 day)
-- Fix 5 github-integration.test.ts formatting tests (markdown escaping issue)
-- Fix 1 manager-coordinator.test.ts complexity calculation test
-- Verify all 36 unit tests pass
+### 🎯 Priority 1: GitHub Branch Cleanup (1-2 hours) 🚨 **CRITICAL**
 
-**Priority 2: Add Contract Validation to Refinement** (0.5 days)
-- Import contract-validator.ts into enhanced-proposer-service.ts
-- Add contract validation check after each refinement cycle
-- Test contract violation detection
+**Context:** 44 commits of validated work stuck on feature branch due to secrets in git history (commit `9fd1400`)
 
-**Priority 3: Orchestrator E2E Test** (2-3 days) 🚨 **HIGHEST RISK**
-- Set up Aider + GitHub CLI test environment
-- Create comprehensive E2E test script
-- Run full work order lifecycle: Poll → Route → Generate → Aider → PR → Track
-- Fix any bugs discovered
+**Phases (Execute in order):**
+1. **Phase 1:** Sync main branch with origin (5 min)
+2. **Phase 2:** Handle stale PR #1 (10 min) - Decision needed
+3. **Phase 3:** Create clean feature branch (30 min) - Cherry-pick essential commits WITHOUT secrets
+4. **Phase 4:** Run E2E test on clean branch (10 min) - Validate GitHub push works
+5. **Phase 5:** Create PR and merge to main (10 min)
+6. **Phase 6:** Clean up old branches (5 min)
 
-**See Critical Path section in Project Plan v3 for full details**
+**Essential Commits to Preserve:**
+- `6a57673` - Fix Critical E2E Bugs (Bug #3, #4, #5)
+- `51f01e7` - Repository Cleanup (gitignore improvements)
+- Phase 2.3 Orchestrator implementation (~10 commits)
+- Phase 3 Error Handling & Resilience (4 commits)
+
+**Blocking Issue:** Cannot push current branch to GitHub due to secrets in commit `9fd1400`
+
+**Success Criteria:**
+- ✅ Clean branch pushed to GitHub successfully
+- ✅ E2E test completes with GitHub PR creation
+- ✅ All validated work merged to main
+- ✅ 0 stale PRs, 0 orphaned branches
+
+**See:** `docs/github-branch-cleanup-plan.md` for complete step-by-step instructions
 
 ---
 
