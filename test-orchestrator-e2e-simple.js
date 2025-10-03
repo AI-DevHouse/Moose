@@ -49,7 +49,7 @@ async function testOrchestratorE2E() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         metadata: {
-          director_approved: true,
+          approved_by_director: true, // Standard field name used by Director
           approval_status: 'approved',
           approved_by: 'e2e-test',
           approved_at: new Date().toISOString()

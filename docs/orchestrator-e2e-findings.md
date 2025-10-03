@@ -19,6 +19,33 @@
    - 6-step process: Create WO → Approve → Start Orchestrator → Monitor → Validate
    - Better for automated testing
 
+## v40 Session Fixes (2025-10-03)
+
+### Bug #3: Work Order GET Endpoint Fixed ✅ COMPLETE
+- **Root Cause:** Missing GET handler in `/api/work-orders/[id]/route.ts`
+- **Fix Applied:**
+  - Added `getWorkOrderById(id)` method to ApiClient (api-client.ts:20-29)
+  - Added `getById(id)` method to WorkOrderService (api-client.ts:199-210)
+  - Added GET export to route handler (work-orders/[id]/route.ts:4-9)
+- **Test Result:** ✅ Work order GET now returns full work order data
+
+### Bug #4: Orchestrator Not Processing - Fixed ✅ COMPLETE
+- **Root Cause:** Field name mismatch in approval checking
+  - Poller checked for `metadata.approved_by_director === true`
+  - Test set `metadata.director_approved: true` (wrong field name)
+- **Fix Applied:**
+  - Updated poller to check both field names (work-order-poller.ts:41-43)
+  - Updated test to use standard field name (test-orchestrator-e2e-simple.js:52)
+- **Test Result:** ✅ Orchestrator now picks up approved work orders and processes them through routing stage
+
+### Bug #5: createWorkOrder Missing Fields - Fixed ✅ COMPLETE
+- **Root Cause:** createWorkOrder API only accepted title/description/risk_level
+- **Impact:** E2E test couldn't provide acceptance_criteria, files_in_scope, context_budget_estimate
+- **Fix Applied:**
+  - Extended createWorkOrder interface to accept all fields (api-client.ts:31-38)
+  - Added fields to insertData (api-client.ts:47-49)
+- **Test Result:** ✅ Work orders now save all Architect fields correctly
+
 ## Bugs Discovered
 
 ### Bug #1: Director API Mismatch ✅ WORKAROUND

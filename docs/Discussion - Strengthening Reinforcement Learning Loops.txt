@@ -1,0 +1,115 @@
+Here’s a structured **discussion document for Claude**. It captures the essence of your conversation, why these changes are being considered, and grounds the proposals in the Moose architecture/docs you’ve provided.
+
+---
+
+# Discussion Document: Strengthening Moose’s Self-Learning Loops (v38 → MVP)
+
+**Date:** 2025-10-03
+**Audience:** Claude (auto-dev partner)
+**Context:** Court & ChatGPT session review
+
+---
+
+## 1. Summary of Conversation
+
+We reviewed how Moose compares to Blitzy’s methodology. While Moose is intended as an **in-house development team** (not a resale platform like Blitzy), both systems rely on multi-agent coordination and feedback loops.
+
+* **Blitzy’s strength:** speed + up-front planning + massive agent parallelism.
+* **Moose’s strength:** governance, resilience, budget controls, and safe human-in-the-loop escalation.
+
+Court’s priority right now is **MVP completion**, not broadening scope. However, one key requirement for Moose’s value beyond MVP is that it must be able to **learn from its own outcomes**. Without solid self-learning loops, Moose will stall after basic functionality is delivered.
+
+The focus of this discussion is therefore **tightening Moose’s failure capture and learning loops within the current scope** — small changes that create structured data for learning without introducing new agents or complex systems.
+
+---
+
+## 2. Why This Is Being Considered
+
+* **Current state (v38):**
+
+  * Proposer 3-cycle self-refinement is live and writes to `outcome_vectors`.
+  * Manager enforces budget safely (row-lock).
+  * Client Manager handles escalations with options and recommendations.
+  * Monitoring dashboard now shows stuck WOs, budget, and escalation counts.
+
+* **Gap:** Failures are logged, but not consistently tagged or categorised. Contract validation is missing from the refinement loop. There is no systemic “failure summary,” making it difficult to measure learning trends.
+
+* **Risk if unchanged:** Moose executes, but cannot **analyze its own patterns** or **improve autonomously**. Human operators will remain the bottleneck.
+
+* **Goal:** Keep Moose’s scope tight (no new agents, no new infra), but make its outputs structured enough that Phase 2+ learning features can be added later without retrofitting.
+
+---
+
+## 3. Proposed Minimal Improvements (Grounded in Current Design)
+
+### (A) Proposer refinement loop
+
+**Files:** `enhanced-proposer-service.ts`, `proposer-refinement-rules.ts`
+
+* Add **contract validation** (`contract-validator.ts`) after each cycle.
+* If contract fails twice → escalate early with `failure_class: contract_violation`.
+* Tag each failed attempt with `failure_class` when writing to `outcome_vectors`.
+
+  * Enum: `compile_error | contract_violation | test_fail | orchestration_error | budget | other`.
+* **Impact:** Prevents wasted refinement cycles, creates structured failure data.
+
+---
+
+### (B) Orchestrator & Sentinel tagging
+
+**Files:** `orchestrator/result-tracker.ts`, `sentinel-service.ts`
+
+* Orchestrator: On Aider/PR errors, write `failure_class: orchestration_error` to `outcome_vectors`.
+* Sentinel: On CI failure, write `failure_class: test_fail` + minimal metadata (failed test suites).
+* **Impact:** Ensures all downstream failures are categorised consistently.
+
+---
+
+### (C) Client Manager escalation logging
+
+**Files:** `client-manager-service.ts`, `client-manager-escalation-rules.ts`
+
+* Ensure each executed decision stores in `escalation_scripts`:
+  `escalation_id, work_order_id, chosen_option_id, ai_reasoning, human_note, resolved`.
+* **Impact:** Creates the ground truth dataset for future **auto-resolution** training.
+
+---
+
+### (D) Monitoring: Failure summary card
+
+**Files:** `MonitoringDashboard.tsx`, `/api/admin/health`
+
+* Add one **read-only card** showing:
+
+  1. Failures by `failure_class` (last 7 days).
+  2. Avg escalation resolution time.
+  3. Top 3 WOs by repeat failures.
+* **Impact:** Simple observability using existing data (`outcome_vectors`, `escalations`). No new infra.
+
+---
+
+## 4. Why This Fits Current Scope
+
+* **No new agents** → keeps Architect/Director/Manager/Proposer roles clearly scoped.
+* **No new tables** → reuse `outcome_vectors`, `escalations`, `escalation_scripts`.
+* **Small, bounded changes** → contract check, failure tags, log enrichment, one extra dashboard card.
+* **Future-ready** → data structured for trend analysis, confidence scoring, auto-resolution loops.
+
+---
+
+## 5. Next Steps for Consideration
+
+* Confirm agreement that these improvements are **in-scope for MVP**.
+* Prioritise **Proposer contract validation + failure tagging** first (low effort, highest leverage).
+* Add orchestration/sentinel tags next.
+* Extend monitoring dashboard once failure tags are in place.
+* Client Manager already writes patterns; verify consistency of stored data.
+
+---
+
+### Discussion Questions for Claude
+
+1. Do you agree that failure tagging and contract validation can be added **without destabilising MVP delivery**?
+2. Is it better to **extend Architect’s WO count** to cover the full app spec now, or defer to Phase 2 once basic loops are stable?
+3. Should Client Manager escalation logging be made **mandatory** at this stage, or left flexible until after MVP?
+

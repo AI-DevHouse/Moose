@@ -38,7 +38,9 @@ export async function pollPendingWorkOrders(): Promise<WorkOrder[]> {
     // Check metadata for auto_approved=true (from Director)
     const approvedWorkOrders = data.filter((wo: any) => {
       const metadata = wo.metadata || {};
-      return metadata.auto_approved === true || metadata.approved_by_director === true;
+      return metadata.auto_approved === true ||
+             metadata.approved_by_director === true ||
+             metadata.director_approved === true; // Support both field names
     });
 
     console.log(`[WorkOrderPoller] Found ${approvedWorkOrders.length} approved Work Orders out of ${data.length} pending`);

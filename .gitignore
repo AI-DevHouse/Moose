@@ -53,3 +53,4 @@ Thumbs.db
 
 # Misc
 .aider.tags.cache.v4/
+.aider*

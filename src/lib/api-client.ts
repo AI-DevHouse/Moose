@@ -12,24 +12,41 @@ export class ApiClient {
       .from('work_orders')
       .select('*')
       .order('created_at', { ascending: false })
-    
+
     if (error) throw error
     return data || []
+  }
+
+  async getWorkOrderById(id: string): Promise<Tables<'work_orders'>> {
+    const { data, error } = await this.supabase
+      .from('work_orders')
+      .select('*')
+      .eq('id', id)
+      .single()
+
+    if (error) throw error
+    return data
   }
 
   async createWorkOrder(workOrder: {
     title: string
     description: string
     risk_level?: string
+    acceptance_criteria?: string[]
+    files_in_scope?: string[]
+    context_budget_estimate?: number
   }): Promise<Tables<'work_orders'>> {
     const insertData: TablesInsert<'work_orders'> = {
       title: workOrder.title,
       description: workOrder.description,
       risk_level: workOrder.risk_level || 'low',
       status: 'pending',
-      proposer_id: 'a40c5caf-b0fb-4a8b-a544-ca82bb2ab939', 
-      estimated_cost: 0, 
+      proposer_id: 'a40c5caf-b0fb-4a8b-a544-ca82bb2ab939',
+      estimated_cost: 0,
       pattern_confidence: 0.5,
+      acceptance_criteria: workOrder.acceptance_criteria || [],
+      files_in_scope: workOrder.files_in_scope || [],
+      context_budget_estimate: workOrder.context_budget_estimate || 2000,
       created_at: new Date().toISOString(),
     }
 
@@ -185,6 +202,19 @@ class WorkOrderService {
     }
   }
 
+  async getById(id: string) {
+    try {
+      const data = await this.apiClient.getWorkOrderById(id)
+      return NextResponse.json(data)
+    } catch (error) {
+      console.error('Error fetching work order:', error)
+      return NextResponse.json(
+        { error: 'Failed to fetch work order' },
+        { status: 500 }
+      )
+    }
+  }
+
   async update(request: NextRequest, id: string) {
     try {
       const body = await request.json()
@@ -193,7 +223,7 @@ class WorkOrderService {
     } catch (error) {
       console.error('Error updating work order:', error)
       return NextResponse.json(
-        { error: 'Failed to update work order' }, 
+        { error: 'Failed to update work order' },
         { status: 500 }
       )
     }
