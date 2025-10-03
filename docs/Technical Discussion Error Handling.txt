@@ -1,0 +1,166 @@
+Technical Discussion: Error Handling & Testing Strategy for Moose
+For: Claude Code (Cursor IDE)
+Context: Multi-agent autonomous development system - 6 agents, stateless API architecture
+Current Status: 21/22 integration tests passing, Phase 2.5 complete, system functional
+
+The Situation
+You have a working multi-agent system with this flow:
+Architect → Director → Manager → Proposers → Orchestrator → Sentinel → Client Manager
+Each agent is a separate service making API calls. The system works in testing but has architectural gaps that will cause problems in production.
+The Core Problem
+Stateless APIs + Multiple Agents = Silent Failure Risk
+Because each API call is independent with no session memory, errors can fail silently without propagation. Example found in your result-tracker.ts:
+typescriptif (ovError) {
+  console.error('[ResultTracker] Error writing outcome_vectors:', ovError);
+  // Error logged but not escalated
+  // Work Order continues
+  // Learning data lost silently
+}
+This pattern appears throughout the codebase. Each agent handles errors locally but doesn't always propagate them to the escalation system.
+The 10 Principles Assessment
+After reviewing your architecture docs and code patterns, your system scores:
+
+Strong (80%+): Observability infrastructure, Explicit state machines, Human override paths
+Moderate (60-70%): Budget enforcement, Metadata management, Progressive rollout
+Weak (30-40%): Error propagation, Failure mode testing, Documentation verification
+
+The weak areas share a pattern: they're all about what happens when things go wrong, not when they work.
+The Rejected Solution (Too Complex)
+I initially proposed a major rewrite: central controller pattern, 4 new database tables, 2,000 lines of infrastructure code. This was over-engineered.
+Why it was wrong: You asked for the "absolute best" design and I interpreted that as "rebuild from scratch." But your architecture is fundamentally sound - it just needs error handling and testing patches, not a rewrite.
+The Recommended Solution (Incremental Patches)
+4 weeks of focused improvements instead of 4 weeks of rewriting:
+Week 1: Centralized Error Handling (2-3 days)
+Problem: Each agent has inconsistent error handling. Some create escalations, some just log.
+Solution: Create src/lib/error-handling.ts with a single function every agent calls:
+typescript// Concept, not complete code
+async function handleCriticalError(
+  component: string,
+  operation: string,
+  error: Error,
+  context: { work_order_id?, metadata? }
+): Promise<void> {
+  // 1. Log for debugging
+  // 2. ALWAYS create escalation in database
+  // 3. Record metric
+  // 4. TODO Week 4: Send alert if critical
+}
+Task for you: Grep for all console.error and catch blocks. Each should call handleCriticalError or have explicit reasoning why not.
+Question for you: Your existing code has createEscalation() calls in some places. Should we standardize on that pattern or create a new abstraction? What do your existing escalation patterns look like?
+Week 2: Budget Race Condition Fix (2-3 days)
+Problem: Two concurrent API calls can both check budget at $95, both call LLM for $10, total spend = $105 (exceeds $100 emergency kill).
+Current pattern (from your manager-routing-rules.ts):
+1. Query cost_tracking SUM
+2. Check if > threshold  
+3. Call LLM
+Race condition exists between steps 1-3.
+Solution: Budget reservation system using database transactions:
+typescript// Concept
+async function reserveBudget(estimated: number): Promise<{ reserved: boolean }> {
+  // Use database transaction to:
+  // 1. Check current spend
+  // 2. Create reservation record
+  // 3. Update daily total
+  // All atomic - no race condition possible
+}
+Question for you: You have cost_tracking table. Do you also have a budget_state table or similar? How do you currently track daily spend? Should we add a new table or modify existing?
+Week 3: Failure Mode Tests (3-4 days)
+Problem: 21/22 tests are "happy path" - they verify things work. Only 1 test verifies graceful failure (Security Hard Stop, which itself fails on cold start).
+Target: 10 new tests for failure scenarios:
+
+Proposer timeout (LLM call exceeds 300s)
+Budget exceeded mid-execution
+Concurrent Work Order updates to same metadata
+Malformed LLM response (invalid JSON)
+Database connection failure during transaction
+GitHub webhook arrives before Orchestrator sets PR number
+Invalid state transition attempted
+Orchestrator Aider command fails
+Sentinel webhook with wrong auth token
+Work Order stuck >24h (monitoring trigger)
+
+Your existing pattern: phase1-2-integration-test.ps1 uses Test-Endpoint function.
+Question for you: Should failure tests go in the same file or create phase1-2-failure-tests.ps1? Do you have Jest/Vitest configured, or is PowerShell your only test framework? The session docs mention "no Jest configured" - has this changed?
+Week 4: Monitoring Dashboard (2-3 days)
+Problem: You have observability data structures (outcome_vectors, cost_tracking, decision_logs) but no way to visualize them or get alerts.
+Solution: Basic monitoring without adding external dependencies:
+
+src/app/api/admin/health/route.ts - Returns system health
+src/app/api/admin/metrics/route.ts - Returns daily metrics
+src/components/MonitoringDashboard.tsx - Shows in Mission Control
+
+Metrics to track:
+
+Stuck Work Orders (>2h in in_progress)
+Daily budget spend vs limits
+Error rate by agent
+Work Order completion rate
+
+Question for you: Your Mission Control already has tabs. Should monitoring be a new tab, or integrated into existing views? What's your component structure?
+Key Architectural Decisions to Discuss
+1. Error Handling Pattern
+Option A: Keep existing escalations table pattern, just enforce it everywhere
+Option B: Add new system_alerts table for infrastructure errors separate from Work Order escalations
+Option C: Use both - escalations for Work Order failures, alerts for system failures
+Which fits your existing patterns better?
+2. Budget Enforcement Level
+Option A: Add budget checks at Manager level only (single point)
+Option B: Add budget checks before every LLM call (Architect, Proposer, etc.)
+Option C: Create middleware that wraps all LLM calls
+Your Architect currently isn't subject to budget enforcement (costs $11.30 per call). Should it be?
+3. Testing Infrastructure
+Your docs say Jest isn't configured, but you have unit test files in src/lib/orchestrator/__tests__/. Are these actually running? If we write 10 failure tests, what format should they be in?
+4. State Machine Enforcement
+Should state transitions be:
+
+Validated in code (current approach - each service checks before updating)
+Enforced by database (add PostgreSQL constraint: CHECK clause on status field)
+Both (defense in depth)
+
+Specific Code Locations to Review
+High priority for error handling:
+
+src/lib/orchestrator/result-tracker.ts lines 93-111, 167-195 (outcome_vectors failures)
+src/lib/sentinel/sentinel-service.ts lines 188-243 (Client Manager API calls)
+src/lib/manager-service.ts (budget checks before routing)
+src/lib/enhanced-proposer-service.ts (LLM call error handling)
+
+Budget-related code:
+
+src/lib/manager-routing-rules.ts lines 110-245 (routing logic)
+src/lib/config-services.ts (budget configuration)
+Database queries in cost_tracking table
+
+Questions for You
+
+Error handling: Do you already have a pattern we should extend, or create new?
+Budget enforcement: Where should budget checks happen? Every LLM call or just Manager?
+Testing: PowerShell integration tests only, or can we use Jest/Vitest for unit tests?
+Database: Are you comfortable adding database constraints (CHECK clauses, triggers) or prefer code-only validation?
+Monitoring: Should monitoring be a new Mission Control tab or a separate admin panel?
+Scope: The proposal is 4 weeks (Week 1: errors, Week 2: budget, Week 3: tests, Week 4: monitoring). Does this align with your timeline, or should we prioritize differently?
+
+What I'm NOT Proposing
+
+Major rewrite or new architecture pattern
+New external dependencies (Redis, message queues, etc.)
+Microservices or event-driven architecture
+Containerization or orchestration systems
+40 tests and 2,000 lines of infrastructure code
+
+What I AM Proposing
+
+300-400 lines of new code (error handler, budget lock, monitoring)
+10 new tests (failure modes)
+Refactoring existing error handling to use new patterns
+Better visibility into system health
+
+Your Assessment Needed
+Based on your actual codebase (which I haven't seen, only docs):
+
+Is the error handling gap as bad as I think, or are there patterns I'm missing?
+Is the budget race condition real or theoretical for your usage patterns?
+Are there other problems more urgent than these?
+What's your comfort level with database-level enforcement vs code-level?
+
+Please review against your actual code and let me know where I'm wrong or what I'm missing. I've only seen documentation - you have the full context.RetryClaude can make mistakes. Please double-check responses.Research Sonnet 4.5

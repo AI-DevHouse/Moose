@@ -194,7 +194,7 @@ async function reserveBudget(
   const { data, error } = await supabase.rpc('check_and_reserve_budget', {
     p_estimated_cost: estimatedCost,
     p_service_name: serviceName,
-    p_metadata: metadata || {}
+    p_metadata: (metadata || {}) as any
   }) as { data: Array<{ can_proceed: boolean; current_total: number; reservation_id: string | null }> | null; error: any };
 
   if (error) {

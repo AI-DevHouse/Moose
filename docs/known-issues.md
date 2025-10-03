@@ -1,5 +1,7 @@
 # Known Issues
 
+**Last Updated:** 2025-10-02 18:45:00 UTC
+
 **Active problems, workarounds, planned fixes.**
 
 ---
@@ -227,20 +229,25 @@ git checkout HEAD -- temp.ts
 
 ---
 
-## 10. Orchestrator Testing Status - ✅ SCHEMA BUG FIXED (v34)
+## 10. Orchestrator Testing Status - ✅ SCHEMA BUG FIXED (v34), ✅ UNIT TESTS COMPLETE (v35)
 
-**Status:** Schema bug fixed, integration tests added, unit tests still pending
+**Status:** Schema bug fixed (v34), unit tests complete (v35), E2E testing still pending
 
 **Problem:** Orchestrator had critical schema bug and zero automated tests
 
-**Resolution (v34):**
-- ✅ **Schema bug FIXED:** result-tracker.ts now uses correct outcome_vectors columns
-- ✅ **Schema Validation Protocol (R10):** "Verify before assuming" added to rules
-- ✅ **Session start automation:** scripts/session-start.ps1 regenerates types automatically
-- ✅ **Integration tests:** 2/2 added (Tests 19-20 for Orchestrator status)
+**Resolution (v34→v35):**
+- ✅ **Schema bug FIXED:** result-tracker.ts now uses correct outcome_vectors columns (v34)
+- ✅ **Schema Validation Protocol (R10):** "Verify before assuming" added to rules (v34)
+- ✅ **Session start automation:** scripts/session-start.ps1 regenerates types automatically (v34)
+- ✅ **Integration tests:** 2/2 added (Tests 19-20 for Orchestrator status) (v34)
+- ✅ **Unit tests:** 5/5 complete (939 lines) (v35)
+  - result-tracker.test.ts (157 lines) - Schema validation
+  - manager-coordinator.test.ts (156 lines) - Complexity estimation
+  - proposer-executor.test.ts (220 lines) - Task description building
+  - aider-executor.test.ts (205 lines) - Instruction file formatting
+  - github-integration.test.ts (201 lines) - PR body generation
 - ✅ **TypeScript:** 0 errors maintained
-- ⏸️ **Unit tests:** 0/5 written (deferred to next session)
-- ⏸️ **E2E testing:** Deferred until unit tests complete
+- ⏸️ **E2E testing:** Deferred (requires Aider + GitHub CLI setup)
 
 **Bug Fix Details:**
 ```typescript
@@ -286,95 +293,129 @@ await supabase.from('outcome_vectors').insert({
 3. ✅ Check supabase.ts before DB queries (no field name assumptions)
 4. ✅ Read actual metadata structures from DB (don't assume field names)
 
-**Testing Strategy (v34 Status):**
+**Testing Strategy (v34→v35 Status):**
 1. ✅ Fixed result-tracker.ts schema bug (v34)
-2. ⏸️ Write 5 unit tests (deferred) - result-tracker, manager-coordinator, proposer-executor, aider-executor, github-integration
+2. ✅ Write 5 unit tests (v35 COMPLETE) - result-tracker, manager-coordinator, proposer-executor, aider-executor, github-integration
 3. ✅ Added Tests 19-20 to integration suite (v34)
 4. ✅ Ran full test suite - 21/22 passing (E2E timeout is NOT a failure)
-5. ⏸️ E2E deferred - prioritizing Sentinel + Client Manager
+5. ✅ Sentinel + Client Manager implementation (v34-v35)
+6. ⏸️ E2E deferred - requires Aider + GitHub CLI environment setup
 
-**Unit Tests Deferred (next session):**
-- `src/lib/orchestrator/__tests__/result-tracker.test.ts` - Schema validation (CRITICAL)
-- `src/lib/orchestrator/__tests__/manager-coordinator.test.ts` - Complexity estimation logic
-- `src/lib/orchestrator/__tests__/proposer-executor.test.ts` - Task description building
-- `src/lib/orchestrator/__tests__/aider-executor.test.ts` - Instruction file formatting
-- `src/lib/orchestrator/__tests__/github-integration.test.ts` - PR body generation
+**Unit Tests Complete (v35):**
+- ✅ `src/lib/orchestrator/__tests__/result-tracker.test.ts` (157 lines) - Schema validation
+- ✅ `src/lib/orchestrator/__tests__/manager-coordinator.test.ts` (156 lines) - Complexity estimation logic
+- ✅ `src/lib/orchestrator/__tests__/proposer-executor.test.ts` (220 lines) - Task description building
+- ✅ `src/lib/orchestrator/__tests__/aider-executor.test.ts` (205 lines) - Instruction file formatting
+- ✅ `src/lib/orchestrator/__tests__/github-integration.test.ts` (201 lines) - PR body generation
 
 **Why E2E Deferred:**
 - Attempted E2E 4 times in v33, each revealed new environment issue
-- Decision: Focus on Sentinel (Phase 3.1) first, then Client Manager (Phase 2.5)
-- Unit tests will validate components in isolation when written
+- Decision: Focus on Sentinel (Phase 3.1) + Client Manager (Phase 2.5) first
+- Unit tests validate components in isolation
+- E2E requires full Aider + GitHub CLI setup
 
-**Next Phase (v34 Complete):** Sentinel Agent (Phase 3.1) ✅ COMPLETE → Client Manager (Phase 2.5) next
-
----
-
-## 11. Manager Integration with Proposers - 🔜 PENDING
-
-**Status:** Manager complete, integration pending
-
-**Problem:** Manager service exists but enhanced-proposer-service still calls proposerRegistry directly
-
-**Current state:**
-- ✅ Manager routing logic: Complete (371 lines in manager-routing-rules.ts)
-- ✅ Manager service: Complete (202 lines in manager-service.ts)
-- ✅ Manager API: Complete (/api/manager POST + GET retry)
-- ⚠️ Integration: Proposers don't call Manager yet
-
-**Required changes:**
-1. Update `enhanced-proposer-service.ts` to call Manager instead of proposerRegistry
-2. Refactor `proposer-registry.ts` lines 110-245 (old routing logic duplicates Manager)
-3. Test Director→Manager→Proposer E2E flow
-
-**Impact:** Manager works independently but not in full workflow
-
-**Workaround:** Test Manager with direct API calls (18/18 tests passing)
-
-**Planned fix:** Next phase integration work
-
-**Files to modify:**
-- `src/lib/enhanced-proposer-service.ts` (remove proposerRegistry routing call)
+**Next Phase (v35 Complete):** Mission Control UI for escalation queue → Live Sentinel/Client Manager testing → Orchestrator E2E
 
 ---
 
-## 12. Sentinel Webhook Configuration Pending - ⏸️ READY FOR SETUP (v34)
+## 11. Manager Integration with Proposers - ✅ COMPLETE (v36)
 
-**Status:** Implementation complete, webhook configuration pending
+**Status:** Integration complete
 
-**Problem:** GitHub repository webhook not yet configured for Sentinel
+**Resolution:** Proposer service now calls Manager API for all routing decisions
 
-**Current state (v34):**
-- ✅ Sentinel implementation: Complete (8 files, 850+ lines)
-- ✅ Webhook endpoint: `/api/sentinel` with GitHub signature verification
-- ✅ Integration tests: 2/2 passing (health check + webhook auth)
-- ✅ GitHub Actions workflow: sentinel-ci.yml configured
-- ⏸️ GitHub webhook: Not configured (requires manual setup)
-- ⏸️ Live testing: Pending webhook configuration
+**Changes made (v36):**
+- ✅ Updated `enhanced-proposer-service.ts` to call `POST /api/manager` instead of proposerRegistry
+- ✅ Removed duplicate routing logic from `proposer-registry.ts` (135 lines removed)
+- ✅ Deprecated `proposerRegistry.routeRequest()` with error directing to Manager API
+- ✅ Added ad-hoc routing support in Manager (gracefully handles non-existent work orders)
+- ✅ Tested Director→Manager→Proposer flow (3/3 tests passing)
 
-**Configuration Steps:**
-1. Go to Repository Settings → Webhooks → Add webhook
-2. Payload URL: `https://moose-dev-webhook.loca.lt/api/sentinel`
-3. Content type: `application/json`
-4. Secret: Use `GITHUB_WEBHOOK_SECRET` from .env.local
-5. Events: Select "Workflow runs" only
-6. Active: ✓
+**Test results:**
+- ✅ Low complexity (0.2) → routed to gpt-4o-mini
+- ✅ High complexity (0.9) + OAuth keywords → Hard Stop → claude-sonnet-4-5
+- ✅ SQL injection keyword → Hard Stop detected → claude-sonnet-4-5
 
-**Prerequisites:**
-- Terminal 2 running: `lt --port 3000 --subdomain moose-dev-webhook`
-- Dev server running in Terminal 1: `npm run dev`
-- GITHUB_WEBHOOK_SECRET configured in .env.local
+**Files modified:**
+- `src/lib/enhanced-proposer-service.ts` (lines 47-58, 147-179)
+- `src/lib/proposer-registry.ts` (lines 110-120: removed 135 lines)
+- `src/lib/manager-service.ts` (lines 154-164: ad-hoc routing support)
 
-**Testing:**
-1. Create test PR with simple change
-2. Trigger GitHub Actions workflow (sentinel-ci.yml)
-3. Verify Sentinel receives webhook (check server logs)
-4. Verify Work Order status updated in database
+**Current Status:** Full governance flow operational (Architect → Director → Manager → Proposer)
 
-**Impact:** Sentinel can't receive workflow completion events until webhook configured
+---
 
-**Workaround:** Manual testing with curl + valid GitHub signature (tested and working)
+## 12. Sentinel Webhook & Client Manager Integration - ✅ COMPLETE (v34-v37)
 
-**Next steps:** Configure webhook → Test with real PR → Implement Client Manager
+**Status:** Complete with UI
+
+**Resolution (v34→v37):**
+- ✅ Sentinel implementation: Complete (8 files, 850+ lines) (v34)
+- ✅ Webhook endpoint: `/api/sentinel` with GitHub signature verification (v34)
+- ✅ Integration tests: 2/2 passing (health check + webhook auth) (v34)
+- ✅ GitHub Actions workflow: sentinel-ci.yml configured (v34)
+- ✅ GitHub webhook: Configured with secret (v35)
+- ✅ Client Manager integration: Sentinel calls `/api/client-manager/escalate` on hard failures (v35)
+- ✅ **Mission Control UI: COMPLETE** (v37) - Escalation queue with resolution options
+- ✅ **Schema bug fixed:** cost_tracking.work_order_id → outcome_vectors (v37)
+- ⏸️ Live E2E testing: Pending (requires triggering real workflow failure)
+
+**Mission Control Escalation UI (v37):**
+- ✅ New "Escalations" tab with badge showing pending count
+- ✅ Escalation list with Work Order details, reason, status
+- ✅ Full-screen resolution modal with:
+  - Context summary (cost spent, attempts, failure pattern)
+  - AI recommendation with confidence visualization
+  - Resolution options with pros/cons (green checkmarks/red X)
+  - Recommended option highlighted with star (⭐)
+  - One-click decision execution
+  - Optional human notes field
+
+**Schema Bug Fix (v37):**
+- Problem: `client-manager-service.ts` queried `cost_tracking.work_order_id` (column doesn't exist)
+- Solution: Changed to query `outcome_vectors.cost` filtered by `work_order_id`
+- Impact: Client Manager API now works correctly for escalation creation
+
+**Current Status:** Backend complete, UI complete, ready for live E2E testing
+
+---
+
+## 13. Client Manager Schema Bug - ✅ RESOLVED (v37)
+
+**Status:** Fixed in v37
+
+**Problem:** `client-manager-service.ts` attempted to query `cost_tracking.work_order_id` column which doesn't exist in database schema
+
+**Symptoms:**
+```
+POST /api/client-manager/escalate
+Error: "Failed to fetch cost tracking: column cost_tracking.work_order_id does not exist"
+```
+
+**Root Cause:**
+- `cost_tracking` table only has: id, cost, service_name, created_at, metadata
+- No `work_order_id` column exists (it's a global cost log, not per-work-order)
+- Client Manager service tried to filter costs by work order
+
+**Resolution (v37):**
+```typescript
+// BEFORE (WRONG - line 51)
+.from('cost_tracking')
+.eq('work_order_id', workOrderId)  // ❌ Column doesn't exist
+
+// AFTER (CORRECT - lines 50-53)
+.from('outcome_vectors')  // ✅ Has work_order_id column
+.select('cost')
+.eq('work_order_id', workOrderId)
+```
+
+**Impact:**
+- Client Manager API `/api/client-manager/escalate` now works correctly
+- Escalation creation functional
+- Tested with Work Order b8dbcb2c-fad4-47e7-941e-c5a5b25f74f4
+
+**Files Modified:**
+- src/lib/client-manager-service.ts (lines 47-57)
 
 ---
 - `src/lib/proposer-registry.ts` (remove lines 110-245 after migration)
@@ -389,7 +430,9 @@ await supabase.from('outcome_vectors').insert({
 | ~~Database migration~~ | ✅ RESOLVED | None | N/A | Complete |
 | ~~Director approval~~ | ✅ RESOLVED | None | N/A | Complete |
 | ~~Pre-existing TS errors (21)~~ | ✅ RESOLVED v31 | None | N/A | Complete |
-| Manager→Proposer integration | 🔜 PENDING | Manager isolated | Direct API test | Next phase |
+| ~~Manager→Proposer integration~~ | ✅ RESOLVED v36 | None | N/A | Complete |
+| ~~Client Manager schema bug~~ | ✅ RESOLVED v37 | None | N/A | Complete |
+| ~~Escalation UI missing~~ | ✅ RESOLVED v37 | None | N/A | Complete |
 | Orchestrator E2E testing | 🔜 PENDING | Not tested yet | N/A | Install prerequisites |
 | Cold-start race condition | **CRITICAL** | Flaky tests | Run twice | Week 4 Day 5 |
 | Dependency validation relaxed | ⚠️ Monitoring | Complex graphs | Director validates | Future phase |

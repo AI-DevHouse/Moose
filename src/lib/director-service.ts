@@ -95,6 +95,7 @@ async function createWorkOrdersInDatabase(
         risk_level: wo.risk_level,
         estimated_cost: decomposition.total_estimated_cost / decomposition.work_orders.length,
         pattern_confidence: risk_assessment.confidence_score,
+        proposer_id: null as any, // Will be assigned by Manager when routed
         // New Architect fields
         acceptance_criteria: wo.acceptance_criteria,
         files_in_scope: wo.files_in_scope,
@@ -110,7 +111,7 @@ async function createWorkOrdersInDatabase(
           auto_approved: true,
           approved_at: new Date().toISOString()
         }
-      })
+      } as any)
       .select('id')
       .single();
 
@@ -144,16 +145,17 @@ async function logApprovalDecision(
   // For now, we'll log to console and skip DB insert if table doesn't exist
   try {
     await supabase.from('decision_logs').insert({
-      feature_name,
       decision_type: 'director_approval',
       approved: decision.approved,
-      auto_approved: decision.auto_approved,
-      aggregate_risk: decision.aggregate_risk,
-      total_cost: decision.total_cost,
       reasoning: decision.reasoning,
-      work_order_ids,
-      risk_assessments: decision.risk_assessments,
-      created_at: new Date().toISOString()
+      decision_data: {
+        feature_name,
+        auto_approved: decision.auto_approved,
+        aggregate_risk: decision.aggregate_risk,
+        total_cost: decision.total_cost,
+        work_order_ids,
+        risk_assessments: decision.risk_assessments
+      } as any
     });
   } catch (error) {
     // decision_logs table might not exist yet - log to console

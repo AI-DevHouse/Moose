@@ -1,0 +1,27 @@
+{
+  "git.untrackedChanges": "hidden",
+  "git.statusLimit": 50000,
+  "git.ignoreLimitWarning": true,
+  "files.watcherExclude": {
+    "**/node_modules/**": true,
+    "**/dist/**": true,
+    "**/build/**": true,
+    "**/.next/**": true,
+    "**/.turbo/**": true,
+    "**/.vercel/**": true,
+    "**/.vite/**": true,
+    "**/.cache/**": true,
+    "**/coverage/**": true
+  },
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/dist": true,
+    "**/build": true,
+    "**/.next": true,
+    "**/.turbo": true,
+    "**/.vercel": true,
+    "**/.vite": true,
+    "**/.cache": true,
+    "**/coverage": true
+  }
+}

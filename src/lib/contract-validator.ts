@@ -150,7 +150,7 @@ export class ContractValidator {
 
     // Analyze each change against relevant contracts
     for (const change of changes) {
-      const relevantContracts = this.identifyRelevantContracts(contracts || [], change);
+      const relevantContracts = this.identifyRelevantContracts((contracts || []) as Contract[], change);
       
       for (const contract of relevantContracts) {
         const validation = await this.validateChangeAgainstContract(change, contract);

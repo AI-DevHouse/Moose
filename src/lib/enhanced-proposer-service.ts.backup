@@ -1,16 +1,9 @@
-// Enhanced Proposer Service - Phase 2.2.3 → 2.2.6
+// Enhanced Proposer Service - Phase 2.2.3 → 2.2.4
 // Performance monitoring for gpt-4o-mini fallback optimization
 // Integrated with modular ComplexityAnalyzer
-// Phase 2.2.6: Self-refinement with TypeScript error detection (now centralized in proposer-refinement-rules.ts)
 
 import { proposerRegistry, type ProposerConfig, type RoutingDecision } from './proposer-registry';
 import { complexityAnalyzer, type ComplexityAnalysis } from './complexity-analyzer';
-import {
-  attemptSelfRefinement,
-  REFINEMENT_THRESHOLDS,
-  type RefinementResult
-} from './proposer-refinement-rules';
-import { ContractValidator, type ValidationResult } from './contract-validator';
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from '@/types/supabase';
 
@@ -22,7 +15,7 @@ const supabase = createClient<Database>(
 export interface PerformanceMetrics {
   execution_time_ms: number;
   cost: number;
-  token_efficiency: number;
+  token_efficiency: number; // tokens per second
   success_rate: number;
   retry_count: number;
   fallback_used: boolean;
@@ -52,10 +45,6 @@ export interface ProposerRequest {
   expected_output_type: 'code' | 'analysis' | 'planning' | 'refactoring';
   priority?: 'high' | 'medium' | 'low';
   retry_config?: RetryConfig;
-  metadata?: {
-    work_order_id?: string;
-    [key: string]: any;
-  };
 }
 
 export interface EnhancedProposerResponse {
@@ -73,8 +62,6 @@ export interface EnhancedProposerResponse {
   routing_decision: RoutingDecision;
   performance_metrics: PerformanceMetrics;
   fallback_monitoring?: FallbackMonitoring;
-  refinement_metadata?: RefinementResult;  // Now uses centralized type
-  contract_validation?: ValidationResult;  // Contract violation detection
   retry_history?: Array<{
     attempt: number;
     proposer: string;
@@ -104,22 +91,6 @@ export class EnhancedProposerService {
     return EnhancedProposerService.instance;
   }
 
-  // REMOVED: Self-refinement logic now in proposer-refinement-rules.ts
-  // This orchestration service only calls centralized functions
-
-  private async executeWithProposerDirect(
-    request: ProposerRequest, 
-    proposer: ProposerConfig
-  ): Promise<any> {
-    if (proposer.provider === 'anthropic') {
-      return this.executeWithClaude(request, proposer);
-    } else if (proposer.provider === 'openai') {
-      return this.executeWithOpenAI(request, proposer);
-    } else {
-      throw new Error(`Unsupported provider: ${proposer.provider}`);
-    }
-  }
-
   async executeWithMonitoring(request: ProposerRequest): Promise<EnhancedProposerResponse> {
     const startTime = Date.now();
     const retryConfig = request.retry_config || {
@@ -134,6 +105,7 @@ export class EnhancedProposerService {
     
     await proposerRegistry.initialize();
     
+    // Use modular complexity analyzer - Phase 2.2.4
     const complexityAnalysis = await complexityAnalyzer.analyze({
       task_description: request.task_description,
       context: request.context,
@@ -149,47 +121,28 @@ export class EnhancedProposerService {
       reasoning: complexityAnalysis.reasoning,
       metadata: complexityAnalysis.metadata
     });
-
-    // Call Manager API for routing decision (Phase 4.1 integration)
-    const managerResponse = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/api/manager`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        work_order_id: request.metadata?.work_order_id || 'adhoc-' + Date.now(),
-        task_description: request.task_description,
-        context_requirements: request.context || [],
-        complexity_score: complexityAnalysis.score,
-        approved_by_director: true // Proposer service assumes Director approval already happened
-      })
-    });
-
-    if (!managerResponse.ok) {
-      const errorData = await managerResponse.json();
-      throw new Error(`Manager routing failed: ${errorData.error || 'Unknown error'}`);
-    }
-
-    const managerResult = await managerResponse.json();
-    if (!managerResult.success || !managerResult.routing_decision) {
-      throw new Error('Manager returned unsuccessful routing decision');
-    }
-
-    const routingDecision = managerResult.routing_decision;
-
-    console.log('🔍 DIAGNOSTIC: Routing Decision from Manager:', {
+    
+    const routingDecision = await proposerRegistry.routeRequest(
+      request.task_description,
+      complexityAnalysis.score,
+      request.context
+    );
+    
+    console.log('🔍 DIAGNOSTIC: Routing Decision:', {
       selected_proposer: routingDecision.selected_proposer,
       reason: routingDecision.reason,
       confidence: routingDecision.confidence,
       fallback_proposer: routingDecision.fallback_proposer,
-      complexity_score_used: complexityAnalysis.score,
-      budget_status: routingDecision.routing_metadata?.budget_status
+      complexity_score_used: complexityAnalysis.score
     });
 
     this.fallbackStats.total_requests++;
 
     for (let attempt = 0; attempt <= retryConfig.max_retries; attempt++) {
-      const attemptStartTime = Date.now();
-      
       try {
+        const attemptStartTime = Date.now();
+        
+        // Determine proposer for this attempt
         const proposerName = this.selectProposerForAttempt(
           attempt, 
           routingDecision, 
@@ -201,6 +154,7 @@ export class EnhancedProposerService {
           throw new Error(`Proposer ${proposerName} not found`);
         }
 
+        // Track if this is a fallback request
         const isFallback = proposerName !== routingDecision.selected_proposer;
         if (isFallback) {
           this.fallbackStats.fallback_requests++;
@@ -214,74 +168,9 @@ export class EnhancedProposerService {
           attempt_number: attempt + 1
         });
 
-        let response = await this.executeWithProposer(request, proposerConfig);
-
-        let refinementMetadata: RefinementResult | undefined = undefined;
-        if (response.success && response.content && request.expected_output_type === 'code') {
-          // Delegate to centralized refinement rules (now supports 3 cycles)
-          const refinementResult = await attemptSelfRefinement(
-            response.content,
-            request,
-            async (refinementRequest: ProposerRequest) => {
-              return this.executeWithProposerDirect(refinementRequest, proposerConfig);
-            },
-            REFINEMENT_THRESHOLDS.MAX_CYCLES  // Now 3 instead of 1
-          );
-
-          response.content = refinementResult.content;
-          refinementMetadata = refinementResult;
-
-          console.log('🔍 SELF-REFINEMENT: Complete', {
-            cycles: refinementMetadata.refinement_count,
-            initial_errors: refinementMetadata.initial_errors,
-            final_errors: refinementMetadata.final_errors,
-            success: refinementMetadata.refinement_success
-          });
-        }
-
-        // Contract validation after refinement (Week 4 D4-5 deliverable)
-        let contractValidation: ValidationResult | undefined = undefined;
-        if (response.success && response.content && request.expected_output_type === 'code') {
-          try {
-            const contractValidator = new ContractValidator();
-
-            // Check for breaking changes or contract violations in generated code
-            // This validates the code doesn't violate existing API/domain contracts
-            const { data: activeContracts } = await supabase
-              .from('contracts')
-              .select('*')
-              .eq('is_active', true);
-
-            if (activeContracts && activeContracts.length > 0) {
-              // For code generation, we validate that the generated code respects existing contracts
-              // This is a simplified check - in production, would parse code AST for actual contract checks
-              for (const contract of activeContracts) {
-                const validation = await contractValidator.validateContract({
-                  contract_type: contract.contract_type as any,
-                  name: contract.name,
-                  version: contract.version,
-                  specification: contract.specification,
-                  validation_rules: contract.validation_rules
-                });
-
-                // If we find high/critical violations, store the validation result
-                if (validation.breaking_changes.some(bc => bc.severity === 'high' || bc.severity === 'critical')) {
-                  contractValidation = validation;
-                  console.log('⚠️ CONTRACT VIOLATION DETECTED:', {
-                    contract_name: contract.name,
-                    breaking_changes: validation.breaking_changes.length,
-                    risk_level: validation.risk_assessment.level
-                  });
-                  break; // Stop on first critical violation
-                }
-              }
-            }
-          } catch (error) {
-            console.error('Contract validation failed:', error);
-            // Non-critical: continue without contract validation
-          }
-        }
-
+        // Execute request
+        const response = await this.executeWithProposer(request, proposerConfig);
+        
         console.log('🔍 DIAGNOSTIC: API Response:', {
           proposer_used: response.proposer_used,
           success: response.success,
@@ -289,9 +178,9 @@ export class EnhancedProposerService {
           token_usage: response.token_usage,
           content_length: response.content?.length || 0
         });
-        
         const attemptExecutionTime = Date.now() - attemptStartTime;
 
+        // Calculate performance metrics
         const performanceMetrics = this.calculatePerformanceMetrics(
           response,
           attemptExecutionTime,
@@ -299,10 +188,13 @@ export class EnhancedProposerService {
           isFallback
         );
 
+        // Update performance history
         this.updatePerformanceHistory(proposerName, performanceMetrics);
 
+        // Update fallback monitoring
         const fallbackMonitoring = this.updateFallbackMonitoring(isFallback, true);
 
+        // Record successful attempt
         retryHistory.push({
           attempt: attempt + 1,
           proposer: proposerName,
@@ -311,6 +203,7 @@ export class EnhancedProposerService {
           execution_time_ms: attemptExecutionTime
         });
 
+        // Store performance data in database - Phase 2.2.4 enhanced
         await this.storePerformanceData(request, response, performanceMetrics, complexityAnalysis, isFallback);
 
         const totalExecutionTime = Date.now() - startTime;
@@ -322,8 +215,6 @@ export class EnhancedProposerService {
           routing_decision: routingDecision,
           performance_metrics: performanceMetrics,
           fallback_monitoring: fallbackMonitoring,
-          refinement_metadata: refinementMetadata,
-          contract_validation: contractValidation,
           retry_history: retryHistory
         };
 
@@ -340,14 +231,18 @@ export class EnhancedProposerService {
           execution_time_ms: attemptExecutionTime
         });
 
+        // Update fallback monitoring for failure
         this.updateFallbackMonitoring(false, false);
 
+        // If this is the last attempt, break
         if (attempt === retryConfig.max_retries) break;
 
+        // Wait before retry
         await new Promise(resolve => setTimeout(resolve, retryConfig.retry_delay_ms));
       }
     }
 
+    // All retries failed
     throw new Error(`All retry attempts failed. Last error: ${lastError?.message}`);
   }
 
@@ -360,6 +255,7 @@ export class EnhancedProposerService {
       return routingDecision.selected_proposer;
     }
 
+    // Use fallback after escalation threshold
     if (attempt >= retryConfig.escalation_threshold && 
         retryConfig.fallback_on_failure && 
         routingDecision.fallback_proposer) {
@@ -375,16 +271,16 @@ export class EnhancedProposerService {
     retryCount: number,
     fallbackUsed: boolean
   ): PerformanceMetrics {
-    const tokenEfficiency = response.token_usage.total / (executionTime / 1000);
+    const tokenEfficiency = response.token_usage.total / (executionTime / 1000); // tokens per second
     
     return {
       execution_time_ms: executionTime,
       cost: response.cost,
       token_efficiency: tokenEfficiency,
-      success_rate: 1.0,
+      success_rate: 1.0, // This execution succeeded
       retry_count: retryCount,
       fallback_used: fallbackUsed,
-      routing_accuracy: fallbackUsed ? 0.7 : 1.0
+      routing_accuracy: fallbackUsed ? 0.7 : 1.0 // Lower if fallback was needed
     };
   }
 
@@ -396,6 +292,7 @@ export class EnhancedProposerService {
     const history = this.performanceHistory.get(proposerName)!;
     history.push(metrics);
     
+    // Keep only last 100 entries
     if (history.length > 100) {
       history.shift();
     }
@@ -433,13 +330,14 @@ export class EnhancedProposerService {
           retry_count: metrics.retry_count,
           task_type: request.expected_output_type,
           complexity_score: complexityAnalysis.score,
-          complexity_factors: complexityAnalysis.factors,
-          complexity_metadata: complexityAnalysis.metadata,
+          complexity_factors: complexityAnalysis.factors, // Phase 2.2.4
+          complexity_metadata: complexityAnalysis.metadata, // Phase 2.2.4
           routing_accuracy: metrics.routing_accuracy
-        } as any
+        }
       });
     } catch (error) {
       console.error('Failed to store performance data:', error);
+      // Don't throw - this is monitoring, not critical path
     }
   }
 
@@ -457,22 +355,23 @@ export class EnhancedProposerService {
       fallback_efficiency: number;
       routing_accuracy: number;
     };
-    routing_accuracy_by_complexity?: any;
+    routing_accuracy_by_complexity?: any; // Phase 2.2.4
   }> {
     const proposerPerformance: Record<string, any> = {};
-
-    for (const [proposerName, history] of Array.from(this.performanceHistory.entries())) {
+    
+    for (const [proposerName, history] of this.performanceHistory.entries()) {
       if (history.length === 0) continue;
-
+      
       proposerPerformance[proposerName] = {
-        avg_execution_time: history.reduce((sum: number, m: PerformanceMetrics) => sum + m.execution_time_ms, 0) / history.length,
-        avg_cost: history.reduce((sum: number, m: PerformanceMetrics) => sum + m.cost, 0) / history.length,
-        avg_token_efficiency: history.reduce((sum: number, m: PerformanceMetrics) => sum + m.token_efficiency, 0) / history.length,
-        success_rate: history.reduce((sum: number, m: PerformanceMetrics) => sum + m.success_rate, 0) / history.length,
+        avg_execution_time: history.reduce((sum, m) => sum + m.execution_time_ms, 0) / history.length,
+        avg_cost: history.reduce((sum, m) => sum + m.cost, 0) / history.length,
+        avg_token_efficiency: history.reduce((sum, m) => sum + m.token_efficiency, 0) / history.length,
+        success_rate: history.reduce((sum, m) => sum + m.success_rate, 0) / history.length,
         total_requests: history.length
       };
     }
 
+    // Get routing accuracy analysis from complexity analyzer - Phase 2.2.4
     const routingAccuracy = await complexityAnalyzer.getRoutingAccuracyByComplexity();
 
     return {
@@ -526,8 +425,8 @@ export class EnhancedProposerService {
     const outputTokens = data.usage.output_tokens;
     
     const cost = (
-      (inputTokens / 1000) * proposer.cost_profile.input_cost_per_token +
-      (outputTokens / 1000) * proposer.cost_profile.output_cost_per_token
+      (inputTokens / 1000) * proposer.cost_profile.input_cost_per_1k_tokens +
+      (outputTokens / 1000) * proposer.cost_profile.output_cost_per_1k_tokens
     );
 
     return {
@@ -568,8 +467,8 @@ export class EnhancedProposerService {
     const outputTokens = data.usage.completion_tokens;
     
     const cost = (
-      (inputTokens / 1000) * proposer.cost_profile.input_cost_per_token +
-      (outputTokens / 1000) * proposer.cost_profile.output_cost_per_token
+      (inputTokens / 1000) * proposer.cost_profile.input_cost_per_1k_tokens +
+      (outputTokens / 1000) * proposer.cost_profile.output_cost_per_1k_tokens
     );
 
     return {
@@ -606,4 +505,3 @@ Provide a concise, practical response for ${request.expected_output_type}.`;
 }
 
 export const enhancedProposerService = EnhancedProposerService.getInstance();
-

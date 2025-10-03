@@ -67,12 +67,12 @@ export class ComplexityAnalyzer {
 
   // Context window limits for memory pressure calculation
   private readonly CONTEXT_LIMITS = {
-    'claude-sonnet-4-5': 200000,
+    'claude-sonnet-4': 200000,
     'gpt-4o-mini': 128000
   };
 
   private readonly USABLE_CONTEXT_RATIO = 0.80; // 20% safety margin
-  // Hard Stop Keywords - Force claude-sonnet-4-5 regardless of complexity
+  // Hard Stop Keywords - Force claude-sonnet-4 regardless of complexity
   private readonly HARD_STOP_KEYWORDS = {
     security: [
       'authentication',
@@ -410,19 +410,7 @@ export class ComplexityAnalyzer {
     }
 
     // Group by complexity bands
-    interface RequestData {
-      complexity: number;
-      proposer: string;
-      fallback: boolean;
-      correct: boolean;
-    }
-
-    const bands: Array<{
-      min: number;
-      max: number;
-      requests: RequestData[];
-      costs: number[];
-    }> = [
+    const bands = [
       { min: 0, max: 0.3, requests: [], costs: [] },
       { min: 0.3, max: 0.5, requests: [], costs: [] },
       { min: 0.5, max: 0.7, requests: [], costs: [] },
@@ -464,9 +452,9 @@ export class ComplexityAnalyzer {
   }
 
   private wasRoutingCorrect(complexity: number, proposer: string, fallback: boolean): boolean {
-    // Simple heuristic: low complexity should use gpt-4o-mini, high should use claude-sonnet-4-5
+    // Simple heuristic: low complexity should use gpt-4o-mini, high should use claude-sonnet-4
     if (complexity < 0.3 && proposer === 'gpt-4o-mini' && !fallback) return true;
-    if (complexity >= 0.3 && proposer === 'claude-sonnet-4-5') return true;
+    if (complexity >= 0.3 && proposer === 'claude-sonnet-4') return true;
     return false;
   }
 
@@ -487,39 +475,4 @@ export class ComplexityAnalyzer {
   }
 }
 
-
-// ========== TYPESCRIPT ERROR PARSING (Phase 2.2.6) ==========
-
-export interface TypeScriptError {
-  file: string;
-  line: number;
-  column: number;
-  code: string;
-  message: string;
-  fullText: string;
-}
-
-export function parseTypeScriptErrors(tscOutput: string): TypeScriptError[] {
-  const errors: TypeScriptError[] = [];
-  
-  // TypeScript compiler format: file.ts(line,col): error TS#### message
-  // Example: src/test.ts(10,5): error TS2304: Cannot find name 'undefinedVar'.
-  const errorPattern = /^(.+?)\((\d+),(\d+)\):\s+error\s+(TS\d+):\s+(.+)$/gm;
-  
-  let match;
-  while ((match = errorPattern.exec(tscOutput)) !== null) {
-    errors.push({
-      file: match[1].trim(),
-      line: parseInt(match[2], 10),
-      column: parseInt(match[3], 10),
-      code: match[4],
-      message: match[5].trim(),
-      fullText: match[0]
-    });
-  }
-  
-  return errors;
-}
-
 export const complexityAnalyzer = ComplexityAnalyzer.getInstance();
-

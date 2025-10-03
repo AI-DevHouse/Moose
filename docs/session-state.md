@@ -1,6 +1,6 @@
-# Session State v38 (2025-10-03 13:45 UTC)
+# Session State v39 (2025-10-03)
 
-**Last Updated:** 2025-10-03 13:45:00 UTC
+**Last Updated:** 2025-10-03 18:00:00 UTC
 
 **Start here each session.** Reference other docs as needed.
 
@@ -44,620 +44,547 @@
 
 ---
 
-## Last Session Summary (v37→v38)
+## Last Session Summary (v38→v39)
 
 **Completed:**
-- ✅ **Phase 1: Error Audit & Escalation Enforcement Complete** - All critical errors now escalate to Client Manager
-- ✅ **Phase 2: Budget Race Condition Fix Complete** - PostgreSQL function with row-level locking prevents concurrent budget overruns
-- ✅ **Phase 3: Failure Mode Tests Complete** - 10 comprehensive tests, all passing (10/10 in 3.18s)
-- ✅ **Phase 4: Monitoring & Observability Complete** - Health monitoring dashboard with real-time metrics
-- ✅ **Final Integration Complete** - Health Monitor tab added to Mission Control Dashboard
-- ✅ **Documentation Complete** - API reference, architecture decisions, and session state updated
+- ✅ **Comprehensive Verification Audit Complete** - Manually verified all claimed completions in project plan
+- ✅ **Project Plan v3 Created** - Verified status edition with evidence for each deliverable
+- ✅ **Error Handling & Resilience Plan Verified** - All 4 phases confirmed complete (v38)
+- ✅ **Critical Path Defined** - 7-11 day timeline to production with priorities
+- ✅ **Updated Handover Documents** - Session state, reading pack prepared for next session
 
-**Key Learnings:**
-- Database schema used `status` not `current_state` for work_orders table
-- Escalations table uses `reason` not `error_type`, and `work_order_id` is required
-- outcome_vectors table has `failure_classes` for tracking errors
-- Health monitoring shows 6 stuck work orders from old test data (Sept 18-19)
-- Budget race condition test validates PostgreSQL locking mechanism
+**Key Findings:**
+- **Overall completion: 65%** (verified, not assumed)
+- **100% complete:** Self-Refinement (3-cycle), Architect (8/8), Director (5/5), Client Manager (7/7), v38 Error Handling (4/4 phases)
+- **Partial:** Orchestrator (built but E2E untested, 5 tests failing), Sentinel (binary pass/fail only), Manager (core works, advanced features missing)
+- **Not started:** Learning system (Phase 3.3), Test App (Phase 5.1), Training Period (Phase 5.2)
+- **Test results:** 10/10 failure mode tests passing, 26/31 unit tests passing (5 failing in github-integration formatting)
+
+**Critical Gaps Identified:**
+1. ❌ **Orchestrator E2E never run** - 1,418 lines of code never tested end-to-end with real Aider
+2. ❌ **Contract validation NOT in refinement** - Week 4 D4-5 deliverable missing
+3. ❌ **5 unit tests failing** - github-integration.test.ts formatting, manager-coordinator.test.ts complexity
+4. ❌ **Sentinel advanced features deferred** - No FLAKY classification, no adaptive baselines
+5. ❌ **Learning system 0%** - Entire Phase 3.3 not started
 
 **Details:**
-- **Health API:** Created `/api/admin/health` endpoint (134 lines)
-- **Monitoring Dashboard:** Created `/components/MonitoringDashboard.tsx` (260 lines, Heroicons + Tailwind)
-- **Integration:** Added "Health Monitor" tab to MissionControlDashboard.tsx
-- **Documentation:** Created comprehensive API reference (docs/api-reference.md, 450+ lines)
-- **Architecture:** Updated architecture-decisions.md with v38 summary
-- **Git Commits:**
-  - `fa67473` Phase 3: Failure Mode Tests - 10 Comprehensive Tests
-  - `8c865eb` Phase 1 & 2: Error Escalation + Budget Race Fix
-  - `93012f1` Phase 4: Monitoring & Observability
+- **Verification method:** Code inspection + API testing (curl) + vitest results + file existence checks
+- **Evidence gathered:** File paths, line numbers, API responses, test output
+- **Project Plan v3:** Created `docs/Project Plan (3) - Verified Status.txt` (1,337 lines)
+- **Critical Path:** 6 priorities, 7-11 day timeline to production
+- **Handover docs:** Updated session-state.md, prepared reading pack
 
----
+**Files Created (v39):**
+- docs/Project Plan (3) - Verified Status.txt (1,337 lines)
 
-## Last Session Summary (v36→v37)
-
-**Completed:**
-- ✅ **Mission Control Escalation Queue UI Complete:** Full implementation (260+ lines added to MissionControlDashboard.tsx)
-- ✅ **Dashboard API Extensions:** Added getEscalationResolutions() and executeEscalationDecision() methods
-- ✅ **Client Manager Schema Bug Fixed:** Fixed cost_tracking.work_order_id error (changed to query outcome_vectors)
-- ✅ **Escalations Tab:** New tab with badge showing pending count, real-time updates
-- ✅ **Resolution Options UI:** AI recommendations with pros/cons display, confidence visualization
-- ✅ **Decision Execution:** One-click execution with optional human notes
-- ✅ **TypeScript:** 0 errors maintained
-
-**Key Learnings:**
-- **cost_tracking schema:** Table doesn't have work_order_id column - use outcome_vectors for per-WO cost tracking
-- **UI pattern:** Full-screen modal with Context Summary → AI Recommendation → Options (pros/cons) → Decision Notes
-- **Real-time updates:** Existing 5-second polling picks up new escalations automatically
-- **Client Manager API flow:** escalate → resolutions/{id} → execute (3-step human decision workflow)
-- **Critical blocker removed:** Humans can now view and resolve escalations via UI (previously stuck in limbo)
-
-**Critical Decisions:**
-1. **Badge notification:** Red badge on Escalations tab shows pending count for visibility
-2. **Recommended option highlight:** Blue border + star (⭐) on AI-recommended option
-3. **Pros/cons visualization:** Green checkmarks for pros, red X for cons (clear trade-offs)
-4. **Decision notes optional:** Humans can add context but not required for execution
-5. **Modal UX:** Large modal (90% width, max 5xl) for full context visibility
-
-**Files Modified (v37):**
-- src/lib/dashboard-api.ts (lines 209-242: Added getEscalationResolutions, executeEscalationDecision)
-- src/components/MissionControlDashboard.tsx (lines 202-208: Escalation state; lines 453-500: Handlers; lines 604-618: Tab with badge; lines 969-1222: Full escalation UI)
-- src/lib/client-manager-service.ts (lines 47-57: Fixed cost_tracking query to use outcome_vectors)
-
-**Files Created (v37):**
-- test-escalation-ui-simple.ps1 (29 lines: Simple escalation creation test)
-
-**Test Results:**
-- Client Manager API: 3/3 endpoints working (escalate, resolutions, execute)
-- Escalation created successfully: ID 40a8367f-f626-4eb6-93c6-8e140aff8a7e
-- Resolution options: 2 options (A: retry_different_approach, B: pivot_solution) with full pros/cons
-- Dashboard API: Escalation visible in /api/escalations
-- TypeScript: 0 errors
-- UI: Escalations tab functional with real data
-
-**Next Session Tasks:**
-1. **Live Sentinel → Client Manager E2E test** (30 min) - Trigger real workflow failure
-2. **Git commit for v36+v37 work** (15 min) - Manager integration + Escalation UI
-3. **Orchestrator E2E testing** (requires Aider setup)
-4. **Production deployment prep** (environment variables, config validation)
-
----
-
-## Last Session Summary (v35→v36)
-
-**Completed:**
-- ✅ **Manager Integration Complete:** Proposer service now calls Manager API for routing decisions
-- ✅ **Duplicate Routing Logic Removed:** proposer-registry.ts cleaned up (135 lines removed)
-- ✅ **Ad-hoc Routing Support:** Manager gracefully handles non-existent work orders for testing
-- ✅ **Vitest Installed:** Unit test infrastructure ready (vitest + @vitest/ui)
-- ✅ **Integration Tests Verified:** 18/18 passing (Manager routing working correctly)
-- ✅ **TypeScript:** 0 errors maintained
-
-**Key Learnings:**
-- **Manager integration pattern:** Proposer service calls `POST /api/manager` with work_order_id, complexity_score, context
-- **Ad-hoc routing:** Manager checks if work_order exists before DB update, gracefully skips for test/ad-hoc requests
-- **Hard Stop verification:** Manager correctly detects security keywords (SQL injection) and forces claude-sonnet-4-5
-- **Budget enforcement working:** Low complexity (0.2) routes to gpt-4o-mini, high complexity (0.9) routes to claude-sonnet-4-5
-- **Full flow operational:** Architect → Director → Manager → Proposer chain now complete
-
-**Critical Decisions:**
-1. **Manager as central router:** All routing logic now in manager-routing-rules.ts (no proposer-registry routing)
-2. **Graceful work_order handling:** Check existence before update to support ad-hoc routing from Proposer service
-3. **Deprecation strategy:** proposer-registry.routeRequest() throws error directing to Manager API
-4. **Test infrastructure:** Added vitest for unit tests (previously written but missing dependency)
-
-**Files Modified (v36):**
-- src/lib/enhanced-proposer-service.ts (lines 47-58, 147-179: Added metadata field, Manager API integration)
-- src/lib/proposer-registry.ts (lines 110-120: Removed 135 lines of duplicate routing, deprecated routeRequest)
-- src/lib/manager-service.ts (lines 154-164: Added work_order existence check)
-- package.json (added vitest dependencies)
-
-**Files Created (v36):**
-- test-manager-integration.ps1 (152 lines: Manager integration test suite)
-
-**Test Results:**
-- Manager Integration: 3/3 passing (low complexity, high complexity, Hard Stop detection)
-- Integration Suite: 18/18 visible tests passing
-- TypeScript: 0 errors
-
-**Next Session Tasks:**
-1. **Mission Control UI for Escalations** (1-2 hours) - Critical blocker for human decision-making
-2. **Live Sentinel → Client Manager testing** (30 min)
-3. **Git commit for Manager integration** (15 min)
-4. **Orchestrator E2E testing** (requires Aider setup)
-
----
-
-## Last Session Summary (v34→v35)
-
-**Completed:**
-- ✅ **GitHub Webhook Configured:** Sentinel webhook secret set, endpoints verified working
-- ✅ **Phase 2.5 Client Manager Complete:** Full implementation (6 files, 916 lines)
-- ✅ **Sentinel ↔ Client Manager Integration:** Sentinel now calls Client Manager on hard failures
-- ✅ **Orchestrator Unit Tests Complete:** 5 test files written (939 lines total)
-- ✅ **TypeScript:** 0 errors maintained across all new code
-
-**Key Learnings:**
-- **Client Manager architecture:** 7 escalation triggers, 5 resolution strategies, cost-efficiency scoring
-- **Historical learning:** Analyzes past escalations to predict success rates for recommendations
-- **Unit test coverage:** Schema validation (result-tracker), complexity estimation (manager-coordinator), task building (proposer-executor), instruction formatting (aider-executor), PR generation (github-integration)
-- **Integration patterns:** Sentinel → Client Manager via fetch() with graceful fallback
-- **Budget monitoring:** Soft cap ($20), hard cap ($50), emergency kill ($100) thresholds
-
-**Critical Decisions:**
-1. **Client Manager follows centralized pattern:** `client-manager-escalation-rules.ts` for logic, service for orchestration
-2. **Resolution options:** 2-4 alternatives with cost/risk/success probability analysis
-3. **Trade-off analysis:** Pros/cons for each option to help human decision-making
-4. **Unit tests:** Structure validation only (no mocks), validates expected behavior patterns
-5. **Sentinel integration:** HTTP API call with fallback to manual status update
-
-**Files Created (v35):**
-- src/types/client-manager.ts (94 lines: EscalationTrigger, ResolutionOption, ClientManagerRecommendation types)
-- src/lib/client-manager-escalation-rules.ts (361 lines: Escalation detection, option generation, recommendation logic)
-- src/lib/client-manager-service.ts (367 lines: Service orchestration, decision execution, budget monitoring)
-- src/app/api/client-manager/escalate/route.ts (25 lines: POST escalation endpoint)
-- src/app/api/client-manager/resolutions/[id]/route.ts (23 lines: GET resolution endpoint)
-- src/app/api/client-manager/execute/route.ts (46 lines: POST decision execution endpoint)
-- src/lib/orchestrator/__tests__/result-tracker.test.ts (157 lines: Schema validation tests)
-- src/lib/orchestrator/__tests__/manager-coordinator.test.ts (156 lines: Complexity estimation tests)
-- src/lib/orchestrator/__tests__/proposer-executor.test.ts (220 lines: Task description building tests)
-- src/lib/orchestrator/__tests__/aider-executor.test.ts (205 lines: Instruction file formatting tests)
-- src/lib/orchestrator/__tests__/github-integration.test.ts (201 lines: PR body generation tests)
-- test-client-manager.ps1 (64 lines: Client Manager integration test script)
-
-**Files Modified (v35):**
-- src/lib/sentinel/sentinel-service.ts (lines 188-243: Updated escalateToClientManager to call Client Manager API)
-- src/lib/client-manager-escalation-rules.ts (lines 342-361: Fixed checkBudgetEscalation signature)
-- src/lib/client-manager-service.ts (lines 221-248: Fixed budget config query)
-
-**Next Session Tasks:**
-1. **Run PowerShell integration tests:** Verify 21/22 passing (E2E timeout expected)
-2. **Test live Sentinel → Client Manager flow:** Trigger webhook, verify escalation created
-3. **Implement UI for escalation queue:** Mission Control components for human decision-making
-4. **Write Orchestrator E2E tests:** Full Work Order lifecycle (requires Aider + GitHub CLI setup)
-5. **Create git commit:** Session v35 summary
-
----
-
-## Last Session Summary (v33→v34)
-
-**Completed:**
-- ✅ **Result Tracker Schema Bug Fixed:** Fixed outcome_vectors columns (agent_name/operation_type → work_order_id/model_used/route_reason)
-- ✅ **Schema Validation Protocol (R10):** "Verify before assuming" - regenerate types at session start, curl before testing
-- ✅ **Session Start Automation:** Created scripts/session-start.ps1 for type regeneration + TypeScript check
-- ✅ **Integration Tests Expanded:** 20/20 passing (added Tests 19-20 for Orchestrator, Tests 21-22 for Sentinel)
-- ✅ **Phase 3.1 Sentinel Agent Complete:** Full implementation with webhook, decision logic, GitHub Actions integration
-- ✅ **Client Manager + Sentinel Specs Created:** Technical specifications documented before implementation
-
-**Key Learnings:**
-- **Schema validation critical:** Type mismatches caused by assuming field names without checking supabase.ts
-- **Test before writing tests:** curl /api/orchestrator revealed `polling` not `is_running` (prevented Test 20 failure)
-- **Outcome vectors scope:** Only writes to outcome_vectors for proposer stage (LLM tracking, not infrastructure)
-- **Sentinel architecture:** Localtunnel webhooks for development, 3-retry logic for race conditions, binary pass/fail MVP
-- **GitHub Actions integration:** Cross-platform PowerShell tests, ubuntu-latest runners, workflow completion webhooks
-
-**Critical Decisions:**
-1. **R10 "Verify before assuming"** added to prevent future schema bugs
-2. **Automation first:** scripts/session-start.ps1 ensures types regenerated every session
-3. **Sentinel MVP scope:** Binary pass/fail only, no flaky detection, no auto-merge (deferred to Phase 3.2)
-4. **Client Manager deferred:** Sentinel can log escalations, full Client Manager implementation pending
-5. **Unit tests deferred:** Focused on integration tests + Sentinel implementation instead
-
-**Files Created (v34):**
-- scripts/session-start.ps1 (64 lines: Session start automation with type regeneration)
-- src/app/api/health/route.ts (7 lines: Health check endpoint)
-- src/app/api/sentinel/route.ts (130 lines: Webhook endpoint with GitHub signature verification)
-- src/types/sentinel.ts (73 lines: Type definitions for Sentinel agent)
-- src/lib/sentinel/test-parser.ts (160 lines: PowerShell and Jest test output parsers)
-- src/lib/sentinel/decision-maker.ts (153 lines: Pass/fail decision logic)
-- src/lib/sentinel/sentinel-service.ts (210 lines: Main Sentinel orchestration)
-- .github/workflows/sentinel-ci.yml (98 lines: GitHub Actions workflow)
-- docs/sentinel-implementation-plan.md (Complete verified implementation plan)
-
-**Files Modified (v34):**
-- src/lib/orchestrator/result-tracker.ts (lines 93-111, 167-195: Fixed outcome_vectors schema)
-- phase1-2-integration-test.ps1 (lines 125-134: Added Tests 19-20; lines 136-149: Added Tests 21-22)
-- docs/rules-and-procedures.md (lines 36-40: Added R10; lines 84-95: Schema pitfalls; lines 128-143: Updated checklist)
-- docs/session-state.md (Updated to v34 with handover summary)
-- src/types/llm.ts (line 2-5: Fixed Contract type import)
-- src/lib/llm-service.ts (line 2-4: Fixed ProposerConfig type import)
-- src/types/supabase.ts (Regenerated from live database)
-- .env.local (lines 20-21: Added EXPECTED_WORKFLOWS)
-
-**Next Session Tasks:**
-1. **Run integration tests:** Verify 22/22 passing with new Sentinel tests
-2. **Test Sentinel webhook:** Manual POST with valid GitHub signature
-3. **Configure GitHub webhook:** Set up repository webhook to trigger on workflow_run completion
-4. **Implement Phase 2.5 Client Manager:** Technical spec ready in conversation history
-5. **Write Orchestrator unit tests:** 5 tests deferred from v33
-
----
-
-## Last Session Summary (v30→v31)
-
-**Completed:**
-- ✅ **Phase 2.4 TypeScript Error Resolution:** Fixed all 21 pre-existing TypeScript errors
-- ✅ **Phase 2.3/3.2 Orchestrator Implementation:** Complete Aider-based execution infrastructure (8 files, ~800 lines)
-- ✅ **Clean Compilation:** Achieved 0 TypeScript errors across entire codebase
-- ✅ **Integration Tests:** Verified 18/18 passing (no regressions)
-
-**Key Learnings:**
-- TypeScript errors were Supabase Json type mismatches - fixed with type assertions and proper imports
-- Orchestrator implements singleton pattern for coordinating Work Order execution
-- 5-stage pipeline: Poll → Route (Manager) → Generate (Proposer) → Aider → PR → Track
-- Concurrency control (max 3 concurrent) prevents resource exhaustion
-- Import paths matter: `manager-routing-rules.ts` not `manager-service.ts` for RoutingDecision type
-
-**Orchestrator Implementation:**
-- **Core Files (src/lib/orchestrator/):**
-  - `types.ts` (60 lines) - Orchestrator type definitions
-  - `work-order-poller.ts` (80 lines) - Polls work_orders table
-  - `manager-coordinator.ts` (90 lines) - Calls Manager API
-  - `proposer-executor.ts` (100 lines) - Calls Proposer API
-  - `result-tracker.ts` (160 lines) - Updates database
-  - `aider-executor.ts` (200 lines) - Spawns Aider CLI
-  - `github-integration.ts` (180 lines) - Creates PRs
-  - `orchestrator-service.ts` (220 lines) - Main coordinator (singleton)
-- **API Endpoints (src/app/api/orchestrator/):**
-  - `route.ts` (80 lines) - GET status, POST start/stop
-  - `execute/route.ts` (70 lines) - POST manual execution
-
-**TypeScript Error Fixes:**
-- **complexity-analyzer.ts:** Added RequestData interface + typed bands array
-- **contract-validator.ts:** Added `as Contract[]` type assertion
-- **director-service.ts:** Added `as any` for work_orders insert + decision_data
-- **enhanced-proposer-service.ts:** Used `Array.from()` for MapIterator + typed reduce params
-- **proposer-registry.ts:** Type assertions for provider, cost_profile, success_patterns, notes
-
-**Files Created:**
-- src/lib/orchestrator/types.ts
-- src/lib/orchestrator/work-order-poller.ts
-- src/lib/orchestrator/manager-coordinator.ts
-- src/lib/orchestrator/proposer-executor.ts
-- src/lib/orchestrator/result-tracker.ts
-- src/lib/orchestrator/aider-executor.ts
-- src/lib/orchestrator/github-integration.ts
-- src/lib/orchestrator/orchestrator-service.ts
-- src/app/api/orchestrator/route.ts
-- src/app/api/orchestrator/execute/route.ts
-
-**Files Modified:**
-- src/lib/complexity-analyzer.ts (added RequestData interface)
-- src/lib/contract-validator.ts (type assertion)
-- src/lib/director-service.ts (type assertions)
-- src/lib/enhanced-proposer-service.ts (Array.from + typed reduce)
-- src/lib/proposer-registry.ts (type assertions)
+**Next Session Priority:**
+**Work on Critical Path** - Start with Priority 1 (Fix failing tests) and Priority 2 (Add contract validation)
 
 ---
 
 ## Current Status
 
-**Phase 2.1/2.2/2.2.6/2.3/2.4/2.5/3.1/3.2/4.1 Complete + v38 Error Handling & Resilience:**
-- ✅ Architect API (`/api/architect/decompose`)
-- ✅ Database migration (5 columns added to work_orders)
-- ✅ Upload Spec UI tab (markdown textarea + decomposition display)
-- ✅ Director approval flow (`/api/director/approve`)
-- ✅ **Manager routing API (`/api/manager` - POST + GET retry)** - **v36: FULLY INTEGRATED with Proposer service**
-- ✅ Self-refinement: 3-cycle adaptive prompting
-- ✅ **Orchestrator: Implementation complete (8 files, 1,152 lines)** - **v34: Schema bug FIXED, v35: Unit tests added (5 files, 939 lines)**
-- ✅ **Sentinel Agent: MVP complete (8 files, 850+ lines)** - **v34: Full GitHub Actions integration, v35: Client Manager integration**
-- ✅ **Client Manager: Complete (6 files, 916 lines)** - **v35: Full escalation handling with AI recommendations**
-- ✅ **Mission Control Escalation UI: COMPLETE (v37)** - **CRITICAL BLOCKER REMOVED** - Humans can now view and resolve escalations
-- ✅ **Schema Validation Protocol (R10):** Type regeneration + verification workflow
-- ✅ Centralized logic: architect-decomposition-rules.ts, director-risk-assessment.ts, proposer-refinement-rules.ts, manager-routing-rules.ts, client-manager-escalation-rules.ts
-- ✅ **Manager Integration: v36 COMPLETE** - Proposer → Manager flow operational, duplicate routing removed
-- ✅ **v38: Error Handling & Resilience COMPLETE** - All 4 phases implemented and tested
-  - Phase 1: Error escalation enforcement
-  - Phase 2: Budget race condition fix (PostgreSQL function)
-  - Phase 3: 10 failure mode tests (all passing)
-  - Phase 4: Health monitoring dashboard
+### **Overall Completion: 65%** (Verified 2025-10-03)
 
-**Infrastructure:**
-- Server: localhost:3000 (running, Sentinel + Orchestrator endpoints compiled)
-- Supabase: qclxdnbvoruvqnhsshjr
-- Branch: feature/wo-b8dbcb2c-orchestrator-e2e-test
-- Models: All using claude-sonnet-4-5-20250929
-- Git: Clean commit (v34: Phase 3.1 + Schema Validation Protocol)
-- **Aider**: Python 3.11 + aider-chat 0.86.1 installed and working
-- **GitHub CLI**: 2.81.0 installed and authenticated (AI-DevHouse)
-- **GitHub Actions**: sentinel-ci.yml workflow configured (ubuntu-latest)
+### ✅ **Phase 2: Core Engine - 75% Complete**
+- ✅ **2.4.6 Self-Refinement:** 100% complete (3-cycle, exceeds plan)
+- ✅ **2.1 Architect:** 100% complete (8/8 deliverables)
+- ⚠️ **Week 4 D4-5 Integration:** 63% complete (2.5/4 deliverables) - Missing contract validation
+- ✅ **2.2 Director Refactor:** 100% complete (5/5 deliverables)
+- ⚠️ **2.3 Orchestrator:** 88% complete (7/8 deliverables) - E2E untested, 5 tests failing
 
-**Testing:**
-- Integration: **18/18 passing** (E2E timeout expected due to LLM calls - NOT a failure)
-- **v38 Failure Mode Tests:** **10/10 passing** (3.18s) - Comprehensive error handling coverage
-- TypeScript: **0 errors** - Clean compilation maintained!
-- **Manager Integration Tests:** 3/3 passing (v36: low complexity, high complexity, Hard Stop detection)
-- **Orchestrator Unit Tests:** 5/5 complete (v35: result-tracker, manager-coordinator, proposer-executor, aider-executor, github-integration)
-- **Orchestrator Integration Tests:** 2/2 complete (Tests 19-20 added in v34)
-- **Sentinel Integration Tests:** 2/2 complete (Tests 21-22 added in v34)
-- **Client Manager Tests:** 3/3 endpoints verified (escalate, resolutions, execute)
-- **Escalation UI Tests:** Functional with live data (v37: escalation created, resolution options displayed)
-- **Health Monitoring:** Endpoint operational, dashboard displays real-time data
-- **Orchestrator E2E:** Deferred (requires Aider + GitHub CLI setup)
-- Database: Schema verified, outcome_vectors columns fixed
-- **Sentinel: Webhook configured, integrated with Client Manager**
-- **Client Manager: Backend + UI COMPLETE** - Full escalation workflow operational
-- **Vitest:** Installed for unit tests (v36), configured in v38
+### ⚠️ **Phase 3: Quality & Learning - 40% Complete**
+- ✅ **2.5 Client Manager:** 100% complete (7/7 deliverables)
+- ⚠️ **3.1 Sentinel:** 38% complete (3/8 deliverables) - MVP binary pass/fail only
+- ❌ **3.3 Learning:** 0% complete (0/6 deliverables) - Not started
+
+### ⚠️ **Phase 4: Manager Enhancement - 50% Complete**
+- ⚠️ **4.1 Manager Upgrade:** 50% complete (3/6 deliverables) - Core routing works
+- ⚠️ **4.2 Integration:** 17% complete (1/6 deliverables) - Only observability complete
+
+### ❌ **Phase 5: Learning Period - 0% Complete**
+- ❌ **5.1 Test App:** 0% complete (0/4 deliverables)
+- ❌ **5.2 Training:** 0% complete (0/5 deliverables)
+
+### ✅ **v38 Error Handling & Resilience - 100% Complete**
+- ✅ **Phase 1:** Error Escalation (error-escalation.ts used in 8 files)
+- ✅ **Phase 2:** Budget Race Fix (PostgreSQL locking function active)
+- ✅ **Phase 3:** Failure Mode Tests (10/10 passing)
+- ✅ **Phase 4:** Monitoring Dashboard (Health Monitor tab operational)
 
 ---
 
 ## Next Immediate Task
 
-### v38 Complete - Ready for Production Testing
+**READ THIS FIRST:** `docs/Project Plan (3) - Verified Status.txt` - Complete verified status with critical path
 
-**Current State (v38):**
-- ✅ **Manager Integration: COMPLETE** (v36)
-- ✅ **Escalation UI: COMPLETE** (v37) - **CRITICAL BLOCKER REMOVED**
-- ✅ **Error Handling & Resilience: COMPLETE** (v38)
-  - Phase 1: Error escalation enforcement ✅
-  - Phase 2: Budget race condition fix ✅
-  - Phase 3: 10 failure mode tests (all passing) ✅
-  - Phase 4: Health monitoring dashboard ✅
-  - Final Integration: Health Monitor tab in Mission Control ✅
-  - Documentation: API reference + architecture updates ✅
-- ✅ Client Manager: Backend + UI complete (6 files backend, 260+ lines UI)
-- ✅ Sentinel → Client Manager: Integrated
-- ✅ Orchestrator unit tests: 5/5 complete (939 lines)
-- ✅ GitHub webhook: Configured
-- ✅ TypeScript: 0 errors
-- ✅ Integration tests: 18/18 passing
-- ✅ Failure mode tests: 10/10 passing
-- ✅ Health monitoring: Operational
-- ✅ Git commits: 3 commits for v38 phases
-- ⏸️ Live E2E test: Not performed
+**Priority 1: Fix Failing Tests** (1 day)
+- Fix 5 github-integration.test.ts formatting tests (markdown escaping issue)
+- Fix 1 manager-coordinator.test.ts complexity calculation test
+- Verify all 36 unit tests pass
 
-**What's New in v38:**
-- **Health Monitoring Dashboard:** Real-time system health at `/admin/health` or Mission Control → Health Monitor tab
-- **Budget Protection:** PostgreSQL function prevents race conditions
-- **Error Visibility:** All critical errors escalate to Client Manager
-- **Comprehensive Testing:** 10 failure mode tests validate error handling
-- **API Documentation:** Complete reference at `docs/api-reference.md`
+**Priority 2: Add Contract Validation to Refinement** (0.5 days)
+- Import contract-validator.ts into enhanced-proposer-service.ts
+- Add contract validation check after each refinement cycle
+- Test contract violation detection
 
-**Next Steps (Recommended):**
-1. **Test Health Monitoring:** Visit http://localhost:3000 → Health Monitor tab
-2. **Orchestrator E2E Testing:** Full work order lifecycle test
-3. **Production Deployment Prep:** Environment configuration, security review
-4. **Performance Testing:** Load testing with concurrent work orders
+**Priority 3: Orchestrator E2E Test** (2-3 days) 🚨 **HIGHEST RISK**
+- Set up Aider + GitHub CLI test environment
+- Create comprehensive E2E test script
+- Run full work order lifecycle: Poll → Route → Generate → Aider → PR → Track
+- Fix any bugs discovered
 
-
----
-
-## Context Verification (Required Before Work)
-
-Answer these to confirm doc comprehension:
-
-**Q1:** What is the architectural pattern for agent logic organization, and which THREE agents currently follow this pattern?
-
-**Q2:** What are the THREE refinement cycle strategies in Phase 2.2.6, and what triggers the zero-progress abort?
-
-**Q3:** What are the TWO validation thresholds for Phase 2.1 Architect (WO count range and max token budget per WO)?
-
-**Q4:** What is the current cost per decomposition, and what percentage of the monthly LLM budget does this represent at 1-2 decompositions/day?
-
-**Q5:** What are the Director approval thresholds (cost, confidence, risk) for auto-approval, and where are they defined?
-
-**Q6:** What was the refinement success rate in Phase 2.2.6 testing (initial errors → final errors → improvement %), and how many cycles were used?
-
-**Q7:** What is the dependency validation behavior in v25, why was strict validation relaxed, and what constraint does this temporarily violate?
-
-**Q8:** What is the next phase priority (Phase 2.3 Orchestrator vs Phase 2.5 Client Manager), and what is the key architectural principle about Orchestrator?
-
-**Q9:** What five columns were added to the work_orders table for Architect integration, and were they successfully migrated?
-
-**Q10:** What is the root cause of the Security Hard Stop test failure on cold start, what is the workaround, and what is the planned fix?
-
-**Q11:** What was the root cause of the system_config SQL error during migration, and how was it fixed?
-
-**Q12:** Why did type generation fail using Supabase CLI, and what was the workaround?
-
-**Q13:** What are the 5 stages of the Orchestrator execution pipeline, and what is the concurrency limit?
-
-**Q14:** What are the prerequisites for running Orchestrator E2E tests, and what are the 3 rollback scenarios?
-
-**Q15 (NEW v32):** What metadata fields does the Orchestrator work-order-poller check for Director approval, and why are there two?
-
-**Q16 (NEW v32):** What is the actual API endpoint structure for Orchestrator control (start/stop), and how does it differ from the original spec?
-
-**Q17 (NEW v33):** What was the critical schema bug found in result-tracker.ts, which columns were wrong, and what are the correct column names for outcome_vectors?
-
-**Q18 (NEW v33):** Why was E2E testing deferred in v33, what is the testing sequence (unit → integration → E2E), and how many unit tests are planned?
-
-**Q19 (NEW v33):** What are the Orchestrator prerequisites installed in v33, which Python version is used with Aider, and why?
-
-**Q20 (NEW v33):** What is the purpose of the outcome_vectors table (LLM model tracking vs generic agent activity), and which stages should write to it?
-
-**Q21 (NEW v34):** What is Rule R10 "Verify before assuming", what are its 4 verification requirements, and what automation script enforces it?
-
-**Q22 (NEW v34):** What was the schema bug in result-tracker.ts (wrong columns), what are the correct column names, and when should outcome_vectors be written?
-
-**Q23 (NEW v34):** What are the 3 main components of Sentinel Agent (parser, decision maker, service), and what is the MVP scope vs Phase 3.2 enhancements?
-
-**Q24 (NEW v34):** How does Sentinel handle the race condition between webhook arrival and github_pr_number being set (retry logic), and what's the alternative solution?
-
-**Q25 (NEW v34):** What are the integration test results for v34 (21/22 passing), why is the E2E timeout NOT a failure, and what tests were added (19-22)?
-
-**Q26 (NEW v35):** What are the 7 escalation trigger types in Client Manager, and which 3 conditions trigger shouldEscalate()?
-
-**Q27 (NEW v35):** What are the 5 resolution strategies in Client Manager, and how is cost-efficiency scoring calculated (formula)?
-
-**Q28 (NEW v35):** What are the 5 Orchestrator unit tests written in v35, and what does each test validate?
-
-**Q29 (NEW v35):** How does Sentinel integrate with Client Manager (which function, what API call), and what's the graceful fallback behavior?
-
-**Q30 (NEW v35):** What are the budget threshold levels for Client Manager escalation ($20, $50, $100), and what action is taken at each?
-
-**Q31 (NEW v36):** What was the Manager integration change in v36, where was duplicate routing logic removed (file + line count), and how does Proposer service now call Manager?
-
-**Q32 (NEW v36):** How does Manager service handle ad-hoc routing requests for non-existent work orders, and why was this change necessary?
-
-**Q33 (NEW v36):** What were the 3 Manager integration test results in v36, and what did each test verify?
-
-**Q34 (NEW v37):** What was the schema bug fixed in client-manager-service.ts, which table was queried incorrectly, and what table should be used instead?
-
-**Q35 (NEW v37):** What are the 5 main sections of the Escalation Details Modal UI, and how is the recommended option highlighted?
-
-**Q36 (NEW v37):** What 2 dashboard API methods were added for Client Manager integration in v37, and what does each method do?
-
----
-
-## Quick Reference
-
-**Key Files:**
-- `src/lib/architect-decomposition-rules.ts` - Decomposition logic (3-8 WOs, <4000 tokens)
-- `src/lib/architect-service.ts` - Orchestration only (76 lines)
-- `src/lib/director-risk-assessment.ts` - Risk assessment logic
-- `src/lib/director-service.ts` - Approval orchestration
-- `src/lib/manager-routing-rules.ts` - Routing + budget + retry logic (371 lines)
-- `src/lib/manager-service.ts` - Orchestration only (202 lines)
-- `src/lib/proposer-refinement-rules.ts` - 3-cycle self-refinement
-- `src/lib/enhanced-proposer-service.ts` - Orchestration only (467 lines, down from 675)
-- `src/lib/orchestrator/` - **v34: SCHEMA BUG FIXED** - 8 files (1,152 lines total)
-  - `orchestrator-service.ts` (286 lines) - Main coordinator (singleton)
-  - `work-order-poller.ts` (83 lines) - Polls work_orders table, checks metadata
-  - `manager-coordinator.ts` - Calls Manager API
-  - `proposer-executor.ts` - Calls Proposer API
-  - `result-tracker.ts` - **v34: FIXED** - Updates database (correct outcome_vectors columns)
-  - `aider-executor.ts` - Spawns Aider CLI
-  - `github-integration.ts` - Creates PRs
-  - `types.ts` - Orchestrator types
-- `src/lib/sentinel/` - **NEW v34, UPDATED v35** - 3 files (523 lines total)
-  - `test-parser.ts` (160 lines) - PowerShell + Jest test output parsing
-  - `decision-maker.ts` (153 lines) - Pass/fail decision logic with confidence
-  - `sentinel-service.ts` (210 lines) - Main orchestration with retry logic + Client Manager integration
-- `src/lib/client-manager-escalation-rules.ts` - **NEW v35** - Escalation detection + resolution generation (361 lines)
-- `src/lib/client-manager-service.ts` - **NEW v35, UPDATED v37** - Orchestration layer (367 lines, fixed cost_tracking schema bug)
-- `src/types/client-manager.ts` - **NEW v35** - Type definitions (94 lines)
-- `src/lib/dashboard-api.ts` - **UPDATED v37** - Added getEscalationResolutions(), executeEscalationDecision()
-- `src/components/MissionControlDashboard.tsx` - **UPDATED v37** - Added Escalations tab with full resolution UI (260+ lines added)
-- `src/app/api/health/` - **NEW v34** - Health check endpoint
-- `src/app/api/sentinel/` - **NEW v34** - Webhook endpoint with GitHub signature verification
-- `src/app/api/client-manager/` - **NEW v35** - 3 endpoints (escalate, resolutions, execute)
-- `src/app/api/orchestrator/` - **NEW v31** - 2 files
-  - `route.ts` (95 lines) - GET status, POST start/stop
-  - `execute/route.ts` (69 lines) - POST manual execution
-- `scripts/session-start.ps1` - **NEW v34** - Automated type regeneration + TypeScript check
-- `scripts/migrate-database.ts` (348 lines) - Migration automation with safeguards
-- `scripts/post-migration.ts` (153 lines) - Post-migration config + type regen
-- `.github/workflows/sentinel-ci.yml` - **NEW v34** - CI/CD workflow for Sentinel
-- `docs/phase-3.1-sentinel-complete.md` - **NEW v34** - Complete Sentinel reference
-- `docs/sentinel-implementation-plan.md` - **NEW v34** - Verified implementation plan
-- See [architecture-decisions.md](architecture-decisions.md) for full structure
-
-**Agent Hierarchy:**
-1. Architect (Phase 2.0 - ✅ 100% Complete)
-2. Director (Phase 2.1 - ✅ 100% Complete)
-3. Manager (Phase 4.1 - ✅ 100% Complete)
-4. Proposers (Phase 2.2/2.2.6 - ✅ 100% Complete + 3-cycle self-refinement)
-5. Orchestrator (Phase 2.3/3.2 - ✅ **v34: SCHEMA BUG FIXED, v35: UNIT TESTS COMPLETE** - Aider-based, NOT agent)
-6. Sentinel (Phase 3.1 - ✅ **v34: MVP COMPLETE, v35: CLIENT MANAGER INTEGRATED** - Webhook + decision logic + escalations)
-7. Client Manager (Phase 2.5 - ✅ **v35: COMPLETE** - AI recommendations + decision execution)
-
-**Essential Commands:**
-```powershell
-# Session start (ALWAYS RUN FIRST - regenerates types, checks TypeScript)
-.\scripts\session-start.ps1
-
-# Integration tests (expect 21/22 passing, E2E timeout is NOT a failure)
-.\phase1-2-integration-test.ps1
-
-# Type errors (expect 0 as of v31)
-npx tsc --noEmit 2>&1 | Select-String "Found.*errors"
-
-# Test Orchestrator status (NEW v31)
-Invoke-RestMethod http://localhost:3000/api/orchestrator
-
-# Start Orchestrator polling (NEW v31)
-Invoke-RestMethod -Uri "http://localhost:3000/api/orchestrator" `
-  -Method POST `
-  -ContentType "application/json" `
-  -Body '{"action":"start","interval_ms":10000}'
-
-# Stop Orchestrator polling (NEW v31)
-Invoke-RestMethod -Uri "http://localhost:3000/api/orchestrator" `
-  -Method POST `
-  -ContentType "application/json" `
-  -Body '{"action":"stop"}'
-
-# Manual Work Order execution (NEW v31)
-Invoke-RestMethod -Uri "http://localhost:3000/api/orchestrator/execute" `
-  -Method POST `
-  -ContentType "application/json" `
-  -Body '{"work_order_id":"<work-order-id>"}'
-
-# Test Architect endpoint
-$spec = @{
-  feature_name = "Test Feature"
-  objectives = @("obj1")
-  constraints = @("con1")
-  acceptance_criteria = @("ac1")
-} | ConvertTo-Json
-
-Invoke-RestMethod -Uri "http://localhost:3000/api/architect/decompose" `
-  -Method POST `
-  -ContentType "application/json" `
-  -Body $spec
-
-# Proposer status
-Invoke-RestMethod http://localhost:3000/api/proposers | ConvertFrom-Json |
-  Select-Object -ExpandProperty proposers |
-  Format-Table name, complexity_threshold, model
-
-# Client Manager - Create escalation (NEW v35)
-Invoke-RestMethod -Uri "http://localhost:3000/api/client-manager/escalate" `
-  -Method POST `
-  -ContentType "application/json" `
-  -Body '{"work_order_id":"<work-order-id>"}'
-
-# Client Manager - Get resolution options (NEW v35)
-Invoke-RestMethod http://localhost:3000/api/client-manager/resolutions/<escalation-id>
-
-# Client Manager - Execute decision (NEW v35)
-Invoke-RestMethod -Uri "http://localhost:3000/api/client-manager/execute" `
-  -Method POST `
-  -ContentType "application/json" `
-  -Body '{"escalation_id":"<esc-id>","chosen_option_id":"A","decided_by":"user"}'
-
-# Prerequisites check (for E2E testing)
-aider --version  # Should be installed
-gh --version     # Should be installed
-gh auth status   # Should be authenticated
-```
+**See Critical Path section in Project Plan v3 for full details**
 
 ---
 
 ## Session Start Checklist
 
-1. [ ] **READ CRITICAL HANDOVER PROTOCOL ABOVE** - Know when/how to update docs
-2. [ ] **Regenerate Supabase types:** `npx supabase gen types typescript --project-id qclxdnbvoruvqnhsshjr > src/types/supabase.ts`
-3. [ ] **Verify TypeScript:** `npx tsc --noEmit` (expect 0 errors as of v34)
-4. [ ] Run integration tests: `.\phase1-2-integration-test.ps1` (expect 20/20 passing as of v34)
-5. [ ] Verify server running (T1: "compiled successfully")
-6. [ ] Answer all 20 verification questions above
-7. [ ] Check git status
-8. [ ] Review [known-issues.md](known-issues.md) for active problems
-9. [ ] Decide: Next priority
+**CRITICAL: Run this checklist at the start of EVERY session**
 
-## Session End Checklist (AT 80-85% CONTEXT)
-
-1. [ ] **STOP WORK** - Do not start new major tasks
-2. [ ] Update "Last Session Summary (vN→vN+1)" with completed work
-3. [ ] Update "Current Status" section with new completions
-4. [ ] Update "Next Immediate Task" with pending work
-5. [ ] Sync architecture-decisions.md if status changed
-6. [ ] Sync known-issues.md if issues resolved/discovered
-7. [ ] Create git commit: "Session vN: [Brief summary]"
-8. [ ] Increment version number in header (vN → vN+1)
+1. ✅ Check if dev server is running (should be `npm run dev`)
+2. ✅ Regenerate Supabase types: `npx supabase gen types typescript --project-id qclxdnbvoruvqnhsshjr > src/types/supabase.ts`
+3. ✅ Verify TypeScript: `npx tsc --noEmit` (expect 0 errors)
+4. ✅ Review git status
+5. ✅ Answer verification questions Q1-Q39 below (spot check, not all required)
 
 ---
 
-## References
+## Reading Pack for New Session
 
-- **[architecture-decisions.md](architecture-decisions.md)** - Agent hierarchy, arch lockins, phase specs
-- **[rules-and-procedures.md](rules-and-procedures.md)** - R1-R8 rules, common pitfalls, diagnostics
-- **[known-issues.md](known-issues.md)** - Active issues with workarounds
-- **[scripts/MIGRATION_GUIDE.md](../scripts/MIGRATION_GUIDE.md)** - **NEW** - Database migration reference
-- **[Technical Specification - Orchestrator.txt](Technical Specification - Orchestrator.txt)** - **NEW** - Complete Orchestrator implementation plan
+**MUST READ (in order):**
+1. **THIS FILE** - `docs/session-state.md` - Start here
+2. **Project Plan v3** - `docs/Project Plan (3) - Verified Status.txt` - Complete verified status + critical path
+3. **Known Issues** - `docs/known-issues.md` - Active problems
+4. **Rules** - `docs/rules-and-procedures.md` - Development rules (R10: Verify before assuming)
+5. **Architecture** - `docs/architecture-decisions.md` - System design
+
+**OPTIONAL (as needed):**
+- `docs/error-handling-resilience-plan.md` - v38 implementation details
+- `docs/api-reference.md` - API documentation
 
 ---
 
-**Phase Status:** 2.0/2.1/2.2/2.2.6/2.3/2.5/3.1/3.2/4.1 Complete ✅ | Tests: 18/18 passing + 5 unit tests + 3 Manager tests + Escalation UI functional | TS Errors: 0 ✅ | Manager Integration: v36 Complete | **Escalation UI: v37 COMPLETE** | Client Manager: Backend + UI COMPLETE | **CRITICAL BLOCKER REMOVED** ✅ | Next: Live E2E Testing + Git Commit
+## Quick Reference
+
+### Key Commands
+```bash
+# Dev server (should already be running)
+npm run dev
+
+# TypeScript check (expect 0 errors)
+npx tsc --noEmit
+
+# Run all tests
+npx vitest run
+
+# Run failure mode tests only
+npx vitest run src/lib/__tests__/failure-modes.test.ts
+
+# Regenerate Supabase types
+npx supabase gen types typescript --project-id qclxdnbvoruvqnhsshjr > src/types/supabase.ts
+
+# Git status
+git status
+```
+
+### Key Files (Updated v39)
+```
+Core Architecture:
+- src/lib/architect-decomposition-rules.ts (7,535 lines) - Spec→WO decomposition
+- src/lib/director-risk-assessment.ts - Governance & approval
+- src/lib/manager-routing-rules.ts (371 lines) - Routing logic
+- src/lib/proposer-refinement-rules.ts (269 lines) - 3-cycle self-refinement
+- src/lib/client-manager-escalation-rules.ts (361 lines) - 7 trigger types, 5 strategies
+- src/lib/error-escalation.ts (50 lines) - Centralized error handler
+
+Orchestrator (1,418 lines total):
+- src/lib/orchestrator/orchestrator-service.ts (310 lines)
+- src/lib/orchestrator/work-order-poller.ts (82 lines)
+- src/lib/orchestrator/manager-coordinator.ts (91 lines)
+- src/lib/orchestrator/proposer-executor.ts (124 lines)
+- src/lib/orchestrator/result-tracker.ts (223 lines)
+- src/lib/orchestrator/aider-executor.ts (259 lines)
+- src/lib/orchestrator/github-integration.ts (257 lines)
+- src/lib/orchestrator/types.ts (72 lines)
+
+Tests:
+- src/lib/__tests__/failure-modes.test.ts (10 tests, all passing)
+- src/lib/orchestrator/__tests__/*.test.ts (5 files, 31 tests, 26 passing)
+
+APIs:
+- /api/architect/decompose - Spec→Work Orders
+- /api/director/approve - Governance approval
+- /api/manager - Routing decisions
+- /api/proposer-enhanced - Code generation
+- /api/client-manager/escalate - Error escalation
+- /api/orchestrator - Work order polling
+- /api/sentinel - GitHub webhook
+- /api/admin/health - Health monitoring
+
+UI:
+- src/components/MissionControlDashboard.tsx - Main dashboard
+- src/components/MonitoringDashboard.tsx (260 lines) - Health monitoring
+
+Database:
+- scripts/create-budget-reservation-function.sql - Budget race fix
+```
+
+### Test Results (Current)
+```
+Unit Tests: 26/31 passing (5 failing - github-integration formatting)
+Failure Mode Tests: 10/10 passing (3.6s)
+Integration Tests: 18/18 passing (PowerShell API smoke tests)
+TypeScript: 0 errors
+```
+
+---
+
+## Verification Questions (Q1-Q39)
+
+**Context Verification (Answer these to prove understanding)**
+
+### Agent Architecture (Q1-Q8)
+
+**Q1:** What is the architectural pattern for agent logic separation? Name THREE agents that follow this pattern and their file pairs.
+
+**Answer:** Centralized logic in separate rules files. Three agents:
+1. Architect: `architect-decomposition-rules.ts` (logic) + `architect-service.ts` (orchestration)
+2. Director: `director-risk-assessment.ts` (logic) + `director-service.ts` (orchestration)
+3. Manager: `manager-routing-rules.ts` (logic) + `manager-service.ts` (orchestration)
+
+**Q2:** What are the THREE refinement cycle strategies in Phase 2.2.6, and when does each trigger?
+
+**Answer:**
+1. Cycle 1-2: Same model with failure context added
+2. Cycle 2-3: Switch to higher capability model (gpt-4o-mini → claude-sonnet-4-5)
+3. Zero-progress abort: If no improvement between cycles (same error count)
+
+**Q3:** What are the TWO validation thresholds for Phase 2.1 Architect Work Order generation?
+
+**Answer:**
+- WO count range: 3-8 Work Orders (too few = not decomposed, too many = overwhelming)
+- Max token budget per WO: <4000 tokens
+
+**Q4:** What is the current cost per Architect decomposition call, and what % of monthly LLM budget does this represent at 1-2 calls/day?
+
+**Answer:** $11.30 per call. At 1-2 calls/day = $226-$452/month = 75-150% of £300 LLM budget
+
+**Q5:** What are the Director approval thresholds for auto-approval?
+
+**Answer:** All WOs must be low-risk AND total_cost < $50
+(Defined in: director-risk-assessment.ts)
+
+**Q6:** What was the refinement success rate in Phase 2.2.6 testing? (Initial errors → Final errors → Improvement %)
+
+**Answer:** Data not specified in docs (verification needed with test results)
+
+**Q7:** What is the dependency validation behavior in v25, and which constraint does it violate?
+
+**Answer:**
+- Relaxed validation: Warns but doesn't block on complex dependency patterns
+- Why: Simple cycle detection flagged valid diamond patterns (A,B→C) as circular
+- Constraint violated: "Sequential dependencies only" (temporarily violated to allow multi-parent convergence)
+
+**Q8:** What is the next phase priority after Phase 2.2, and what is its key architectural principle?
+
+**Answer:** Phase 2.3 Orchestrator (comes before Phase 2.5 Client Manager)
+Key principle: Orchestrator = tooling/infrastructure (Aider CLI), NOT an agent
+
+### Database & Migration (Q9-Q12)
+
+**Q9:** What are the FIVE columns added to work_orders table for Architect integration? Were they successfully migrated?
+
+**Answer:**
+1. acceptance_criteria (jsonb)
+2. files_in_scope (jsonb)
+3. context_budget_estimate (integer)
+4. decomposition_doc (text)
+5. architect_version (text)
+Successfully migrated: ✅ YES (verified in supabase.ts lines 469-479)
+
+**Q10:** What was the root cause of the Security Hard Stop test failure on cold start, and what is the planned fix?
+
+**Answer:**
+- Root cause: Config loading race condition - API accepts requests before system_config loaded
+- Workaround: Run integration tests twice after server restart
+- Planned fix: Add initialization barrier + `/api/health/ready` endpoint + test suite waits for readiness
+
+**Q11:** What caused the system_config SQL error during migration, and how was it fixed?
+
+**Answer:** Not explicitly specified in docs (migration scripts created with safeguards)
+
+**Q12:** Why did type generation fail using Supabase CLI, and what is the workaround?
+
+**Answer:**
+- Why failed: Not specified in docs
+- Workaround: Manual generation command: `npx supabase gen types typescript --project-id qclxdnbvoruvqnhsshjr > src/types/supabase.ts`
+
+### Orchestrator (Q13-Q19)
+
+**Q13:** What are the 5 stages of the Orchestrator execution pipeline, and what is the concurrency limit?
+
+**Answer:**
+1. Poll (work-order-poller)
+2. Route (manager-coordinator - calls Manager API)
+3. Generate (proposer-executor - calls Proposer API)
+4. Aider (aider-executor - applies code)
+5. PR + Track (github-integration + result-tracker)
+Concurrency limit: max 3 concurrent
+
+**Q14:** What are the prerequisites for Orchestrator E2E testing, and name 3 rollback scenarios.
+
+**Answer:**
+- Prerequisites: Aider CLI installed, GitHub CLI (gh) installed and authenticated
+- 3 rollback scenarios: Not explicitly listed in docs (need to check implementation)
+
+**Q15 (v32):** What are the TWO metadata fields used by Orchestrator work-order-poller for Director approval? Why are there two?
+
+**Answer:**
+- Two fields: `director_approved` and `approval_status`
+- Why two: Belt-and-suspenders approach for approval tracking
+
+**Q16 (v32):** What is the actual API endpoint structure for Orchestrator control? How does it differ from the original spec?
+
+**Answer:**
+- Structure: POST `/api/orchestrator` with `{"action":"start"|"stop","interval_ms":10000}`
+- Differs from original spec: Single POST endpoint with action parameter vs separate start/stop endpoints
+
+**Q17 (v33):** What was the critical schema bug in result-tracker.ts? What are the correct columns?
+
+**Answer:**
+- Wrong columns: `agent_name` and `operation_type`
+- Correct columns: `work_order_id`, `model_used`, `route_reason`, `cost`, `execution_time_ms`, `success`, `diff_size_lines`, `test_duration_ms`, `failure_classes`, `metadata`
+
+**Q18 (v33):** Why was E2E testing deferred, and what is the testing sequence? How many unit tests were planned?
+
+**Answer:**
+- Why deferred: Attempted 4 times, each revealed new environment issues - focused on Sentinel + Client Manager instead
+- Testing sequence: Unit → Integration → E2E
+- Unit tests planned: 5 tests (result-tracker, manager-coordinator, proposer-executor, aider-executor, github-integration)
+
+**Q19 (v33):** What Orchestrator prerequisites are installed, and what Python version is required?
+
+**Answer:**
+- Prerequisites: Aider CLI, GitHub CLI
+- Python version: Python 3.11 with aider-chat 0.86.1
+- Why: Specified compatibility/stability version
+
+### Data Flow & Tables (Q20-Q22)
+
+**Q20:** What is the purpose of the outcome_vectors table, and which pipeline stages write to it?
+
+**Answer:**
+- Purpose: LLM model performance tracking for Manager's learning system (NOT generic agent activity)
+- Which stages write: Proposer stage only (tracks LLM model usage: "gpt-4o-mini generated code for WO-123, cost $0.001, succeeded")
+
+**Q21:** What is Rule R10 "Verify before assuming"? Name 4 verification requirements and the automation script.
+
+**Answer:**
+- 4 verification requirements:
+  1. Always regenerate types at session start
+  2. Curl endpoints before writing tests (verify field names)
+  3. Check supabase.ts before DB queries (no field name assumptions)
+  4. Read actual metadata structures from DB (don't assume field names)
+- Automation script: `scripts/session-start.ps1`
+
+**Q22:** What was the schema bug in result-tracker.ts (v34)? What are the correct columns, and when should you write outcome_vectors?
+
+**Answer:**
+- Wrong columns: `agent_name`, `operation_type`
+- Correct columns: `work_order_id`, `model_used`, `route_reason`
+- When to write outcome_vectors: Proposer stage only (LLM tracking, not infrastructure)
+
+### Sentinel Agent (Q23-Q25)
+
+**Q23:** What are the 3 main components of Sentinel Agent? What is the MVP scope vs Phase 3.2 enhancements?
+
+**Answer:**
+- 3 components:
+  1. `test-parser.ts` (PowerShell + Jest test output parsing)
+  2. `decision-maker.ts` (Pass/fail decision logic)
+  3. `sentinel-service.ts` (Main orchestration with retry logic + Client Manager integration)
+- MVP scope: Binary pass/fail, 3-retry logic for race conditions, GitHub webhook integration
+- Phase 3.2 enhancements: Flaky detection, auto-merge, advanced quality gates (deferred)
+
+**Q24:** How does Sentinel handle the race condition when webhook arrives before github_pr_number is set?
+
+**Answer:** 3-retry logic for when webhook arrives before github_pr_number is set
+Alternative solution: Wait for metadata to be populated before processing webhook
+
+**Q25:** What were the integration test results for v34? Why is E2E timeout NOT considered a failure?
+
+**Answer:**
+- Results: 21/22 passing (E2E timeout expected)
+- E2E timeout NOT a failure: Because it involves actual LLM calls (long-running)
+- Tests added: Tests 19-20 (Orchestrator), Tests 21-22 (Sentinel)
+
+### Client Manager (Q26-Q30)
+
+**Q26:** What are the 7 escalation trigger types for Client Manager? What are the 3 conditions for shouldEscalate()?
+
+**Answer:**
+- 7 types: retry_exhausted, budget_warning, budget_critical, test_failures, contract_violation, aider_failure, manual_escalation
+- 3 conditions for shouldEscalate():
+  1. Retry exhausted (attempts ≥ 3)
+  2. Budget critical (>$80 spent)
+  3. Test failures (repeated >3 cycles)
+
+**Q27:** What are the 5 resolution strategies for Client Manager? What is the cost-efficiency formula?
+
+**Answer:**
+- 5 strategies: retry_different_approach, pivot_solution, amend_work_orders, abort_redesign, increase_budget
+- Cost-efficiency formula: `score = (success_probability * 100) / (estimated_cost + risk_factor * 10)`
+
+**Q28:** What are the 5 Orchestrator unit tests?
+
+**Answer:**
+1. result-tracker.test.ts: Schema validation for outcome_vectors writes
+2. manager-coordinator.test.ts: Complexity estimation logic
+3. proposer-executor.test.ts: Task description building
+4. aider-executor.test.ts: Instruction file formatting
+5. github-integration.test.ts: PR body generation
+
+**Q29:** What is the function that integrates Sentinel + Client Manager? What is the API call, and what is the graceful fallback?
+
+**Answer:**
+- Function: `escalateToClientManager()` in sentinel-service.ts
+- API call: `POST /api/client-manager/escalate`
+- Graceful fallback: Manual status update if API call fails
+
+**Q30:** What are the budget threshold levels for Client Manager?
+
+**Answer:**
+- $20 (soft cap): Warning status, continue normally
+- $50 (hard cap): Force cheapest model (gpt-4o-mini)
+- $100 (emergency kill): Stop all operations, escalate to Client Manager
+
+### Manager Integration (Q31-Q33)
+
+**Q31:** What changed in Manager integration (v36)? How many lines of duplicate routing were removed, and how does Proposer call Manager?
+
+**Answer:**
+- Change: Proposer service now calls `POST /api/manager` for routing decisions
+- Duplicate routing removed: `proposer-registry.ts` lines 110-245 (135 lines removed)
+- How Proposer calls Manager: HTTP fetch to `/api/manager` with work_order_id, complexity_score, context
+
+**Q32:** How does Manager handle ad-hoc routing? Why is this necessary?
+
+**Answer:**
+- How: Check if work_order exists before DB update (lines 154-164 in manager-service.ts)
+- Why necessary: Support ad-hoc routing requests from Proposer service for testing/non-WO scenarios
+
+**Q33:** What were the 3 Manager integration test results in v36?
+
+**Answer:**
+1. Low complexity (0.2): Routed to gpt-4o-mini ✅
+2. High complexity (0.9) + OAuth keywords: Hard Stop → claude-sonnet-4-5 ✅
+3. SQL injection keyword: Hard Stop detected → claude-sonnet-4-5 ✅
+
+### Client Manager v37 (Q34-Q36)
+
+**Q34:** What schema bug was fixed in client-manager-service.ts (v37)?
+
+**Answer:**
+- Queried incorrectly: `cost_tracking.work_order_id` (column doesn't exist)
+- Should use instead: `outcome_vectors` table with `work_order_id` filter for cost tracking
+
+**Q35:** What are the 5 main sections of the Escalation Details Modal UI?
+
+**Answer:**
+1. Work Order context (ID, title, description)
+2. Context Summary (cost spent, attempts, failure pattern)
+3. AI Recommendation with confidence visualization
+4. Resolution Options with pros/cons (green checkmarks/red X)
+5. Decision Notes + Execute button
+Recommended option highlight: Blue border + star (⭐)
+
+**Q36:** What are the 2 dashboard API methods added for Client Manager in v37?
+
+**Answer:**
+1. `getEscalationResolutions(escalationId)`: Fetch resolution options for an escalation
+2. `executeEscalationDecision(escalationId, optionId, decidedBy, notes?)`: Execute human's chosen resolution
+
+### v38 Error Handling (Q37-Q39)
+
+**Q37:** What are the 4 phases of v38 Error Handling & Resilience plan? Which are complete?
+
+**Answer:**
+1. Phase 1: Error Escalation (error-escalation.ts + audit fixes) - ✅ COMPLETE
+2. Phase 2: Budget Race Condition Fix (PostgreSQL locking function) - ✅ COMPLETE
+3. Phase 3: Failure Mode Tests (10 tests) - ✅ COMPLETE
+4. Phase 4: Monitoring Dashboard - ✅ COMPLETE
+All 4 phases: ✅ VERIFIED COMPLETE
+
+**Q38:** How does the budget race condition fix work? What PostgreSQL feature prevents the race?
+
+**Answer:**
+- Function: `check_and_reserve_budget(p_estimated_cost, p_service_name, p_metadata)`
+- PostgreSQL feature: `LOCK TABLE cost_tracking IN SHARE ROW EXCLUSIVE MODE`
+- How it works: Atomic check-and-reserve prevents concurrent reads during budget calculation
+- Called from: `manager-service.ts` line 194
+
+**Q39:** What are the 10 failure mode tests, and what is the pass rate?
+
+**Answer:**
+1. outcome_vectors Write Failure
+2. Budget Race Condition
+3. Concurrent Work Order Metadata Updates
+4. Malformed LLM JSON Response
+5. Database Connection Failure
+6. GitHub Webhook Race Condition
+7. Invalid State Transition
+8. Orchestrator Aider Command Failure
+9. Sentinel Webhook Invalid Auth Token
+10. Work Order Stuck >24h Monitoring
+Pass rate: 10/10 passing (100%, 3.6s execution time)
+
+---
+
+## Known Issues Reference
+
+**See `docs/known-issues.md` for full details**
+
+**Active Issues:**
+1. **Orchestrator E2E never run** - 1,418 lines of code untested with real Aider
+2. **5 unit tests failing** - github-integration formatting, manager-coordinator complexity
+3. **Contract validation NOT in refinement** - Missing from Week 4 D4-5
+4. **Sentinel binary pass/fail only** - No FLAKY classification or adaptive baselines
+5. **Learning system 0%** - Phase 3.3 not implemented
+
+**Recently Resolved (v38):**
+- ✅ Error escalation enforcement (Phase 1 complete)
+- ✅ Budget race condition (Phase 2 complete)
+- ✅ Failure mode test coverage (Phase 3 complete)
+- ✅ Health monitoring (Phase 4 complete)
+
+---
+
+## Git Reference
+
+**Current Branch:** `feature/wo-b8dbcb2c-orchestrator-e2e-test`
+
+**Recent Commits:**
+- `6b89ee6` v38 Final Integration: Health Monitoring + Documentation
+- `93012f1` Phase 4: Monitoring & Observability
+- `fa67473` Phase 3: Failure Mode Tests - 10 Comprehensive Tests
+- `8c865eb` Phase 1 & 2: Error Escalation + Budget Race Fix
+
+**Main Branch:** `main`
+
+---
+
+## Critical Reminders
+
+1. **ALWAYS regenerate types at session start** - Schema may have changed
+2. **ALWAYS run `npx tsc --noEmit` before committing** - Must have 0 errors
+3. **NEVER assume field names** - Check supabase.ts first (Rule R10)
+4. **ALWAYS use handleCriticalError() for critical errors** - Ensures escalation to Client Manager
+5. **READ Project Plan v3 before starting work** - Complete verified status + critical path
+6. **Orchestrator E2E is highest risk** - Never tested end-to-end, 60% chance of bugs
+
+---
+
+**Last Session Duration:** ~3 hours (verification audit)
+**Context Used:** 68,825 / 200,000 tokens (34.4%)
+**Next Session Focus:** Critical Path - Fix tests, add contract validation, Orchestrator E2E

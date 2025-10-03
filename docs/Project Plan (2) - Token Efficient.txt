@@ -1,0 +1,249 @@
+# Moose Project Plan v4 - Token-Optimized Edition
+**AI-Native Autonomous Dev Environment**
+
+## Overview
+**Budget:** £500/mo | **Timeline:** 8-10wks (6dev + 2-4learn) | **Success:** <5% escalation→2% | **Priority:** Autonomy>Quality>Speed>Cost
+
+**v22 Status:**
+✅ Phase 1.1-1.3, 2.1 (as "Manager LLM"), 2.2.1-2.2.5, 2.2.8 (partial)
+🚀 Ready: 2.2.6 (Self-refinement) + 2.1 (Architect)
+
+## Agent Hierarchy
+1. **Architect** - Spec→Work Orders decomposition
+2. **Director** - Governance, risk, approval (was "Manager")
+3. **Manager** - Routing, resources, coordination (was "Director")
+4. **Proposers** - Code gen (Sonnet 4, 4o-mini)
+5. **Client Manager** - Escalation interface
+6. **Orchestrator** - Aider execution infra (NOT agent)
+7. **Sentinel** - Quality gates
+
+---
+
+## Phase 2: Core Engine (Wk3-5)
+
+### Wk3: Parallel MVP
+
+**2.4.6 Self-Refinement (D1-3)**
+Deps: 2.2 Proposers | Goal: Prove error self-correction
+
+Deliverables:
+- [ ] **1** TS compile check: `tsc --noEmit`, parse errors
+- [ ] **2** Single refine: regen w/error context, max 1 attempt, log to outcome_vectors
+- [ ] **3** Telemetry: track errors, success rate, cost→cost_tracking
+
+**Success:** Detect TS errors, >60% fix rate, costs logged
+**Scope:** TS only, 1 cycle, manual tests
+**Files:** enhanced-proposer-service.ts, complexity-analyzer.ts
+
+---
+
+**2.1 Architect (D4-5 + Wk4 D1-3)**
+Deps: 1.2, 1.3 | Goal: Spec→executable Work Orders
+
+Deliverables:
+- [ ] **1** Service: Sonnet 4, prompts, validation
+- [ ] **2** Input: spec format (objectives/constraints/criteria), Mission Control upload
+- [ ] **3** Analysis: estimate LOC, complexity, security flags
+- [ ] **4** Budget: token estimates, flag >4k, chunking suggestions
+- [ ] **5** Dependencies: sequential graph (A→B→C)→work_orders.metadata
+- [ ] **6** Generation: create work_orders (title, criteria, files, budget, risk)
+- [ ] **7** Docs: markdown (graph, rationale)→metadata.decomposition_doc
+- [ ] **8** UI: upload, review, edit WOs before submit
+
+**Success:** Accept spec→3-8 WOs, clear criteria, no circular deps, readable docs
+**Scope:** Sequential only, simple estimates, one-shot, manual validation
+**Files:** +architect-service.ts, +api/architect/decompose, +types/architect.ts | MissionControlDashboard.tsx, api/work-orders
+
+**Migration:**
+```sql
+ALTER TABLE work_orders ADD COLUMN
+  acceptance_criteria jsonb DEFAULT '[]',
+  files_in_scope jsonb DEFAULT '[]',
+  context_budget_estimate int DEFAULT 2000;
+```
+
+**Tests:** 3 specs (simple/medium/complex), eval actionability, measure time/cost/edits
+
+---
+
+### Wk4: Integration
+
+**D1-3:** Complete Architect
+
+**D4-5: Connect Self-Refine + Architect**
+Deps: 2.4.6 + 2.1 | Goal: E2E validation
+
+Deliverables:
+- [ ] **1** Add contract validation to refinement
+- [ ] **2** Multi-cycle: 2-3 attempts, track history
+- [ ] **3** Architect WOs→Director→Manager→Proposer flow
+- [ ] **4** E2E test: spec→decompose→approve→route→generate+refine
+
+**Success:** E2E works, catches TS+contracts, WOs actionable, criteria guide gen, 70%+ completion
+**Files:** enhanced-proposer-service.ts, llm-service.ts, proposer-registry.ts
+
+---
+
+**2.2 Director Refactor (2d overlap)**
+Deps: 2.1 | Goal: Governance ≠ execution
+
+Deliverables:
+- [ ] **1** Rename: llm-service→director-service, /api/llm→/api/director
+- [ ] **2** Extract routing to Manager; Director=validate/risk/approve only
+- [ ] **3** Progressive trust: auto-approve confidence>0.95 AND low-risk
+- [ ] **4** Approval queue: high-risk→Mission Control, 1-click approve/reject
+- [ ] **5** Validate: Director never routes; Manager never approves
+
+**Success:** Clear separation, auto-approve works, high-risk queued, audit trail complete
+**Files:** llm-service→director-service, proposer-registry (→Manager), MissionControlDashboard
+
+---
+
+**2.3/3.2 Orchestrator (Wk5, 5d)**
+Deps: 2.4.6, 2.1 | Goal: Aider execution
+
+Deliverables:
+- [ ] **1** ProposerOutputV1: {woId, branch, commit, edits[], checks, meta}
+- [ ] **2** GH Actions: trigger on complete, spin container (Node+Aider), mount repo
+- [ ] **3** Exec: orchestrator/aider-exec.ts, translate edits→Aider, `aider --yes --message-file`
+- [ ] **4** Feedback: Aider checks files/imports/compile→report→refinement
+- [ ] **5** Branch+PR: feature/wo-{id}-{slug}, metadata (risk/proposer/cost/checks), labels
+- [ ] **6** Auto-merge: low+pass→merge, else→review
+- [ ] **7** Rollback: post-merge fail→revert, notify Client Mgr, log github_events
+- [ ] **8** Lifecycle: 15min timeout, cleanup, retain logs
+
+**Success:** Output→Aider clean, correct branch/PR, auto-merge works, feedback catches errors, no resource leaks
+**Files:** +orchestrator/aider-exec.ts, +.github/workflows/orchestrator.yml, +types/orchestrator.ts | enhanced-proposer-service.ts, api/work-orders/[id]
+
+**Infra:** GH Actions+Docker, Aider CLI, repo access
+
+---
+
+## Phase 3: Quality & Learning (Wk6-7)
+
+**2.5 Client Manager (Wk6 D1-3)**
+Deps: 2.2, 2.3, 2.4 | Goal: Escalation interface
+
+Deliverables:
+- [ ] **1** Monitor: poll work_orders/escalations/costs, detect stuck (>2h), failures, budget
+- [ ] **2** Detect: retry exhausted, Aider fails, budget exceeded, conflicts
+- [ ] **3** Options: templates (retry/amend/abort), 2-4 per escalation, cost/risk/time
+- [ ] **4** Recommend: rank by success prob, confidence 0-1, reasoning
+- [ ] **5** UI: cards w/options, 1-click execute, explain button
+- [ ] **6** Execute: amend/retry/abort work_orders
+- [ ] **7** Learn: store type/options/choice, improve future recs
+
+**Success:** Detect <15min, 2-4 options shown, execute clean, improve recs, <10min resolution
+**Files:** +client-manager-service.ts, +api/escalations, +EscalationQueue.tsx
+
+---
+
+**3.1 Sentinel (Wk6 D4-5 + Wk7 D1-2)**
+Deps: 2.3 | Goal: Adaptive quality
+
+Deliverables:
+- [ ] **1** Parser: webhook for Actions, parse tests/build/lint→github_events
+- [ ] **2** Classify: PASS/FAIL/FLAKY (>90%/10-90%/<10%)
+- [ ] **3** Adaptive: baseline from last 50 outcome_vectors, ±5% variance OK
+- [ ] **4** Learn: track per-test flake >10%→auto-ignore
+- [ ] **5** Rules: detect patterns (missing import X)→custom checks→playbook_memory
+- [ ] **6** Drift: quality down >10%→alert Client Mgr
+- [ ] **7** Concurrent: 10+ PRs parallel, isolate per WO
+- [ ] **8** Escalate: hard fail→create escalation, notify Client Mgr
+
+**Success:** Classify correct, ignore flaky, custom rules, drift <24h, concurrent works
+**Files:** +sentinel-service.ts, +api/sentinel/webhook, +api/sentinel/status
+
+---
+
+**3.3 Learning (Wk7 D3-5)**
+Deps: 2.1-2.5, 3.1 | Goal: Pattern recognition
+
+Deliverables:
+- [ ] **1** Confidence: calc per WO type (rate/cost/time), update scores, display trends
+- [ ] **2** Predict: analyze failure characteristics→patterns→playbook_memory
+- [ ] **3** Trends: track escalations (freq/time/choice), identify automation opps
+- [ ] **4** Amplify: success→generate variations→store→Architect uses
+- [ ] **5** Graduate: confidence>95% for 20+ WOs→auto-approve/more budget/less scrutiny
+- [ ] **6** Report: weekly success/cost/escalation, compare WoW, recommendations
+
+**Success:** Predict ±10%, reduce retry waste, ≥3 automation opps, autonomy increases, reports actionable
+**Files:** +learning-service.ts, +api/learning/patterns, +api/learning/report
+
+---
+
+## Phase 4: Manager Enhancement (Wk8)
+
+**4.1 Manager Upgrade (D1-3)**
+Deps: All | Goal: Intelligent coordination
+
+Enhancements to proposer-registry.ts:
+- [ ] **1** Sequencing: read dependencies→queue by order
+- [ ] **2** Context routing: historical success, code area specialization
+- [ ] **3** Predict: tokens ±20%, time ±30%, failure 0-1→adjust timeouts/budgets
+- [ ] **4** Retry ladder: std→+context+similar→switch/escalate
+- [ ] **5** Budget: 10% grace, forecast 80% warn, Hard Stop override
+- [ ] **6** Capacity: Sonnet:2, 4o-mini:4 concurrent, queue at limit, load balance
+
+**Success:** Dependency order, ≥15% routing improvement, predictions accurate, ≥20% fewer escalations, forecast works, no rate limits
+**Files:** proposer-registry→manager-service, config-services
+
+---
+
+**4.2 Integration (D4-5)**
+Deps: 4.1 | Goal: E2E + optimization
+
+Deliverables:
+- [ ] **1** E2E: 3 scenarios (simple/complex/failure), measure completion/escalation/cost/time
+- [ ] **2** Perf: <200ms APIs, index slow queries, profile memory, tune cache
+- [ ] **3** Observe: realtime WO status, budget charts, quality metrics, agent health
+- [ ] **4** Docs: ops procedures, troubleshooting, architecture, API examples
+- [ ] **5** Backup: daily Supabase, config export, rollback steps, test restore
+- [ ] **6** Security: least privilege, rotate secrets, sanitize inputs, rate limit
+
+**Success:** ≤10% escalation, perf targets met, clear dashboard, docs enable handoff, backup works, no critical vulns
+
+---
+
+## Phase 5: Learning Period (Wk9-12)
+
+**5.1 Test App (Wk9)**
+Deps: Complete system | Goal: Exercise patterns
+
+- [ ] **1** L1: Parallel LLM UI (3+ models side-by-side)
+- [ ] **2** L2: Group discussion (LLMs respond to each other)
+- [ ] **3** L3: Persona debates (optimist/pessimist/pragmatist)
+- [ ] **4** All via Moose bursts
+
+**Success:** App works, API+realtime+orchestration, ≤10% escalation, confidence increases, <£500/mo
+
+---
+
+**5.2 Training (Wk10-12)**
+Deps: 5.1 | Goal: <5% escalation
+
+- [ ] **1** Metrics: daily report (WOs/success/cost), anomalies, trends
+- [ ] **2** Tune: thresholds, A/B test, iterate on FP/FN
+- [ ] **3** Expand: identify gaps, generate variations, validate improvements
+- [ ] **4** Auto-resolve: scripts for top 5 escalations
+- [ ] **5** Calibrate: monitor auto-approval accuracy, adjust thresholds, expand categories
+
+**Success:** <5% sustained 2wks, >95% confidence, ≥50% auto-resolved, <30min/day human, ≤£500/mo
+
+---
+
+## Risk Mitigation
+1. **Cost overrun:** Fallback, cache, alerts | Emergency kill $100/d
+2. **GH rate limit:** Batch, queue, monitor | Upgrade if needed
+3. **Confidence miscal:** Conservative defaults, override | Disable auto-approve 1wk
+4. **Auto-merge bugs:** Low-risk only, validate, rollback | Disable 48h, investigate
+5. **Architect quality:** Review first 10-20, tune prompts | Fall back to manual
+
+## Success Metrics
+- **P2 (Wk3-5):** >60% error fix, actionable WOs, clean deploys
+- **P3 (Wk6-7):** Escalations handled, flaky learned, confidence operational
+- **P4 (Wk8):** ≥15% routing improvement, ≤10% E2E escalation
+- **P5 (Wk9-12):** <5% sustained, >95% confidence, ≤£500/mo
+
+## Budget
+Infra £100 | LLM £300 | Actions £50 | Observe £50 = **£500/mo**

@@ -197,11 +197,46 @@ export const dashboardApi = {
         },
         body: JSON.stringify({ resolution }),
       });
-      
+
       if (!response.ok) throw new Error('Failed to resolve escalation');
       return true;
     } catch (error) {
       console.error('Error resolving escalation:', error);
+      return false;
+    }
+  },
+
+  async getEscalationResolutions(escalationId: string): Promise<any> {
+    try {
+      const response = await fetch(`/api/client-manager/resolutions/${escalationId}`);
+      if (!response.ok) throw new Error('Failed to fetch escalation resolutions');
+      const result = await response.json();
+      return result;
+    } catch (error) {
+      console.error('Error fetching escalation resolutions:', error);
+      return null;
+    }
+  },
+
+  async executeEscalationDecision(escalationId: string, optionId: string, decidedBy: string, notes?: string): Promise<boolean> {
+    try {
+      const response = await fetch('/api/client-manager/execute', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          escalation_id: escalationId,
+          chosen_option_id: optionId,
+          decided_by: decidedBy,
+          human_notes: notes
+        }),
+      });
+
+      if (!response.ok) throw new Error('Failed to execute escalation decision');
+      return true;
+    } catch (error) {
+      console.error('Error executing escalation decision:', error);
       return false;
     }
   }

@@ -574,6 +574,18 @@ export type Database = {
       }
     }
     Functions: {
+      check_and_reserve_budget: {
+        Args: {
+          p_estimated_cost: number
+          p_metadata?: Json
+          p_service_name: string
+        }
+        Returns: {
+          can_proceed: boolean
+          current_total: number
+          reservation_id: string
+        }[]
+      }
       get_work_order_github_events: {
         Args: { work_order_id_param: string }
         Returns: {

@@ -1,0 +1,1017 @@
+Now let me draft the complete technical specification:
+
+● TECHNICAL SPECIFICATION: Phase 2.3/3.2 Orchestrator (Aider-based Execution Infrastructure)
+
+  1. EXECUTIVE SUMMARY
+
+  Objective: Build Aider-based execution infrastructure that bridges Work Orders from Manager to code application in the repository.
+
+  Scope: Phase 2.3/3.2 consolidated - create the "Orchestrator" infrastructure layer (NOT an agent) that:
+  - Polls work_orders table for pending approved Work Orders
+  - Triggers Manager for routing decisions
+  - Spins up Aider CLI to apply Proposer-generated code
+  - Creates branches, commits, and Pull Requests
+  - Reports results back to Work Orders
+
+  Estimated effort: 5-7 hours (per session-state.md)
+
+  Key constraint: Docker not currently installed - will use Node.js child_process to spawn Aider instances instead of containers initially. Containerization can be added later.
+
+  ---
+  2. ARCHITECTURE OVERVIEW
+
+  2.1 Component Diagram
+
+  ┌─────────────────────────────────────────────────────────────┐
+  │ DIRECTOR                                                     │
+  │ ↓ Writes Work Orders to database (status='pending')         │
+  └──────────────────────────┬──────────────────────────────────┘
+                             ↓
+  ┌─────────────────────────────────────────────────────────────┐
+  │ ORCHESTRATOR SERVICE (NEW)                                  │
+  │                                                              │
+  │ ┌─────────────────────────────────────────────────────────┐│
+  │ │ 1. Work Order Poller                                    ││
+  │ │    - Polls work_orders table every 10s                  ││
+  │ │    - Finds status='pending' + approved_by_director=true ││
+  │ └────────────────────────┬───────────────────────────────┘│
+  │                          ↓                                   │
+  │ ┌─────────────────────────────────────────────────────────┐│
+  │ │ 2. Manager Coordinator                                  ││
+  │ │    - Transforms Work Order → ManagerRoutingRequest     ││
+  │ │    - Calls /api/manager for routing decision           ││
+  │ │    - Gets selected_proposer (claude-sonnet-4 vs gpt)   ││
+  │ └────────────────────────┬───────────────────────────────┘│
+  │                          ↓                                   │
+  │ ┌─────────────────────────────────────────────────────────┐│
+  │ │ 3. Proposer Executor                                    ││
+  │ │    - Transforms Work Order → ProposerRequest           ││
+  │ │    - Calls /api/proposer-enhanced for code generation  ││
+  │ │    - Receives generated code with diffs                ││
+  │ └────────────────────────┬───────────────────────────────┘│
+  │                          ↓                                   │
+  │ ┌─────────────────────────────────────────────────────────┐│
+  │ │ 4. Aider Executor                                       ││
+  │ │    - Spawns Aider CLI via child_process                ││
+  │ │    - Creates feature branch: feature/wo-{id}-{slug}    ││
+  │ │    - Passes Proposer code to Aider via --message-file  ││
+  │ │    - Aider applies changes with git commits            ││
+  │ │    - Captures stdout/stderr for feedback               ││
+  │ └────────────────────────┬───────────────────────────────┘│
+  │                          ↓                                   │
+  │ ┌─────────────────────────────────────────────────────────┐│
+  │ │ 5. GitHub Integration                                   ││
+  │ │    - Pushes branch to remote                            ││
+  │ │    - Creates PR via gh CLI                              ││
+  │ │    - Adds metadata (risk, cost, proposer, WO ID)       ││
+  │ │    - Updates work_orders table with PR URL             ││
+  │ └────────────────────────┬───────────────────────────────┘│
+  │                          ↓                                   │
+  │ ┌─────────────────────────────────────────────────────────┐│
+  │ │ 6. Result Tracker                                       ││
+  │ │    - Updates work_orders.status                         ││
+  │ │    - Writes github_events table                         ││
+  │ │    - Writes outcome_vectors for learning                ││
+  │ └─────────────────────────────────────────────────────────┘│
+  └─────────────────────────────────────────────────────────────┘
+
+  2.2 Data Flow
+
+  work_orders (status='pending', approved_by_director=true)
+      ↓
+  Orchestrator polls
+      ↓
+  Transform to ManagerRoutingRequest:
+  {
+    work_order_id: string,
+    task_description: string,
+    complexity_score: number (computed from acceptance_criteria),
+    context_requirements: string[] (from files_in_scope),
+    approved_by_director: true
+  }
+      ↓
+  POST /api/manager → RoutingDecision
+  {
+    selected_proposer: "claude-sonnet-4-5",
+    reason: string,
+    routing_metadata: {...}
+  }
+      ↓
+  Transform to ProposerRequest:
+  {
+    task_description: work_order.description,
+    context: work_order.files_in_scope,
+    expected_output_type: "code",
+    security_context: (inferred from risk_level)
+  }
+      ↓
+  POST /api/proposer-enhanced → EnhancedProposerResponse
+  {
+    content: string (generated code),
+    cost: number,
+    proposer_used: string,
+    ...
+  }
+      ↓
+  Create Aider instruction file:
+  You are implementing Work Order: {title}
+
+  Description: {description}
+
+  Acceptance Criteria:
+  - {criterion 1}
+  - {criterion 2}
+
+  Files to modify:
+  - {file 1}
+  - {file 2}
+
+  Generated code:
+  {proposer content}
+
+  Apply these changes to the repository.
+      ↓
+  Spawn Aider:
+  $ aider --message-file /tmp/wo-{id}-instruction.txt \
+          --model {selected_proposer} \
+          --yes \
+          --auto-commits \
+          {files_in_scope}
+      ↓
+  Aider applies changes + commits
+      ↓
+  Create PR:
+  $ gh pr create --title "WO-{id}: {title}" \
+                 --body "{PR body with metadata}"
+      ↓
+  Update work_orders:
+  {
+    status: 'in_progress',
+    github_pr_url: string,
+    github_pr_number: number,
+    github_branch: string,
+    metadata: {...routing_metadata, execution_metadata}
+  }
+
+  ---
+  3. FILE STRUCTURE
+
+  src/lib/orchestrator/
+  ├── orchestrator-service.ts          # Main service (singleton)
+  ├── work-order-poller.ts             # Polls work_orders table
+  ├── manager-coordinator.ts           # Calls Manager API
+  ├── proposer-executor.ts             # Calls Proposer API
+  ├── aider-executor.ts                # Spawns Aider CLI
+  ├── github-integration.ts            # PR creation + metadata
+  ├── result-tracker.ts                # Updates database
+  └── types.ts                         # Orchestrator-specific types
+
+  src/app/api/orchestrator/
+  ├── route.ts                         # GET status, POST start/stop polling
+  └── execute/route.ts                 # POST manually trigger WO execution
+
+  docs/
+  └── orchestrator-implementation.md   # Implementation notes
+
+  ---
+  4. DETAILED COMPONENT SPECIFICATIONS
+
+  4.1 Orchestrator Service (orchestrator-service.ts)
+
+  Responsibilities:
+  - Singleton service that coordinates all Orchestrator components
+  - Manages polling lifecycle (start/stop)
+  - Maintains execution queue
+  - Prevents concurrent execution of same Work Order
+
+  Key Methods:
+  class OrchestratorService {
+    private static instance: OrchestratorService;
+    private pollingInterval: NodeJS.Timeout | null = null;
+    private executingWorkOrders: Set<string> = new Set();
+
+    static getInstance(): OrchestratorService;
+
+    startPolling(intervalMs: number = 10000): void;
+    stopPolling(): void;
+
+    async executeWorkOrder(work_order_id: string): Promise<ExecutionResult>;
+
+    getStatus(): {
+      polling: boolean,
+      executing_count: number,
+      last_poll: string,
+      errors: Error[]
+    };
+  }
+
+  Dependencies:
+  - WorkOrderPoller
+  - ManagerCoordinator
+  - ProposerExecutor
+  - AiderExecutor
+  - GitHubIntegration
+  - ResultTracker
+
+  ---
+  4.2 Work Order Poller (work-order-poller.ts)
+
+  Responsibilities:
+  - Query Supabase for pending Work Orders
+  - Filter for status='pending' AND approved_by_director=true
+  - Return Work Orders ordered by created_at ASC (FIFO)
+  - Implement basic rate limiting
+
+  Query:
+  SELECT *
+  FROM work_orders
+  WHERE status = 'pending'
+    AND metadata->>'approved_by_director' = 'true'
+  ORDER BY created_at ASC
+  LIMIT 10;
+
+  Key Methods:
+  export async function pollPendingWorkOrders(): Promise<WorkOrder[]> {
+    const supabase = createSupabaseServiceClient();
+
+    const { data, error } = await supabase
+      .from('work_orders')
+      .select('*')
+      .eq('status', 'pending')
+      .eq('metadata->>approved_by_director', 'true')
+      .order('created_at', { ascending: true })
+      .limit(10);
+
+    if (error) throw error;
+    return data || [];
+  }
+
+  ---
+  4.3 Manager Coordinator (manager-coordinator.ts)
+
+  Responsibilities:
+  - Transform Work Order → ManagerRoutingRequest
+  - Call /api/manager endpoint
+  - Extract routing decision
+  - Handle Manager errors (budget exceeded, etc.)
+
+  Transformation Logic:
+  export function transformWorkOrderToManagerRequest(
+    wo: WorkOrder
+  ): ManagerRoutingRequest {
+    return {
+      work_order_id: wo.id,
+      task_description: wo.description,
+      complexity_score: estimateComplexity(wo),
+      context_requirements: wo.files_in_scope || [],
+      approved_by_director: true
+    };
+  }
+
+  function estimateComplexity(wo: WorkOrder): number {
+    // Heuristic based on acceptance_criteria count, files_in_scope count
+    const criteriaCount = wo.acceptance_criteria?.length || 1;
+    const filesCount = wo.files_in_scope?.length || 1;
+
+    // Simple formula: 0.1 per criterion + 0.1 per file, capped at 1.0
+    return Math.min(criteriaCount * 0.1 + filesCount * 0.05, 1.0);
+  }
+
+  API Call:
+  export async function getRoutingDecision(
+    wo: WorkOrder
+  ): Promise<RoutingDecision> {
+    const request = transformWorkOrderToManagerRequest(wo);
+
+    const response = await fetch('http://localhost:3000/api/manager', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request)
+    });
+
+    if (!response.ok) {
+      throw new Error(`Manager routing failed: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    return data.routing_decision;
+  }
+
+  ---
+  4.4 Proposer Executor (proposer-executor.ts)
+
+  Responsibilities:
+  - Transform Work Order → ProposerRequest
+  - Call /api/proposer-enhanced endpoint
+  - Extract generated code
+  - Handle Proposer errors (refinement failures, etc.)
+
+  Transformation Logic:
+  export function transformWorkOrderToProposerRequest(
+    wo: WorkOrder
+  ): ProposerRequest {
+    return {
+      task_description: buildEnhancedTaskDescription(wo),
+      context: wo.files_in_scope || [],
+      security_context: mapRiskToSecurityContext(wo.risk_level),
+      expected_output_type: 'code',
+      priority: 'medium'
+    };
+  }
+
+  function buildEnhancedTaskDescription(wo: WorkOrder): string {
+    return `
+  Work Order: ${wo.title}
+
+  Description:
+  ${wo.description}
+
+  Acceptance Criteria:
+  ${wo.acceptance_criteria?.map((ac, i) => `${i + 1}. ${ac}`).join('\n')}
+
+  Files to modify:
+  ${wo.files_in_scope?.map(f => `- ${f}`).join('\n')}
+
+  Please generate complete, deployable code that satisfies all acceptance criteria.
+  `.trim();
+  }
+
+  function mapRiskToSecurityContext(risk_level: string): 'high' | 'medium' | 'low' {
+    if (risk_level === 'high') return 'high';
+    if (risk_level === 'medium') return 'medium';
+    return 'low';
+  }
+
+  API Call:
+  export async function generateCode(
+    wo: WorkOrder
+  ): Promise<EnhancedProposerResponse> {
+    const request = transformWorkOrderToProposerRequest(wo);
+
+    const response = await fetch('http://localhost:3000/api/proposer-enhanced', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request)
+    });
+
+    if (!response.ok) {
+      throw new Error(`Proposer execution failed: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    return data.data; // Note: API returns { success, data }
+  }
+
+  ---
+  4.5 Aider Executor (aider-executor.ts)
+
+  Responsibilities:
+  - Create Aider instruction file
+  - Spawn Aider CLI process via child_process
+  - Create feature branch
+  - Capture stdout/stderr
+  - Handle Aider errors and timeouts
+
+  Prerequisites:
+  # User must install Aider globally:
+  pip install aider-chat
+
+  # Verify installation:
+  aider --version
+
+  Instruction File Format:
+  export function createAiderInstructionFile(
+    wo: WorkOrder,
+    proposerResponse: EnhancedProposerResponse
+  ): string {
+    const instruction = `
+  Work Order ID: ${wo.id}
+  Title: ${wo.title}
+
+  Description:
+  ${wo.description}
+
+  Acceptance Criteria:
+  ${wo.acceptance_criteria?.map((ac, i) => `${i + 1}. ${ac}`).join('\n')}
+
+  Files to modify:
+  ${wo.files_in_scope?.map(f => `- ${f}`).join('\n')}
+
+  Generated code from ${proposerResponse.proposer_used}:
+
+  ${proposerResponse.content}
+
+  Instructions:
+  1. Create/modify the files listed above
+  2. Apply the generated code changes
+  3. Ensure all acceptance criteria are met
+  4. Commit changes with descriptive message
+  `.trim();
+
+    const tmpDir = os.tmpdir();
+    const instructionPath = path.join(tmpDir, `wo-${wo.id}-instruction.txt`);
+    fs.writeFileSync(instructionPath, instruction, 'utf-8');
+
+    return instructionPath;
+  }
+
+  Branch Creation:
+  function createFeatureBranch(wo: WorkOrder): string {
+    const slug = wo.title
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .substring(0, 30);
+    const branchName = `feature/wo-${wo.id}-${slug}`;
+
+    execSync(`git checkout -b ${branchName}`, { cwd: process.cwd() });
+
+    return branchName;
+  }
+
+  Aider Execution:
+  export async function executeAider(
+    wo: WorkOrder,
+    proposerResponse: EnhancedProposerResponse,
+    selectedProposer: string
+  ): Promise<AiderResult> {
+    // 1. Create instruction file
+    const instructionPath = createAiderInstructionFile(wo, proposerResponse);
+
+    // 2. Create feature branch
+    const branchName = createFeatureBranch(wo);
+
+    // 3. Build Aider command
+    const files = wo.files_in_scope?.join(' ') || '';
+    const modelMap = {
+      'claude-sonnet-4-5': 'claude-3-5-sonnet-20241022',
+      'gpt-4o-mini': 'gpt-4o-mini'
+    };
+    const aiderModel = modelMap[selectedProposer] || 'claude-3-5-sonnet-20241022';
+
+    const command = `aider --message-file "${instructionPath}" --model ${aiderModel} --yes --auto-commits ${files}`;
+
+    // 4. Spawn Aider process
+    return new Promise((resolve, reject) => {
+      const aiderProcess = spawn('aider', [
+        '--message-file', instructionPath,
+        '--model', aiderModel,
+        '--yes',
+        '--auto-commits',
+        ...files.split(' ')
+      ], {
+        cwd: process.cwd(),
+        env: {
+          ...process.env,
+          ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
+          OPENAI_API_KEY: process.env.OPENAI_API_KEY
+        },
+        timeout: 300000 // 5 minutes
+      });
+
+      let stdout = '';
+      let stderr = '';
+
+      aiderProcess.stdout.on('data', (data) => {
+        stdout += data.toString();
+        console.log('[Aider]', data.toString());
+      });
+
+      aiderProcess.stderr.on('data', (data) => {
+        stderr += data.toString();
+        console.error('[Aider Error]', data.toString());
+      });
+
+      aiderProcess.on('close', (code) => {
+        // Clean up instruction file
+        fs.unlinkSync(instructionPath);
+
+        if (code === 0) {
+          resolve({
+            success: true,
+            branch_name: branchName,
+            stdout,
+            stderr
+          });
+        } else {
+          reject(new Error(`Aider exited with code ${code}: ${stderr}`));
+        }
+      });
+
+      aiderProcess.on('error', (error) => {
+        fs.unlinkSync(instructionPath);
+        reject(error);
+      });
+    });
+  }
+
+  ---
+  4.6 GitHub Integration (github-integration.ts)
+
+  Responsibilities:
+  - Push feature branch to remote
+  - Create Pull Request via gh CLI
+  - Add PR metadata (risk, cost, proposer, WO ID)
+  - Extract PR URL and number
+
+  Prerequisites:
+  # User must install GitHub CLI:
+  # https://cli.github.com/
+
+  # Authenticate:
+  gh auth login
+
+  Implementation:
+  export async function pushBranchAndCreatePR(
+    wo: WorkOrder,
+    branchName: string,
+    routingDecision: RoutingDecision,
+    proposerResponse: EnhancedProposerResponse
+  ): Promise<GitHubPRResult> {
+    // 1. Push branch
+    execSync(`git push -u origin ${branchName}`, { cwd: process.cwd() });
+
+    // 2. Build PR title and body
+    const prTitle = `WO-${wo.id}: ${wo.title}`;
+    const prBody = buildPRBody(wo, routingDecision, proposerResponse);
+
+    // 3. Create PR
+    const prOutput = execSync(
+      `gh pr create --title "${prTitle}" --body "${prBody}" --head ${branchName}`,
+      { cwd: process.cwd(), encoding: 'utf-8' }
+    );
+
+    // 4. Extract PR URL from output
+    const prUrl = prOutput.trim().split('\n').pop() || '';
+
+    // 5. Get PR number
+    const prNumber = await getPRNumber(branchName);
+
+    return {
+      pr_url: prUrl,
+      pr_number: prNumber,
+      branch_name: branchName
+    };
+  }
+
+  function buildPRBody(
+    wo: WorkOrder,
+    routingDecision: RoutingDecision,
+    proposerResponse: EnhancedProposerResponse
+  ): string {
+    return `
+  ## Work Order: ${wo.id}
+
+  **Risk Level:** ${wo.risk_level}
+  **Proposer Used:** ${proposerResponse.proposer_used}
+  **Complexity Score:** ${routingDecision.routing_metadata.complexity_score}
+  **Cost:** $${proposerResponse.cost.toFixed(4)}
+  **Hard Stop Required:** ${routingDecision.routing_metadata.hard_stop_required ? 'Yes' : 'No'}
+
+  ## Description
+
+  ${wo.description}
+
+  ## Acceptance Criteria
+
+  ${wo.acceptance_criteria?.map((ac, i) => `- [x] ${ac}`).join('\n')}
+
+  ## Files Modified
+
+  ${wo.files_in_scope?.map(f => `- \`${f}\``).join('\n')}
+
+  ## Routing Decision
+
+  **Reason:** ${routingDecision.reason}
+  **Confidence:** ${routingDecision.confidence}
+
+  ## Metadata
+
+  \`\`\`json
+  ${JSON.stringify({
+    work_order_id: wo.id,
+    routing_metadata: routingDecision.routing_metadata,
+    proposer_metadata: {
+      cost: proposerResponse.cost,
+      token_usage: proposerResponse.token_usage,
+      execution_time_ms: proposerResponse.execution_time_ms,
+      refinement_metadata: proposerResponse.refinement_metadata
+    }
+  }, null, 2)}
+  \`\`\`
+
+  ---
+
+  🤖 Generated with [Moose Mission Control](https://github.com/AI-DevHouse/Moose)
+  `.trim();
+  }
+
+  async function getPRNumber(branchName: string): Promise<number> {
+    const output = execSync(
+      `gh pr list --head ${branchName} --json number --jq '.[0].number'`,
+      { cwd: process.cwd(), encoding: 'utf-8' }
+    );
+    return parseInt(output.trim(), 10);
+  }
+
+  ---
+  4.7 Result Tracker (result-tracker.ts)
+
+  Responsibilities:
+  - Update work_orders table with execution results
+  - Write to github_events table
+  - Write to outcome_vectors for learning
+  - Handle both success and failure cases
+
+  Success Case:
+  export async function trackSuccessfulExecution(
+    wo: WorkOrder,
+    routingDecision: RoutingDecision,
+    proposerResponse: EnhancedProposerResponse,
+    aiderResult: AiderResult,
+    prResult: GitHubPRResult
+  ): Promise<void> {
+    const supabase = createSupabaseServiceClient();
+
+    // 1. Update work_orders
+    await supabase
+      .from('work_orders')
+      .update({
+        status: 'in_progress', // PR created, awaiting review/merge
+        github_pr_url: prResult.pr_url,
+        github_pr_number: prResult.pr_number,
+        github_branch: prResult.branch_name,
+        metadata: {
+          ...wo.metadata,
+          routing_decision: routingDecision,
+          proposer_response: {
+            proposer_used: proposerResponse.proposer_used,
+            cost: proposerResponse.cost,
+            token_usage: proposerResponse.token_usage,
+            execution_time_ms: proposerResponse.execution_time_ms
+          },
+          aider_execution: {
+            branch_name: aiderResult.branch_name,
+            success: aiderResult.success
+          },
+          orchestrator_execution_at: new Date().toISOString()
+        }
+      })
+      .eq('id', wo.id);
+
+    // 2. Write to github_events
+    await supabase
+      .from('github_events')
+      .insert({
+        event_type: 'pull_request',
+        action: 'opened',
+        pr_number: prResult.pr_number,
+        branch_name: prResult.branch_name,
+        work_order_id: wo.id,
+        metadata: {
+          pr_url: prResult.pr_url,
+          risk_level: wo.risk_level,
+          proposer_used: proposerResponse.proposer_used,
+          cost: proposerResponse.cost
+        }
+      });
+
+    // 3. Write to outcome_vectors
+    await supabase
+      .from('outcome_vectors')
+      .insert({
+        agent_name: 'orchestrator',
+        operation_type: 'work_order_execution',
+        success: true,
+        execution_time_ms: proposerResponse.execution_time_ms,
+        cost: proposerResponse.cost,
+        metadata: {
+          work_order_id: wo.id,
+          proposer_used: proposerResponse.proposer_used,
+          complexity_score: routingDecision.routing_metadata.complexity_score,
+          hard_stop_required: routingDecision.routing_metadata.hard_stop_required
+        }
+      });
+  }
+
+  Failure Case:
+  export async function trackFailedExecution(
+    wo: WorkOrder,
+    error: Error,
+    stage: 'routing' | 'proposer' | 'aider' | 'github'
+  ): Promise<void> {
+    const supabase = createSupabaseServiceClient();
+
+    // 1. Update work_orders
+    await supabase
+      .from('work_orders')
+      .update({
+        status: 'failed',
+        metadata: {
+          ...wo.metadata,
+          orchestrator_error: {
+            stage,
+            message: error.message,
+            timestamp: new Date().toISOString()
+          }
+        }
+      })
+      .eq('id', wo.id);
+
+    // 2. Write to outcome_vectors
+    await supabase
+      .from('outcome_vectors')
+      .insert({
+        agent_name: 'orchestrator',
+        operation_type: 'work_order_execution',
+        success: false,
+        metadata: {
+          work_order_id: wo.id,
+          error_stage: stage,
+          error_message: error.message
+        }
+      });
+
+    // 3. TODO: Trigger Client Manager escalation (Phase 2.X)
+    console.error(`Work Order ${wo.id} failed at ${stage}:`, error);
+  }
+
+  ---
+  5. API ENDPOINTS
+
+  5.1 GET /api/orchestrator
+
+  Purpose: Get Orchestrator status
+
+  Response:
+  {
+    success: true,
+    status: {
+      polling: boolean,
+      interval_ms: number,
+      executing_count: number,
+      executing_work_orders: string[],
+      last_poll: string,
+      total_executed: number,
+      total_failed: number,
+      errors: Array<{ message: string, timestamp: string }>
+    }
+  }
+
+  5.2 POST /api/orchestrator/start
+
+  Purpose: Start polling for Work Orders
+
+  Request:
+  {
+    interval_ms?: number // Default 10000
+  }
+
+  Response:
+  {
+    success: true,
+    message: "Orchestrator polling started",
+    interval_ms: 10000
+  }
+
+  5.3 POST /api/orchestrator/stop
+
+  Purpose: Stop polling
+
+  Response:
+  {
+    success: true,
+    message: "Orchestrator polling stopped"
+  }
+
+  5.4 POST /api/orchestrator/execute
+
+  Purpose: Manually trigger execution of specific Work Order
+
+  Request:
+  {
+    work_order_id: string
+  }
+
+  Response:
+  {
+    success: true,
+    result: {
+      work_order_id: string,
+      pr_url: string,
+      pr_number: number,
+      branch_name: string,
+      execution_time_ms: number
+    }
+  }
+
+  ---
+  6. CONFIGURATION
+
+  6.1 Environment Variables (.env.local)
+
+  # Existing
+  ANTHROPIC_API_KEY=sk-ant-...
+  OPENAI_API_KEY=sk-...
+  NEXT_PUBLIC_SUPABASE_URL=https://...
+  NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
+  SUPABASE_SERVICE_ROLE_KEY=eyJ...
+
+  # New for Orchestrator
+  ORCHESTRATOR_POLLING_INTERVAL_MS=10000
+  ORCHESTRATOR_MAX_CONCURRENT_EXECUTIONS=3
+  ORCHESTRATOR_AIDER_TIMEOUT_MS=300000
+  ORCHESTRATOR_AUTO_START=false
+
+  6.2 System Config Table
+
+  Add to system_config table:
+  INSERT INTO system_config (key, value, description) VALUES
+  ('orchestrator_enabled', 'true', 'Enable Orchestrator polling'),
+  ('orchestrator_polling_interval_ms', '10000', 'Polling interval in milliseconds'),
+  ('orchestrator_max_concurrent', '3', 'Max concurrent Work Order executions');
+
+  ---
+  7. ERROR HANDLING
+
+  7.1 Error Categories
+
+  1. Manager Routing Errors
+    - Budget exceeded (emergency_kill)
+    - No available proposers
+    - Invalid Work Order data
+  2. Proposer Execution Errors
+    - API timeout
+    - Refinement failures
+    - LLM API errors
+  3. Aider Errors
+    - Command not found (aider not installed)
+    - Timeout (>5 minutes)
+    - Git conflicts
+    - Invalid file paths
+  4. GitHub Errors
+    - Authentication failures
+    - Branch conflicts
+    - PR creation failures
+
+  7.2 Retry Strategy
+
+  Aider failures → Retry with same Proposer (attempt 2)
+  Proposer failures → Switch model via Manager retry strategy
+  GitHub failures → Retry push 1x, then fail
+
+  7.3 Rollback Strategy
+
+  If Aider fails:
+  git checkout main
+  git branch -D feature/wo-{id}-{slug}
+
+  If PR creation fails:
+  git push origin --delete feature/wo-{id}-{slug}
+  git checkout main
+  git branch -D feature/wo-{id}-{slug}
+
+  ---
+  8. TESTING STRATEGY
+
+  8.1 Unit Tests
+
+  - work-order-poller.test.ts - Query logic
+  - manager-coordinator.test.ts - Transformation logic
+  - proposer-executor.test.ts - API call mocking
+  - aider-executor.test.ts - Command building (no actual exec)
+  - github-integration.test.ts - PR body generation
+
+  8.2 Integration Tests
+
+  Add to phase1-2-integration-test.ps1:
+
+  Test 19: Orchestrator Status
+  $r = Invoke-RestMethod http://localhost:3000/api/orchestrator
+  $r.success -eq $true -and $null -ne $r.status
+
+  Test 20: Manual Work Order Execution (E2E)
+  # Prerequisites:
+  # 1. Aider installed: pip install aider-chat
+  # 2. GitHub CLI authenticated: gh auth login
+  # 3. Work Order exists in database with status='pending'
+
+  $r = Invoke-RestMethod -Uri "http://localhost:3000/api/orchestrator/execute" `
+    -Method POST `
+    -ContentType "application/json" `
+    -Body '{"work_order_id":"<test-wo-id>"}'
+
+  $r.success -eq $true -and $null -ne $r.result.pr_url
+
+  8.3 Manual E2E Test
+
+  1. Create Work Order via Architect
+  2. Approve via Director
+  3. Verify Work Order in database (status='pending')
+  4. Start Orchestrator polling: POST /api/orchestrator/start
+  5. Wait 10 seconds
+  6. Check Orchestrator status: GET /api/orchestrator
+  7. Verify PR created on GitHub
+  8. Verify Work Order status='in_progress'
+  9. Stop polling: POST /api/orchestrator/stop
+
+  ---
+  9. DEPENDENCIES
+
+  9.1 External Tools (User Must Install)
+
+  # 1. Aider
+  pip install aider-chat
+  aider --version
+
+  # 2. GitHub CLI
+  # Windows: winget install --id GitHub.cli
+  # Verify: gh --version
+  gh auth login
+
+  9.2 Node.js Packages
+
+  {
+    "dependencies": {
+      // No new dependencies - use built-in child_process
+    }
+  }
+
+  ---
+  10. IMPLEMENTATION PHASES
+
+  Phase 1: Core Infrastructure (2-3 hours)
+
+  1. Create file structure
+  2. Implement WorkOrderPoller
+  3. Implement ManagerCoordinator
+  4. Implement ProposerExecutor
+  5. Implement OrchestratorService (without Aider)
+  6. Add API endpoints
+
+  Phase 2: Aider Integration (2-3 hours)
+
+  1. Implement AiderExecutor
+  2. Test Aider command execution locally
+  3. Handle stdout/stderr capture
+  4. Implement error handling and rollback
+
+  Phase 3: GitHub Integration (1-2 hours)
+
+  1. Implement GitHubIntegration
+  2. Test branch creation and push
+  3. Test PR creation with metadata
+  4. Implement ResultTracker
+
+  Phase 4: Testing & Polish (1 hour)
+
+  1. Add integration tests
+  2. Test E2E flow
+  3. Update documentation
+  4. Update session-state.md
+
+  ---
+  11. RISKS & MITIGATIONS
+
+  | Risk                           | Impact | Mitigation                                                                |
+  |--------------------------------|--------|---------------------------------------------------------------------------|
+  | Aider not installed            | HIGH   | Check on startup, provide clear error message with install instructions   |
+  | GitHub CLI not authenticated   | HIGH   | Verify gh auth status on startup                                          |
+  | Concurrent executions conflict | MEDIUM | Use executingWorkOrders Set to prevent duplicates                         |
+  | Aider timeout on large files   | MEDIUM | Set 5-minute timeout, log progress                                        |
+  | Git merge conflicts            | MEDIUM | Aider's git-aware editing should prevent this, but add conflict detection |
+  | API rate limits (LLM)          | MEDIUM | Respect Manager's budget enforcement                                      |
+  | Polling overhead               | LOW    | 10-second interval is reasonable, can be adjusted                         |
+
+  ---
+  12. SUCCESS CRITERIA
+
+  ✅ Work Orders transition from status='pending' to status='in_progress' automatically
+
+  ✅ PRs created on GitHub with correct metadata (risk, cost, proposer, WO ID)
+
+  ✅ Manager routing decisions respected (correct Proposer used)
+
+  ✅ Aider successfully applies code changes with git commits
+
+  ✅ Result tracking updates database correctly (work_orders, github_events, outcome_vectors)
+
+  ✅ Integration tests: 20/20 passing (18 existing + 2 new Orchestrator tests)
+
+  ✅ Zero regressions in existing tests
+
+  ✅ Documentation complete and session-state.md updated
+
+  ---
+  13. OPEN QUESTIONS
+
+  1. Should Orchestrator auto-start on server boot?
+    - Proposal: No, require manual POST /api/orchestrator/start for safety
+    - Add ORCHESTRATOR_AUTO_START=false env var for override
+  2. How to handle Aider installation check?
+    - Proposal: Check on first execution attempt, fail gracefully with install instructions
+  3. Should we limit concurrent executions?
+    - Proposal: Yes, max 3 concurrent Work Orders (configurable)
+  4. What if Proposer generates code for wrong files?
+    - Proposal: Trust Manager's routing + Proposer's output for now, Sentinel will validate later
+  5. How to handle Work Orders with no files_in_scope?
+    - Proposal: Fail with error "files_in_scope required" - Architect must specify files
