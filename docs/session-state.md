@@ -10,7 +10,7 @@
 
 **🚨 ABSOLUTE TOP PRIORITY - MUST DO BEFORE CONTEXT RUNS OUT 🚨**
 
-**When to Update:** At **80-85% of context budget used** (160,000-170,000 tokens of 200,000), pause at the next logical task completion point.
+**When to Update:** At **90,000 tokens used** (45% of 200,000 token budget), pause at the next logical task completion point.
 
 **What Happens if Skipped:** Catastrophic loss of session progress - next session will not know what was accomplished, leading to duplicate work, confusion, and wasted time.
 
