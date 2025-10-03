@@ -44,7 +44,15 @@
 
 ---
 
-## Last Session Summary (v39→v40)
+## Last Session Summary (v40→v41)
+
+**Completed:**
+- ✅ **Bug #3: Work Order GET Endpoint Fixed** - Added missing GET handler to work-orders/[id]/route.ts
+- ✅ **Bug #4: Orchestrator Processing Fixed** - Fixed field name mismatch in approval checking
+- ✅ **Bug #5: createWorkOrder Fields Fixed** - Extended API to accept all Architect fields
+- ✅ **E2E Test Progress** - Orchestrator now processes work orders through routing stage
+
+## Previous Session Summary (v39→v40)
 
 **Completed:**
 - ✅ **Priority 1: All Tests Fixed** (1 day → 15 min) - 49/49 tests passing (100%)
