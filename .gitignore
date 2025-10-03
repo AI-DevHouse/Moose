@@ -50,6 +50,23 @@ Thumbs.db
 *.swp
 *.swo
 *~
+.claude/settings.local.json
+.cursor/settings.json
+
+# Backup files
+*.backup
+*.backup2
+*.backup3
+.gitignore.backup
+
+# Test outputs
+test-orchestrator-output.txt
+test-*.log
+
+# Secret files (belt and suspenders)
+*API Keys*.txt
+*api-keys*.txt
+*secrets*.txt
 
 # Misc
 .aider.tags.cache.v4/
