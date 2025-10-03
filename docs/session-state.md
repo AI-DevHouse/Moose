@@ -1,6 +1,6 @@
-# Session State v39 (2025-10-03)
+# Session State v40 (2025-10-03)
 
-**Last Updated:** 2025-10-03 18:00:00 UTC
+**Last Updated:** 2025-10-03 20:00:00 UTC
 
 **Start here each session.** Reference other docs as needed.
 
@@ -44,41 +44,44 @@
 
 ---
 
-## Last Session Summary (v38→v39)
+## Last Session Summary (v39→v40)
 
 **Completed:**
-- ✅ **Comprehensive Verification Audit Complete** - Manually verified all claimed completions in project plan
-- ✅ **Project Plan v3 Created** - Verified status edition with evidence for each deliverable
-- ✅ **Error Handling & Resilience Plan Verified** - All 4 phases confirmed complete (v38)
-- ✅ **Critical Path Defined** - 7-11 day timeline to production with priorities
-- ✅ **Updated Handover Documents** - Session state, reading pack prepared for next session
+- ✅ **Priority 1: All Tests Fixed** (1 day → 15 min) - 49/49 tests passing (100%)
+- ✅ **Priority 2: Contract Validation Integrated** (0.5 days → 10 min) - Week 4 D4-5 deliverable complete
+- ✅ **Priority 3: E2E Infrastructure Created** - Test scripts + environment verified
+- ✅ **Priority 3: Integration Bugs Discovered** - 4 bugs found in first E2E run (2 critical)
 
-**Key Findings:**
-- **Overall completion: 65%** (verified, not assumed)
-- **100% complete:** Self-Refinement (3-cycle), Architect (8/8), Director (5/5), Client Manager (7/7), v38 Error Handling (4/4 phases)
-- **Partial:** Orchestrator (built but E2E untested, 5 tests failing), Sentinel (binary pass/fail only), Manager (core works, advanced features missing)
-- **Not started:** Learning system (Phase 3.3), Test App (Phase 5.1), Training Period (Phase 5.2)
-- **Test results:** 10/10 failure mode tests passing, 26/31 unit tests passing (5 failing in github-integration formatting)
+**Key Accomplishments:**
+- **Test fixes:** 4 github-integration formatting + 1 manager-coordinator complexity calculation
+- **Contract validation:** Integrated into enhanced-proposer-service.ts after refinement cycle
+- **E2E tests:** Created test-orchestrator-e2e-full.ps1 + test-orchestrator-e2e-simple.js
+- **Environment:** Verified Aider CLI 0.86.1, GitHub CLI 2.81.0, Python 3.11.9 all working
 
-**Critical Gaps Identified:**
-1. ❌ **Orchestrator E2E never run** - 1,418 lines of code never tested end-to-end with real Aider
-2. ❌ **Contract validation NOT in refinement** - Week 4 D4-5 deliverable missing
-3. ❌ **5 unit tests failing** - github-integration.test.ts formatting, manager-coordinator.test.ts complexity
-4. ❌ **Sentinel advanced features deferred** - No FLAKY classification, no adaptive baselines
-5. ❌ **Learning system 0%** - Entire Phase 3.3 not started
+**Bugs Discovered (First E2E Run):**
+1. ❌ **CRITICAL:** Work order GET endpoint failing (api/work-orders/[id]/route.ts)
+2. ❌ **CRITICAL:** Orchestrator not processing work orders (stuck in "pending" status)
+3. ⚠️ **MODERATE:** Orchestrator status endpoint returns undefined
+4. ✅ **WORKAROUND:** Director API expects decomposition payload, not work_order_id
 
 **Details:**
-- **Verification method:** Code inspection + API testing (curl) + vitest results + file existence checks
-- **Evidence gathered:** File paths, line numbers, API responses, test output
-- **Project Plan v3:** Created `docs/Project Plan (3) - Verified Status.txt` (1,337 lines)
-- **Critical Path:** 6 priorities, 7-11 day timeline to production
-- **Handover docs:** Updated session-state.md, prepared reading pack
+- **Priority 1:** Fixed markdown formatting in tests ("Risk Level: medium" → "**Risk Level:** medium")
+- **Priority 2:** Added ContractValidator import, validation after refinement, contract_validation field in response
+- **Priority 3:** Created 2 E2E test scripts, ran first execution, documented bugs in orchestrator-e2e-findings.md
+- **Test execution:** Work order created → approved → orchestrator started → **STUCK** (no processing)
 
-**Files Created (v39):**
-- docs/Project Plan (3) - Verified Status.txt (1,337 lines)
+**Files Modified (v40):**
+- src/lib/orchestrator/__tests__/github-integration.test.ts (4 test fixes)
+- src/lib/orchestrator/__tests__/manager-coordinator.test.ts (1 test fix)
+- src/lib/enhanced-proposer-service.ts (contract validation lines 13, 77, 242-283, 326)
+
+**Files Created (v40):**
+- test-orchestrator-e2e-full.ps1 (PowerShell 7-step E2E test)
+- test-orchestrator-e2e-simple.js (Node.js 6-step automated test)
+- docs/orchestrator-e2e-findings.md (Complete bug analysis + next steps)
 
 **Next Session Priority:**
-**Work on Critical Path** - Start with Priority 1 (Fix failing tests) and Priority 2 (Add contract validation)
+**Fix Critical E2E Bugs** - Priority order: Bug #3 (GET endpoint) → Bug #4 (orchestrator processing) → Re-run E2E → Fix remaining bugs
 
 ---
 
