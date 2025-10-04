@@ -8,6 +8,7 @@ import { generateCode } from './proposer-executor';
 import { executeAider, rollbackAider } from './aider-executor';
 import { pushBranchAndCreatePR, rollbackPR } from './github-integration';
 import { trackSuccessfulExecution, trackFailedExecution } from './result-tracker';
+import { CapacityManager } from './capacity-manager';
 
 /**
  * Orchestrator Service (Singleton)
@@ -166,6 +167,8 @@ export class OrchestratorService {
    */
   public async executeWorkOrder(workOrderId: string): Promise<ExecutionResult> {
     const startTime = Date.now();
+    const capacityManager = CapacityManager.getInstance();
+    let modelName: string | null = null;
 
     // Mark as executing
     this.executingWorkOrders.add(workOrderId);
@@ -184,6 +187,18 @@ export class OrchestratorService {
       let routingDecision;
       try {
         routingDecision = await getRoutingDecision(wo);
+        modelName = routingDecision.selected_proposer;
+
+        // Reserve capacity for this model
+        const capacityAvailable = await capacityManager.waitForCapacity(modelName, 60000);
+        if (!capacityAvailable) {
+          throw new Error(`Timeout waiting for ${modelName} capacity`);
+        }
+
+        const reserved = capacityManager.reserveCapacity(modelName, workOrderId);
+        if (!reserved) {
+          throw new Error(`Failed to reserve capacity for ${modelName}`);
+        }
       } catch (error: any) {
         await trackFailedExecution(wo, error, 'routing');
         throw error;
@@ -270,6 +285,11 @@ export class OrchestratorService {
     } finally {
       // Remove from executing set
       this.executingWorkOrders.delete(workOrderId);
+
+      // Release capacity
+      if (modelName) {
+        capacityManager.releaseCapacity(modelName, workOrderId);
+      }
     }
   }
 

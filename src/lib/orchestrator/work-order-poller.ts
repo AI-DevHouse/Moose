@@ -2,6 +2,11 @@
 
 import { createSupabaseServiceClient } from '@/lib/supabase';
 import type { WorkOrder } from './types';
+import {
+  getExecutableWorkOrders,
+  getCompletedWorkOrderIds,
+  visualizeDependencies
+} from './dependency-resolver';
 
 /**
  * Polls the work_orders table for pending Work Orders that have been approved by Director
@@ -9,10 +14,11 @@ import type { WorkOrder } from './types';
  * Query criteria:
  * - status = 'pending'
  * - metadata->>'approved_by_director' = 'true' (or auto_approved = true in metadata)
- * - Order by created_at ASC (FIFO)
+ * - Dependency resolution: Only return WOs where all dependencies are completed
+ * - Order by created_at ASC (FIFO for WOs with no dependencies)
  * - Limit 10 per poll
  *
- * @returns Array of pending Work Orders ready for execution
+ * @returns Array of pending Work Orders ready for execution (dependencies satisfied)
  */
 export async function pollPendingWorkOrders(): Promise<WorkOrder[]> {
   const supabase = createSupabaseServiceClient();
@@ -23,7 +29,7 @@ export async function pollPendingWorkOrders(): Promise<WorkOrder[]> {
       .select('*')
       .eq('status', 'pending')
       .order('created_at', { ascending: true })
-      .limit(10);
+      .limit(50); // Increased limit to handle dependency chains
 
     if (error) {
       console.error('[WorkOrderPoller] Query error:', error);
@@ -45,7 +51,22 @@ export async function pollPendingWorkOrders(): Promise<WorkOrder[]> {
 
     console.log(`[WorkOrderPoller] Found ${approvedWorkOrders.length} approved Work Orders out of ${data.length} pending`);
 
-    return approvedWorkOrders as WorkOrder[];
+    // Apply dependency resolution
+    const completedIds = await getCompletedWorkOrderIds(supabase);
+    const executableWorkOrders = getExecutableWorkOrders(
+      approvedWorkOrders as WorkOrder[],
+      completedIds
+    );
+
+    // Log dependency visualization if any WOs have dependencies
+    if (approvedWorkOrders.length > executableWorkOrders.length) {
+      console.log('[WorkOrderPoller] Dependency Resolution:');
+      console.log(visualizeDependencies(approvedWorkOrders as WorkOrder[]));
+      console.log(`[WorkOrderPoller] ${executableWorkOrders.length}/${approvedWorkOrders.length} WOs ready (dependencies satisfied)`);
+    }
+
+    // Return top 10 executable work orders
+    return executableWorkOrders.slice(0, 10);
   } catch (error) {
     console.error('[WorkOrderPoller] Unexpected error:', error);
     throw error;
