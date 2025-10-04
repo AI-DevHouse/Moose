@@ -26,8 +26,8 @@ export async function GET() {
     // 2. Check open escalations
     const { data: pendingEscalations, error: escalationsError } = await supabase
       .from('escalations')
-      .select('id, reason, status, created_at')
-      .eq('status', 'open')
+      .select('id, trigger_type, status, created_at')
+      .eq('status', 'pending')
       .order('created_at', { ascending: false })
       .limit(10);
 
