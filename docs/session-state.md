@@ -1,6 +1,6 @@
-# Session State v42 (2025-10-03)
+# Session State v43 (2025-10-03)
 
-**Last Updated:** 2025-10-03 19:00:00 UTC
+**Last Updated:** 2025-10-03 20:00:00 UTC
 
 **Start here each session.** Reference other docs as needed.
 
@@ -44,7 +44,64 @@
 
 ---
 
-## Last Session Summary (v42→v43)
+## Last Session Summary (v43→v44)
+
+**✅ PHASE 4.1 REFINEMENT COMPLETE: Dependency Sequencing, Capacity Management, FLAKY Detection**
+
+**Completed:**
+- ✅ **Feature 1:** Dependency-based Sequencing (235 lines)
+- ✅ **Feature 2:** Per-Model Capacity Management (207 lines)
+- ✅ **Feature 3:** FLAKY Test Detection Infrastructure (299 lines)
+- ✅ **Total:** 778 new lines of production code, 0 breaking changes
+
+**Feature 1: Dependency-based Sequencing:**
+- Created dependency-resolver.ts (235 lines)
+  - Topological sort using Kahn's algorithm
+  - Validates circular dependencies
+  - Filters executable work orders (only those with dependencies satisfied)
+  - Visualizes dependency graph in logs
+- Updated work-order-poller.ts (+19 lines)
+  - Queries completed work orders from database
+  - Only returns WOs where all dependencies are completed
+  - Increased poll limit to 50 to handle dependency chains
+- Impact: Prevents executing WO-2 before WO-0 completes (correctness critical)
+
+**Feature 2: Per-Model Capacity Management:**
+- Created capacity-manager.ts (207 lines)
+  - Claude Sonnet 4.5: max 2 concurrent executions
+  - GPT-4o-mini: max 4 concurrent executions
+  - Reserve/release capacity tracking per model
+  - Wait for capacity with 60s timeout
+- Updated orchestrator-service.ts (+18 lines)
+  - Integrated capacity manager into execution pipeline
+  - Waits for model capacity before starting execution
+  - Releases capacity in finally block (guaranteed cleanup)
+- Impact: Prevents rate limit 429 errors, better resource utilization
+
+**Feature 3: FLAKY Test Detection Infrastructure:**
+- Created flaky-detector.ts (299 lines)
+  - Classifies tests: STABLE_PASS (>90%), FLAKY (10-90%), STABLE_FAIL (<10%)
+  - Tracks test pass/fail history (queries outcome_vectors)
+  - Auto-ignores FLAKY tests with >10% flake rate over 20+ runs
+  - Filters out flaky test failures from decision making
+- Status: Infrastructure-only (database writes deferred to post-deployment)
+- Impact: Reduces false positive escalations when calibrated with real data
+
+**Test Results:**
+- TypeScript: 0 errors ✅
+- All tests: 49/49 passing (100%) ✅
+- Git commit: 3247dbe ✅
+
+**Files Created:**
+- src/lib/orchestrator/dependency-resolver.ts (235 lines)
+- src/lib/orchestrator/capacity-manager.ts (207 lines)
+- src/lib/sentinel/flaky-detector.ts (299 lines)
+
+**Files Modified:**
+- src/lib/orchestrator/work-order-poller.ts (+19 lines)
+- src/lib/orchestrator/orchestrator-service.ts (+18 lines)
+
+## Previous Session Summary (v42→v43)
 
 **✅ PRIORITY 5.4 COMPLETE: Ops Documentation**
 
