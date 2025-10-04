@@ -1,3 +1,6 @@
+export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
+
 import { NextRequest, NextResponse } from 'next/server';
 import { proposerRegistry, ProposerConfig } from '@/lib/proposer-registry';
 import { getOrCache, cache } from '@/lib/cache';

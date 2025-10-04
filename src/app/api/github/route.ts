@@ -1,3 +1,6 @@
+export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
+
 // src/app/api/github/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { createGitHubClient } from '@/lib/github-client';

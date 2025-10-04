@@ -1,3 +1,6 @@
+export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
+
 import { NextRequest, NextResponse } from 'next/server';
 import { ContractValidator, type Contract, type ValidationResult, type DiffAnalysis } from '@/lib/contract-validator';
 

@@ -1,3 +1,6 @@
+export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
+
 // Enhanced Proposer API Route - Phase 2.2.3
 // Exposes performance monitoring and fallback optimization
 

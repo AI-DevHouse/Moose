@@ -1,3 +1,6 @@
+export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
+
 // src/app/api/client-manager/execute/route.ts
 // API endpoint for executing human decisions on escalations
 

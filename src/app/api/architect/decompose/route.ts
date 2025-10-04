@@ -1,5 +1,8 @@
+export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
+
 // src/app/api/architect/decompose/route.ts
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse} from 'next/server';
 import { architectService } from '@/lib/architect-service';
 import type { TechnicalSpec } from '@/types/architect';
 import { withRateLimit, architectApiLimiter } from '@/lib/rate-limiter';

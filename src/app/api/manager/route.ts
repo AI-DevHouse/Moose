@@ -1,10 +1,11 @@
+export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
+
 // src/app/api/manager/route.ts
 // Manager API endpoint - Work Order routing
 
 import { NextRequest, NextResponse } from 'next/server';
 import { routeWorkOrder, getRetryStrategy } from '@/lib/manager-service';
-
-export const dynamic = 'force-dynamic';
 
 /**
  * POST /api/manager/route

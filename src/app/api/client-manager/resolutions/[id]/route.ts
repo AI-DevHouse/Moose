@@ -1,3 +1,6 @@
+export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
+
 // src/app/api/client-manager/resolutions/[id]/route.ts
 // API endpoint for getting escalation resolutions
 

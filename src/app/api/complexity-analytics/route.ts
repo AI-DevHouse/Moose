@@ -1,3 +1,6 @@
+export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
+
 // Complexity Analytics API - Phase 2.2.4
 // Performance monitoring and threshold tuning interface
 

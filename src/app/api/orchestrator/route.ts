@@ -1,3 +1,6 @@
+export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
+
 // Orchestrator API - Status and control endpoints
 
 import { NextRequest, NextResponse } from 'next/server';

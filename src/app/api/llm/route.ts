@@ -1,3 +1,6 @@
+export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
+
 // src/app/api/llm/route.ts - FIXED TO MATCH LLM SERVICE INTERFACE
 import { NextRequest, NextResponse } from 'next/server';
 import { llmService } from '@/lib/llm-service';

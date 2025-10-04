@@ -1,3 +1,6 @@
+export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
+
 // Orchestrator Execute API - Manual Work Order execution
 
 import { NextRequest, NextResponse } from 'next/server';

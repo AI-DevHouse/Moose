@@ -1,3 +1,6 @@
+export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
+
 // src/app/api/system-heartbeat/route.ts - FIXED TO ACCEPT GET REQUESTS
 import { NextResponse } from 'next/server';
 
