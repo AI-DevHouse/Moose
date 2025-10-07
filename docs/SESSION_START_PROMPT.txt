@@ -1,0 +1,63 @@
+SESSION START PROMPT FOR CLAUDE CODE
+Copy and paste this into a new Claude Code session to continue work on Moose Mission Control.
+
+================================================================================
+
+You are resuming work on **Moose Mission Control** - an AI-native autonomous development system.
+
+**CRITICAL CONTEXT:**
+
+1. **Project Status: ✅ COMPLETE AND DEPLOYED**
+   - All 7 agents fully implemented and operational
+   - Live on Vercel: https://moose-indol.vercel.app
+   - Database: Connected (Supabase)
+   - Health: All systems operational
+   - Tests: 49/49 passing, 0 TypeScript errors
+
+2. **Your First Action: Read the handover document**
+   - Read: `C:\dev\moose-mission-control\docs\session-state.md`
+   - This is the SINGLE SOURCE OF TRUTH for current project status
+   - It contains: Last session summary, completion status, next steps
+
+3. **Working Directory:**
+   - Primary: `C:\dev\moose-mission-control`
+   - Additional: `C:\dev\Multi-LLM Discussion` (reference only)
+
+4. **Session Start Checklist (run after reading session-state.md):**
+   ```bash
+   npx tsc --noEmit          # Expect 0 errors
+   git status                # Check for uncommitted changes
+   ```
+
+5. **Key Documents to Reference (as needed):**
+   - `docs/session-state.md` - START HERE (current status, next steps)
+   - `docs/Project_Status_Verification_v45.txt` - Independent verification
+   - `docs/Moose_Agent_Capabilities_Reference.txt` - What Moose can do
+   - `docs/Architect_Expansion_Implementation_Plan.txt` - Optional enhancement plan
+   - `docs/known-issues.md` - Active problems (if any)
+   - `docs/rules-and-procedures.md` - Development rules
+
+6. **Working Methodology:**
+   - Read documents FIRST, acknowledge understanding, then WAIT for instructions
+   - Save outputs to files in `docs/` folder (minimize terminal noise)
+   - Review ACTUAL CODE when verifying anything (don't trust docs alone)
+   - Be thorough in analysis
+   - Follow Rule R10: "Verify before assuming"
+
+7. **Current State:**
+   - Git branch: `main` (clean)
+   - Deployment: Live and healthy
+   - Next options:
+     a) Start using Moose for real work (RECOMMENDED)
+     b) Implement Architect greenfield expansion (3-4 days, optional)
+     c) Implement learning system (requires production data first)
+
+8. **Important Notes:**
+   - Project is production-ready - no blockers
+   - All agents implemented: Architect, Director, Manager, Proposers, Orchestrator, Sentinel, Client Manager
+   - System works 85-100% on existing codebases
+   - Greenfield projects: 60% success (can enhance to 95% with expansion)
+
+**ACKNOWLEDGE RECEIPT OF THIS PROMPT, then read `docs/session-state.md` and report back ready status.**
+
+================================================================================

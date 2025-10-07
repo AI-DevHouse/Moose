@@ -1,0 +1,571 @@
+# Prompt for Claude Code: Final Recommended Implementation Approach
+
+---
+
+## Context
+
+We've reviewed your technical analysis and agree with your core insights about token limits and cost considerations. However, our goal for Moose is broader than initially apparent: **autonomous delivery of large enterprise projects requiring hundreds to thousands of granular instructions**.
+
+The Multi-LLM Discussion App is our **test case to validate and iterate** on this capability, not an edge case to optimize away.
+
+---
+
+## Strategic Direction
+
+**Core Principle:** Moose must scale to handle complex, multi-month projects that would take human teams weeks to decompose and months to build.
+
+**Key Insight from Your Review:** The distinction between "work orders," "features," "tasks," and "instructions" is flexible. What matters is: **Can we break large projects into executable units that Aider agents can handle?**
+
+**Your Finding:** The 4,000 token output limit is a hard constraint we must work within or around.
+
+---
+
+## Approved Implementation Plan
+
+Implement the following in priority order:
+
+---
+
+### **PHASE 1: Foundation (This Week - 1-2 Days)**
+
+#### **Task 1.1: Pre-Decomposed Specification Recognition** ⭐ HIGHEST PRIORITY
+**Goal:** Extract existing structure from well-organized specs instead of re-decomposing from scratch.
+
+**Implementation:**
+- Modify `buildArchitectPrompt()` in `src/lib/architect-decomposition-rules.ts`
+- Add detection logic for section headers (## 4.1, ## 4.2, etc.)
+- Extract section title, description, and scope as "work units"
+- Preserve original author's architectural decisions
+- Augment with missing pieces (contracts, dependencies)
+
+**Prompt Addition:**
+```
+SPECIFICATION STRUCTURE ANALYSIS:
+
+Before decomposing, scan for existing structural indicators:
+- Numbered section headers (## 4.1, ## 4.2, ### 4.1.1)
+- "Component Specifications" or similar sections
+- Clear module/service/component boundaries
+- Existing work breakdown structure
+
+IF STRUCTURED DECOMPOSITION DETECTED:
+1. EXTRACT sections as work units (preserve numbering)
+2. USE existing titles and descriptions
+3. INFER files_in_scope from section content
+4. GENERATE acceptance_criteria from section requirements
+5. MAP dependencies from cross-references
+6. AUGMENT with contracts if missing
+7. OUTPUT with metadata:
+   - decomposition_source: "extracted"
+   - extraction_confidence: 0.0-1.0
+   - original_structure: "section_based"
+
+IF NO CLEAR STRUCTURE:
+- Proceed with standard decomposition
+- decomposition_source: "generated"
+```
+
+**Expected Outcome:**
+- Multi-LLM App spec → 11 extracted work units
+- Cost: ~$0.10 (same as current, possibly cheaper)
+- Time: 30-45 seconds
+
+**Acceptance Criteria:**
+- Can extract 11 sections from Multi-LLM App spec
+- Preserves section hierarchy and relationships
+- Generates valid work order structure
+- Confidence score >0.8 for structured specs
+
+---
+
+#### **Task 1.2: Increase Work Order Output Limit** ⭐ CRITICAL ENABLER
+**Goal:** Support projects requiring 15-20 work units without multi-call overhead.
+
+**Implementation:**
+- Modify `DECOMPOSITION_THRESHOLDS` in `src/lib/architect-decomposition-rules.ts`
+- Change `MAX_WORK_ORDERS: 8` to `MAX_WORK_ORDERS: 20`
+- Add validation: Warn if output approaches 3,500 tokens (leave 500 token buffer)
+- Calculate: 20 WOs × 170 tokens = 3,400 tokens ✅ Fits in 4K limit
+
+**Rationale:**
+- 15-20 work units covers 80% of greenfield projects
+- Still within single API call (cost efficient)
+- Enables Multi-LLM App without hierarchical decomposition
+
+**Acceptance Criteria:**
+- Architect accepts specs generating 15-20 work orders
+- No API errors from exceeding token limits
+- Cost remains <$0.20 per decomposition
+
+---
+
+#### **Task 1.3: Missing Specification Detection** ⭐ PROACTIVE QUALITY GATE
+**Goal:** Identify blockers before decomposition to prevent downstream failures.
+
+**Implementation:**
+- Add validation section at START of Architect prompt
+- Scan for: missing wireframes, missing schemas, missing deployment architecture
+- Flag severity: BLOCKER vs. WARNING
+- Output in decomposition_doc with remediation guidance
+
+**Prompt Addition:**
+```
+SPECIFICATION VALIDATION (check FIRST):
+
+UI-HEAVY PROJECTS (mentions: UI, views, screens, components, interface):
+- CHECK FOR: Wireframes, mockups, Figma links, component hierarchy
+- IF MISSING: Flag as BLOCKER with message:
+  "⚠️ BLOCKER: UI Wireframes Missing
+   Components requiring design: [list]
+   Impact: Moose will implement literal text descriptions
+   Recommendation: Provide wireframes before decomposition
+   Auto-resolution: Enable wireframe generation (--generate-wireframes)"
+
+API/SERVICE PROJECTS (mentions: endpoints, API, routes, services):
+- CHECK FOR: API schemas, request/response formats, error codes
+- IF MISSING: Flag as WARNING (can infer from context)
+
+DEPLOYMENT PROJECTS (mentions: production, deployment, infrastructure):
+- CHECK FOR: Platform, scaling requirements, environment specs
+- IF MISSING: Flag as WARNING (can use defaults)
+
+OUTPUT FORMAT:
+If blockers found, add to top of decomposition_doc:
+## ⚠️ BLOCKERS - REQUIRES INPUT
+[List with auto-resolution options]
+
+CONTINUE decomposition regardless (user decides whether to proceed).
+```
+
+**Acceptance Criteria:**
+- Detects missing wireframes for UI projects
+- Provides actionable remediation steps
+- Offers auto-resolution via generation flags
+- Does not halt decomposition (advisory only)
+
+---
+
+#### **Task 1.4: Post-Decomposition Contract Generation** ⭐ INTEGRATION ENABLER
+**Goal:** Generate integration contracts after decomposition to prevent integration failures.
+
+**Implementation:**
+- Add `ContractGenerationService` (similar to `WireframeGenerationService`)
+- Detect work units with integration points (IPC, API, state, file system)
+- Generate contract specifications via Claude API
+- Attach to work orders as metadata
+
+**Service Structure:**
+```typescript
+class ContractGenerationService {
+  async generateContracts(
+    workOrders: WorkOrder[]
+  ): Promise<IntegrationContracts> {
+    
+    // Detect integration points
+    const integrationPoints = this.detectIntegrationPoints(workOrders);
+    
+    // For each integration type:
+    if (integrationPoints.ipc) {
+      contracts.ipc_contracts = await this.generateIPCContracts(integrationPoints.ipc);
+    }
+    
+    if (integrationPoints.api) {
+      contracts.api_contracts = await this.generateAPIContracts(integrationPoints.api);
+    }
+    
+    // etc.
+    
+    return contracts;
+  }
+  
+  private async generateIPCContracts(points: IntegrationPoint[]): Promise<IPCContract[]> {
+    const prompt = `
+Based on these work orders, define IPC contracts:
+${points.map(p => p.description).join('\n')}
+
+For each IPC channel:
+- channel_name: string
+- message_format: TypeScript interface
+- event_sequence: description of message flow
+- example: sample message
+
+Return as JSON array of IPCContract objects.
+`;
+    
+    const response = await this.claude.messages.create({ /* ... */ });
+    return JSON.parse(response.content);
+  }
+}
+```
+
+**Integration with Architect:**
+```typescript
+// After decomposition
+const decomposition = await architect.decomposeSpec(spec);
+
+// Generate contracts (if flag enabled)
+if (options.generateContracts) {
+  const contracts = await contractService.generateContracts(decomposition.work_orders);
+  decomposition.contracts = contracts;
+}
+```
+
+**Cost:** ~$0.05-0.10 per project (one-time contract generation)
+
+**Acceptance Criteria:**
+- Generates IPC contracts for Electron apps
+- Generates API contracts for service-based apps
+- Generates state contracts for Redux/state management
+- Contracts are valid TypeScript interfaces
+- Attached to decomposition metadata
+
+---
+
+### **PHASE 2: Validation (Next Week)**
+
+#### **Task 2.1: Multi-LLM App Test Run**
+**Goal:** Validate Phase 1 enhancements solve the greenfield project use case.
+
+**Test Process:**
+1. Run enhanced Architect on Multi-LLM App technical spec
+2. Verify extraction of 11 sections as work units
+3. Verify contract generation for IPC/API integration points
+4. Verify wireframe detection and generation
+5. Measure: cost, time, output quality
+
+**Success Criteria:**
+- All 11 sections extracted correctly
+- Contracts generated for main↔renderer, main↔alignment-service
+- UI components flagged for wireframes
+- Total cost <$1.00
+- Total time <2 minutes
+- Human review confirms quality
+
+**Expected Issues:**
+- Some sections may need sub-division (e.g., Phase 3 has 12 work units)
+- Dependencies between sections may need manual validation
+- Contract generation may need refinement
+
+**Iteration Plan:**
+- Fix issues discovered
+- Re-test
+- Document lessons learned
+
+---
+
+#### **Task 2.2: Metrics Collection**
+**Goal:** Gather baseline data for future optimization decisions.
+
+**Metrics to Track:**
+- Work order count distribution (how many specs generate 3, 5, 8, 15, 20+ WOs)
+- Extraction vs. generation ratio (how often we use pre-decomposed recognition)
+- Contract generation success rate
+- Blocker detection accuracy
+- Cost per decomposition
+- Time per decomposition
+
+**Data Collection Period:** 2-4 weeks across multiple projects
+
+---
+
+### **PHASE 3: Scale Decision (3-4 Weeks from Now)**
+
+#### **Decision Point: Do We Need Hierarchical Decomposition?**
+
+**Evaluate Based on Phase 2 Data:**
+
+**Scenario A: 20 WO Limit is Sufficient (80%+ of projects)**
+- Outcome: No hierarchical decomposition needed
+- Action: Optimize existing approach
+- Cost stays at $0.15-0.20 per decomposition
+
+**Scenario B: 30-40 WOs Needed Regularly (50%+ of projects)**
+- Outcome: Implement hierarchical decomposition
+- Action: Build two-tier system (Features → Work Orders)
+- Cost increases to $0.50 per decomposition
+- Benefit: Can handle hundreds of instructions
+
+**Scenario C: 100+ WOs Needed for Enterprise Projects**
+- Outcome: Implement full hierarchical system
+- Action: Multi-tier decomposition (Phases → Features → Work Orders)
+- Cost increases to $1.00-2.00 per decomposition
+- Benefit: Can handle thousand-instruction projects
+
+**Your Finding is Correct:** We won't know which scenario we're in until we test on real projects.
+
+**Our Addition:** Let's test on Multi-LLM App immediately rather than waiting for data from projects we can't run yet.
+
+---
+
+### **PHASE 4: Hierarchical Decomposition (If Needed)**
+
+**Only implement if Phase 3 evaluation shows necessity.**
+
+**Design (from your alternative approach):**
+- Keep Architect core simple (3-20 work units per call)
+- Add multi-pass decomposition for large projects
+- Implement context management (summaries + references)
+- Add phased execution to Orchestrator
+
+**Cost Impact:** Acceptable if solving real problem
+- $0.50 per complex project vs. $8,000 human cost
+- Still 16,000× cheaper than human decomposition
+
+---
+
+## Implementation Priorities
+
+```
+Priority 1 (This Week):
+├─ Pre-decomposed spec recognition    [4-6 hours]
+├─ Increase WO limit to 20             [30 minutes]
+├─ Missing spec detection              [3-4 hours]
+└─ Contract generation service         [6-8 hours]
+   TOTAL: 14-19 hours (2 days)
+
+Priority 2 (Next Week):
+├─ Multi-LLM App test run              [4 hours]
+├─ Issue resolution                    [4-6 hours]
+└─ Metrics collection setup            [2 hours]
+   TOTAL: 10-12 hours (1.5 days)
+
+Priority 3 (3-4 Weeks):
+└─ Evaluate hierarchical need          [Based on data]
+
+Priority 4 (Conditional):
+└─ Implement hierarchical              [3-4 days if needed]
+```
+
+---
+
+## Key Decisions
+
+### **Question 1: Work Order Terminology**
+You noted: "What is a work order vs. separated instruction can be determined later."
+
+**Recommendation:** 
+- Keep "work order" as the term for now
+- It represents: **A unit of work executable by a single Aider agent invocation**
+- Scope: 1-10 file changes, 500-4,000 tokens of context
+- Duration: 5-15 minutes of execution time
+
+Later, we can introduce:
+- **Task** = Group of related work orders (Phase 1, Phase 2, etc.)
+- **Feature** = Group of related tasks
+- **Epic** = Group of related features
+
+But for now, keep it simple: Everything is a work order.
+
+---
+
+### **Question 2: Token Limit Workaround**
+Your concern: "4,000 token output limit constrains everything."
+
+**Our Approach:**
+1. **Phase 1:** Work within limit (20 WOs × 170 tokens = 3,400 tokens) ✅
+2. **Phase 2:** Test if this is sufficient for 80% of projects
+3. **Phase 3:** If not, implement multi-pass decomposition
+
+**Why This Works:**
+- Most projects: Single pass sufficient
+- Complex projects: Multi-pass acceptable (cost is still tiny vs. human)
+- We optimize for common case, support edge case when needed
+
+---
+
+### **Question 3: Cost Tolerance**
+Your question: "Is $0.40 savings worth delaying greenfield support?"
+
+**Our Answer:** No. Implement Phase 1 immediately.
+- $0.15-0.20 cost is acceptable (still 40,000× cheaper than human)
+- $0.50 cost for hierarchical is acceptable if needed (still 16,000× cheaper)
+- $1.00-2.00 cost for enterprise-scale is acceptable (still 4,000-8,000× cheaper)
+
+**Cost is not the constraint. Time to capability is.**
+
+---
+
+## Success Metrics
+
+### **Phase 1 Success:**
+- ✅ Multi-LLM App spec decomposes successfully
+- ✅ 11 sections extracted as work units
+- ✅ Contracts generated for integration points
+- ✅ Cost <$1.00
+- ✅ Time <2 minutes
+- ✅ Can execute work units through Moose pipeline
+
+### **Phase 2 Success:**
+- ✅ 5+ projects successfully decomposed
+- ✅ Metrics collected and analyzed
+- ✅ Pattern identified (do we need hierarchical?)
+- ✅ Decision made on Phase 3
+
+### **Long-Term Success:**
+- ✅ Moose can decompose 1,000+ instruction projects
+- ✅ Cost per decomposition <$5
+- ✅ Human review time <30 minutes
+- ✅ Autonomous execution rate >85%
+
+---
+
+## Specific Implementation Instructions
+
+### **File Modifications:**
+
+**1. `src/lib/architect-decomposition-rules.ts`**
+```typescript
+// Line 8-12: Update thresholds
+export const DECOMPOSITION_THRESHOLDS = {
+  MIN_WORK_ORDERS: 3,
+  MAX_WORK_ORDERS: 20,  // Changed from 8
+  MAX_TOKENS_PER_WO: 4000,
+  COST_PER_1K_TOKENS: 0.001,
+};
+
+// Line 25-92: Expand buildArchitectPrompt function
+// Add: Pre-decomposed spec recognition section (see Task 1.1)
+// Add: Missing specification detection section (see Task 1.3)
+```
+
+**2. `src/services/ContractGenerationService.ts` (NEW FILE)**
+```typescript
+// Create new service for contract generation
+// See Task 1.4 implementation details
+```
+
+**3. `src/types/architect.ts`**
+```typescript
+// Add: IntegrationContracts interface
+// Add: decomposition_source field to FeatureDecomposition
+// Add: extraction_confidence field
+```
+
+**4. `src/lib/architect-service.ts`**
+```typescript
+// Line 46: After decomposition, check for contracts flag
+// If enabled, call ContractGenerationService
+// Attach contracts to decomposition
+```
+
+---
+
+## Testing Strategy
+
+### **Unit Tests:**
+```typescript
+// Test pre-decomposed recognition
+test('extracts structured spec sections', () => {
+  const spec = createMockStructuredSpec();
+  const result = architect.decomposeSpec(spec);
+  expect(result.decomposition_source).toBe('extracted');
+  expect(result.work_orders.length).toBeGreaterThan(8);
+});
+
+// Test 20 WO limit
+test('handles 20 work orders within token limit', () => {
+  const result = architect.decomposeSpec(largeSpec);
+  expect(result.work_orders.length).toBeLessThanOrEqual(20);
+  expect(estimateTokens(result)).toBeLessThan(4000);
+});
+
+// Test blocker detection
+test('detects missing wireframes for UI projects', () => {
+  const uiSpec = createUISpec({ wireframes: false });
+  const result = architect.decomposeSpec(uiSpec);
+  expect(result.blockers).toContain('UI Wireframes Missing');
+});
+```
+
+### **Integration Test:**
+```typescript
+test('Multi-LLM App end-to-end decomposition', async () => {
+  const spec = loadMultiLLMAppSpec();
+  
+  const result = await architect.decomposeSpec(spec, {
+    generateWireframes: true,
+    generateContracts: true,
+    detectBlockers: true
+  });
+  
+  expect(result.work_orders.length).toBeGreaterThanOrEqual(11);
+  expect(result.contracts.ipc_contracts.length).toBeGreaterThan(0);
+  expect(result.wireframes.length).toBeGreaterThan(0);
+  expect(result.cost).toBeLessThan(1.00);
+});
+```
+
+---
+
+## Risk Mitigation
+
+### **Risk 1: 20 WO Limit Still Insufficient**
+**Mitigation:** Phase 3 implements hierarchical decomposition
+**Backup Plan:** Manual splitting of large projects into sub-projects
+
+### **Risk 2: Contract Generation Quality Issues**
+**Mitigation:** Human review of contracts in Phase 2
+**Backup Plan:** Manual contract definition with template library
+
+### **Risk 3: Cost Exceeds Budget**
+**Mitigation:** Monitor costs daily, implement hard caps
+**Backup Plan:** Reduce scope or implement caching strategies
+
+### **Risk 4: Token Limit Still Constrains Output**
+**Mitigation:** Compress work order representation, remove verbose fields
+**Backup Plan:** Multi-pass decomposition (hierarchical approach)
+
+---
+
+## Final Notes
+
+### **Your Concerns Addressed:**
+
+1. ✅ **"We need to scale to hundreds of instructions"**
+   - Phase 1 enables 20 WOs (covers 80% of projects)
+   - Phase 4 enables hierarchical (covers remaining 20%)
+
+2. ✅ **"Token limit is a hard constraint"**
+   - We work within it in Phase 1
+   - We work around it in Phase 4 (if needed)
+
+3. ✅ **"Cost increase from $0.10 to $0.50 is significant"**
+   - Only applied if hierarchical is needed
+   - Still 16,000× cheaper than human
+   - Justified by capability gain
+
+4. ✅ **"Multi-LLM App is an edge case"**
+   - We agree it's not representative
+   - But it's our validation test case
+   - Learn by doing, iterate based on results
+
+### **What We're Asking You to Build:**
+
+**Phase 1 Deliverables (This Week):**
+1. Pre-decomposed spec recognition (prompt engineering)
+2. 20 WO limit increase (config change)
+3. Missing spec detection (prompt engineering)
+4. Contract generation service (new service, ~400 LOC)
+
+**Estimated Effort:** 14-19 hours (2 days)
+
+**Test Case:** Multi-LLM Discussion App technical specification
+
+**Success Criteria:** App spec decomposes into 11-15 executable work units with contracts
+
+---
+
+## Your Call to Action
+
+Please implement Phase 1 this week with these priorities:
+
+1. **Start with:** Pre-decomposed spec recognition (biggest impact)
+2. **Then:** Increase WO limit to 20 (enables Multi-LLM App)
+3. **Then:** Missing spec detection (quality gate)
+4. **Finally:** Contract generation service (integration enabler)
+
+**End of week goal:** Run Multi-LLM App spec through enhanced Architect successfully.
+
+We'll iterate based on what we learn. If 20 WOs isn't enough, we'll implement hierarchical in Phase 4. If contracts aren't sufficient, we'll enhance them. But let's start with the quick wins and test on real projects.
+
+**Are you ready to proceed with Phase 1 implementation?**

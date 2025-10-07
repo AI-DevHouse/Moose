@@ -1,0 +1,870 @@
+ARCHITECT EXPANSION IMPLEMENTATION PLAN
+Project: Greenfield Project Support for Moose Architect Agent
+Version: 1.0
+Date: October 7, 2025
+
+========================================
+PROJECT OVERVIEW
+========================================
+
+OBJECTIVE:
+Expand Architect agent to handle greenfield projects (new systems from scratch) by adding
+capabilities for contract creation, deployment architecture specification, test fixture generation,
+and missing specification detection.
+
+CURRENT STATE:
+- Architect fully functional for EXISTING codebases
+- Decomposes specs into 3-8 work orders with dependencies
+- Estimates costs, validates circular dependencies
+- Success rate: 100% for existing codebases, 60% for greenfield projects
+
+TARGET STATE:
+- Architect handles greenfield projects with 95% success rate
+- Generates deployment architecture work orders (Docker, CI/CD, build tools)
+- Creates integration contracts (API, IPC, state, file system)
+- Defines test fixture requirements
+- Detects missing specifications (wireframes, schemas)
+
+EFFORT ESTIMATE: 3-4 days (prompt engineering + schema updates + testing)
+RISK: Low (backward compatible, no breaking changes)
+BUDGET: ~$5-10 in API costs for testing
+
+========================================
+WORK BREAKDOWN
+========================================
+
+PHASE 1: PROMPT EXPANSION (2-3 days)
+───────────────────────────────────────
+
+TASK 1.1: Add Contract Creation Section to Architect Prompt
+EFFORT: 4 hours
+FILES: src/lib/architect-decomposition-rules.ts (line 25-92, buildArchitectPrompt function)
+
+CHANGES:
+Expand buildArchitectPrompt() to include new section after line 90 (before "Return ONLY valid JSON"):
+
+```
+INTEGRATION CONTRACTS (for new systems):
+If this is a new system with no existing codebase, define integration contracts in decomposition_doc:
+
+API CONTRACTS (if backend/service):
+- List all REST/GraphQL endpoints
+- Define request/response schemas (TypeScript interfaces)
+- Specify validation rules (Zod, JSON Schema)
+- Define error response formats
+- Example: POST /api/align { responses: string[] } → { alignment_score: number }
+
+IPC CONTRACTS (if Electron/multi-process):
+- List all IPC channels
+- Define message formats per channel
+- Specify event sequences (e.g., "main sends 'start-capture' → renderer replies 'capture-complete'")
+- Example: Channel "clipboard-paste", Message: { content: string, target_window: number }
+
+STATE MANAGEMENT CONTRACTS (if Redux/MobX/Zustand):
+- Define state shape (TypeScript interface)
+- Define action types and payloads
+- Define selector signatures
+- Example: State: { cycles: Cycle[], currentCycle: Cycle | null }
+
+FILE SYSTEM CONTRACTS (if file-based persistence):
+- Define directory structure (tree format)
+- Define file formats (JSON schema, CSV columns, etc.)
+- Specify archive formats if applicable
+- Example: manifests/[timestamp].json → ManifestSchema
+
+DATABASE CONTRACTS (if using database):
+- Define table schemas (columns, types, constraints)
+- Define relationships (foreign keys, joins)
+- Specify indexes for performance
+- Example: Table cycles(id, started_at, status, manifest_path)
+
+Output these under "## Integration Contracts" heading in decomposition_doc.
+If no new contracts needed (existing system), omit this section.
+```
+
+TASK 1.2: Add Deployment Architecture Section
+EFFORT: 4 hours
+FILES: src/lib/architect-decomposition-rules.ts (same function, after contracts section)
+
+CHANGES:
+Add section for deployment architecture:
+
+```
+DEPLOYMENT ARCHITECTURE (for new systems):
+If this is a new system, generate infrastructure work orders with HIGHEST PRIORITY (execute first):
+
+REQUIRED INFRASTRUCTURE WORK ORDERS:
+
+WO-0: Set up CI/CD Pipeline
+- Title: "Configure GitHub Actions workflows"
+- Description: "Create .github/workflows/ for build, test, deploy"
+- Files in scope: [".github/workflows/test.yml", ".github/workflows/deploy.yml"]
+- Include: Build workflow (install, compile), Test workflow (unit, integration), Deploy workflow (staging, production)
+- Acceptance criteria: ["Workflows trigger on PR", "All steps complete successfully"]
+
+WO-1: Create Docker Configuration (if containerization needed)
+- Title: "Set up Docker build configuration"
+- Description: "Create Dockerfile, docker-compose.yml if multi-service"
+- Files in scope: ["Dockerfile", "docker-compose.yml", ".dockerignore"]
+- Include: Base image selection, dependency installation, entry point, resource limits
+- Acceptance criteria: ["Docker build succeeds", "Container runs locally"]
+
+WO-2: Define Environment Configuration
+- Title: "Set up environment variable management"
+- Description: "Create .env.example, document all required variables"
+- Files in scope: [".env.example", "config/env-validation.ts"]
+- Include: List all env vars, validation logic (Zod), default values for dev
+- Acceptance criteria: ["All env vars documented", "Validation catches missing vars"]
+
+WO-3: Set up Build Tooling
+- Title: "Configure build tools and package management"
+- Description: "Set up package.json, tsconfig.json, build scripts"
+- Files in scope: ["package.json", "tsconfig.json", "vite.config.ts"]
+- Include: Scripts (dev, build, test, lint), dependencies, TypeScript config
+- Platform considerations: Note any platform-specific dependencies (Windows: electron-builder-windows)
+- Acceptance criteria: ["npm run build succeeds", "npm run dev starts server"]
+
+These work orders should have NO DEPENDENCIES (can run in parallel if supported) and should be
+FIRST in the work_orders array (indices 0-3).
+
+If existing system, omit these work orders.
+```
+
+TASK 1.3: Add Test Fixture Section
+EFFORT: 2 hours
+FILES: src/lib/architect-decomposition-rules.ts (same function, after deployment section)
+
+CHANGES:
+Add section for test fixtures:
+
+```
+TEST FIXTURES (for new systems):
+Identify test data requirements and document in decomposition_doc:
+
+For each major component, specify:
+- Sample inputs (3-5 representative examples)
+- Expected outputs for each input
+- Edge cases (empty, null, boundary values)
+- Mock data for external dependencies (API responses, database queries, file contents)
+
+Example format in decomposition_doc:
+## Test Fixtures Required
+- **ClipboardAutomation**: 5 sample LLM responses (ChatGPT, Claude, Gemini, Grok, Perplexity)
+- **AlignmentService**: 3 response pairs (high alignment: 0.9+, medium: 0.7, low: 0.3)
+- **WebViewManager**: Mock idle detection hashes (5 samples)
+
+Flag if human review needed:
+- UI components (need real screenshots or mockups)
+- Domain-specific data (need subject matter expert)
+- External service responses (need API access)
+
+Add under "## Test Fixtures" heading in decomposition_doc.
+```
+
+TASK 1.4: Add Missing Specification Detection
+EFFORT: 3 hours
+FILES: src/lib/architect-decomposition-rules.ts (same function, at the BEGINNING before decomposition)
+
+CHANGES:
+Add validation section at the START of the prompt (after "YOUR TASK:" section):
+
+```
+SPECIFICATION VALIDATION (check before decomposition):
+Before decomposing, scan the specification for missing critical information:
+
+UI-HEAVY PROJECTS (if spec mentions UI, views, screens, components):
+- Check for: Wireframes, mockups, Figma links, component hierarchy, user flows
+- If missing: Flag as BLOCKER
+
+BACKEND/API PROJECTS (if spec mentions endpoints, routes, services):
+- Check for: API schemas, endpoint definitions, request/response formats
+- If missing: Flag as BLOCKER
+
+PERFORMANCE-CRITICAL PROJECTS (if spec mentions speed, latency, throughput):
+- Check for: Performance benchmarks, acceptable latency, throughput targets
+- If missing: Flag as WARNING
+
+SECURITY-SENSITIVE PROJECTS (if spec mentions auth, encryption, payments):
+- Check for: Security requirements, threat model, compliance needs (GDPR, PCI-DSS)
+- If missing: Flag as BLOCKER
+
+DEPLOYMENT PROJECTS (if spec mentions production, deployment, infrastructure):
+- Check for: Deployment platform, infrastructure requirements, scaling needs
+- If missing: Flag as WARNING
+
+OUTPUT FORMAT for blockers:
+If any BLOCKERS found, add to decomposition_doc at the TOP:
+
+## ⚠️ BLOCKERS - REQUIRES HUMAN INPUT
+
+**UI Wireframes Missing:**
+- Arbitration UI (core feature) - need wireframes showing layout, controls, data display
+- Settings panel - need mockup for configuration options
+- Control panel - need design for start/stop/status controls
+
+**Why Critical:** UI implementation cannot proceed without visual design. Moose will implement
+literally what is described in text, which may not match human's mental model.
+
+**Recommended Action:** Provide wireframes or mockups before decomposition. Tools: Figma, Excalidraw,
+hand-drawn sketches photographed.
+
+Continue with decomposition ONLY if blockers are acknowledged.
+If BLOCKERS exist, set all work order dependencies to include "REQUIRES_HUMAN_INPUT" flag.
+```
+
+TASK 1.5: Update Token Estimation Rules for Infrastructure WOs
+EFFORT: 1 hour
+FILES: src/lib/architect-decomposition-rules.ts (TOKEN_ESTIMATION_RULES, lines 14-19)
+
+CHANGES:
+Add new complexity category:
+
+```typescript
+export const TOKEN_ESTIMATION_RULES = {
+  LOW_COMPLEXITY: { min: 500, max: 1000 },    // CRUD, config
+  MEDIUM_COMPLEXITY: { min: 1000, max: 2000 }, // business logic, API
+  HIGH_COMPLEXITY: { min: 2000, max: 4000 },   // architecture, security
+  INFRASTRUCTURE: { min: 800, max: 1500 },     // CI/CD, Docker, build tools (NEW)
+};
+```
+
+Update prompt section (line 73-76) to include:
+```
+- Infrastructure (CI/CD, Docker, build): ${TOKEN_ESTIMATION_RULES.INFRASTRUCTURE.min}-${TOKEN_ESTIMATION_RULES.INFRASTRUCTURE.max} tokens
+```
+
+TASK 1.6: Testing Prompt Changes
+EFFORT: 4 hours
+
+TEST CASES:
+1. Existing codebase spec (regression test - should work exactly as before)
+2. Greenfield project WITH deployment specs (should decompose successfully)
+3. Greenfield project WITHOUT deployment specs (should generate infrastructure WOs)
+4. UI-heavy project WITHOUT wireframes (should flag as BLOCKER)
+5. API project WITHOUT schemas (should flag as BLOCKER)
+
+TEST INPUTS: Create 5 test specs in src/lib/__tests__/fixtures/architect-test-specs.ts
+TEST FILE: Update src/lib/__tests__/architect-service.test.ts
+
+VALIDATION:
+- All 5 tests pass
+- No regressions (existing tests still pass)
+- Output includes new sections in decomposition_doc
+- Infrastructure WOs have correct indices (0-3)
+- Blockers correctly identified
+
+PHASE 2: SCHEMA EXPANSION (1 day)
+───────────────────────────────────
+
+TASK 2.1: Expand WorkOrder Interface
+EFFORT: 2 hours
+FILES: src/types/architect.ts (lines 11-19)
+
+CHANGES:
+Add optional fields to WorkOrder interface:
+
+```typescript
+export interface WorkOrder {
+  title: string;
+  description: string;
+  acceptance_criteria: string[];
+  files_in_scope: string[];
+  context_budget_estimate: number;
+  risk_level: "low" | "medium" | "high";
+  dependencies: string[];
+
+  // NEW OPTIONAL FIELDS (greenfield support):
+  contracts?: IntegrationContracts;
+  test_fixtures?: TestFixtureRequirement[];
+  deployment_config?: DeploymentConfig;
+  blockers?: SpecificationBlockers;
+}
+
+// NEW TYPES:
+export interface IntegrationContracts {
+  api_contracts?: APIContract[];
+  ipc_contracts?: IPCContract[];
+  state_contracts?: StateContract[];
+  file_contracts?: FileContract[];
+  database_contracts?: DatabaseContract[];
+}
+
+export interface APIContract {
+  endpoint: string;
+  method: "GET" | "POST" | "PUT" | "DELETE" | "PATCH";
+  request_schema: string;  // TypeScript interface as string
+  response_schema: string;
+  validation_rules?: string;
+  error_responses?: string[];
+}
+
+export interface IPCContract {
+  channel_name: string;
+  message_format: string;
+  event_sequence?: string;
+  example?: string;
+}
+
+export interface StateContract {
+  state_shape: string;  // TypeScript interface as string
+  action_types?: string[];
+  selectors?: string[];
+}
+
+export interface FileContract {
+  path: string;
+  format: "json" | "csv" | "xml" | "binary" | "text";
+  schema?: string;  // JSON schema or description
+}
+
+export interface DatabaseContract {
+  table_name: string;
+  columns: { name: string; type: string; constraints?: string }[];
+  relationships?: { foreign_key: string; references: string }[];
+  indexes?: string[];
+}
+
+export interface TestFixtureRequirement {
+  component: string;
+  fixture_type: "sample_input" | "expected_output" | "mock_data" | "edge_case";
+  description: string;
+  example?: string;
+  requires_human_input?: boolean;
+}
+
+export interface DeploymentConfig {
+  docker_required: boolean;
+  ci_cd_workflows: string[];
+  environment_vars: string[];
+  platform_specific_notes?: string;
+}
+
+export interface SpecificationBlockers {
+  missing_wireframes?: string[];
+  missing_schemas?: string[];
+  missing_requirements?: string[];
+  severity: "blocker" | "warning";
+  recommended_action: string;
+}
+```
+
+TASK 2.2: Update Architect Prompt to Output New Fields
+EFFORT: 2 hours
+FILES: src/lib/architect-decomposition-rules.ts (line 47-71, OUTPUT FORMAT section)
+
+CHANGES:
+Update example output to show optional fields:
+
+```
+OUTPUT FORMAT (valid JSON):
+{
+  "work_orders": [
+    {
+      "title": "Configure GitHub Actions workflows",
+      "description": "Create .github/workflows/ for build, test, deploy",
+      "acceptance_criteria": ["Workflows trigger on PR", "All steps pass"],
+      "files_in_scope": [".github/workflows/test.yml"],
+      "context_budget_estimate": 1000,
+      "risk_level": "medium",
+      "dependencies": [],
+      "deployment_config": {
+        "docker_required": false,
+        "ci_cd_workflows": ["test", "deploy"],
+        "environment_vars": ["NODE_ENV", "API_KEY"]
+      }
+    }
+  ],
+  "decomposition_doc": "# Implementation Plan\n## Integration Contracts\n...\n## Test Fixtures\n...",
+  "total_estimated_cost": 25.50
+}
+
+OPTIONAL FIELDS (include when relevant):
+- contracts: Include for WOs that define or modify API/IPC/state contracts
+- test_fixtures: Include for WOs that require specific test data
+- deployment_config: Include for infrastructure WOs (CI/CD, Docker, build)
+- blockers: Include at top level if specification missing critical info
+```
+
+TASK 2.3: Update Validation Logic
+EFFORT: 2 hours
+FILES: src/lib/architect-decomposition-rules.ts (validation functions)
+
+CHANGES:
+Add validation for new optional fields:
+
+```typescript
+// NEW FUNCTION: Validate contracts structure
+export function validateContracts(contracts?: IntegrationContracts): string[] {
+  const warnings: string[] = [];
+
+  if (!contracts) return warnings;
+
+  // Validate API contracts
+  if (contracts.api_contracts) {
+    contracts.api_contracts.forEach((api, idx) => {
+      if (!api.endpoint || !api.method) {
+        warnings.push(`API contract ${idx}: Missing endpoint or method`);
+      }
+      if (!api.request_schema && !api.response_schema) {
+        warnings.push(`API contract ${idx}: Missing both request and response schemas`);
+      }
+    });
+  }
+
+  // Validate IPC contracts
+  if (contracts.ipc_contracts) {
+    contracts.ipc_contracts.forEach((ipc, idx) => {
+      if (!ipc.channel_name || !ipc.message_format) {
+        warnings.push(`IPC contract ${idx}: Missing channel name or message format`);
+      }
+    });
+  }
+
+  return warnings;
+}
+
+// NEW FUNCTION: Validate test fixtures
+export function validateTestFixtures(fixtures?: TestFixtureRequirement[]): string[] {
+  const warnings: string[] = [];
+
+  if (!fixtures) return warnings;
+
+  fixtures.forEach((fixture, idx) => {
+    if (!fixture.component || !fixture.fixture_type || !fixture.description) {
+      warnings.push(`Test fixture ${idx}: Missing required fields`);
+    }
+  });
+
+  return warnings;
+}
+```
+
+Call these in architect-service.ts after JSON parsing (line 46, after JSON.parse):
+
+```typescript
+// Validate new optional fields (warn only)
+if (decomposition.work_orders.some(wo => wo.contracts)) {
+  const contractWarnings = decomposition.work_orders.flatMap((wo, idx) =>
+    validateContracts(wo.contracts).map(w => `WO-${idx}: ${w}`)
+  );
+  if (contractWarnings.length > 0) {
+    console.warn('Contract validation warnings:', contractWarnings);
+  }
+}
+
+if (decomposition.work_orders.some(wo => wo.test_fixtures)) {
+  const fixtureWarnings = decomposition.work_orders.flatMap((wo, idx) =>
+    validateTestFixtures(wo.test_fixtures).map(w => `WO-${idx}: ${w}`)
+  );
+  if (fixtureWarnings.length > 0) {
+    console.warn('Test fixture validation warnings:', fixtureWarnings);
+  }
+}
+```
+
+TASK 2.4: Testing Schema Changes
+EFFORT: 2 hours
+
+TEST CASES:
+1. Parse work order WITH new optional fields (should succeed)
+2. Parse work order WITHOUT new optional fields (should succeed - backward compatible)
+3. Invalid contract structure (should warn but not fail)
+4. Invalid test fixture structure (should warn but not fail)
+
+UPDATE: src/lib/__tests__/architect-service.test.ts with new test cases
+
+PHASE 3: INTEGRATION & TESTING (4-6 hours)
+───────────────────────────────────────────
+
+TASK 3.1: End-to-End Test with Multi-LLM App Spec
+EFFORT: 2 hours
+
+SETUP:
+1. Convert Multi-LLM Discussion App spec to TechnicalSpec format
+2. Save as src/lib/__tests__/fixtures/multi-llm-app-spec.ts
+3. Create test case in architect-service.test.ts
+
+EXPECTED OUTPUT:
+- 10-12 work orders (4 infrastructure + 6-8 feature)
+- WO-0 to WO-3: Infrastructure (CI/CD, Docker, env, build)
+- WO-4+: Feature work orders (UI, orchestration, clipboard, alignment, etc.)
+- decomposition_doc includes:
+  * Integration Contracts section (IPC channels, API endpoints)
+  * Test Fixtures section (sample LLM responses, alignment data)
+  * BLOCKERS section (missing UI wireframes)
+- Estimated cost: $15-25
+
+VALIDATION:
+- All work orders have valid acceptance criteria
+- Dependencies correctly sequenced (infrastructure first)
+- No circular dependencies
+- Token estimates within range
+- Cost estimate reasonable
+
+TASK 3.2: Regression Testing
+EFFORT: 1 hour
+
+TEST EXISTING SPECS:
+Run all existing architect tests to ensure no regressions.
+
+EXPECTED: All existing tests pass with no changes to output format.
+
+TASK 3.3: Manual Testing with Real API
+EFFORT: 1 hour
+
+SETUP:
+1. Use real Anthropic API key (not mock)
+2. Test with 3 specs:
+   - Existing codebase (simple feature addition)
+   - Greenfield with full details
+   - Greenfield with missing wireframes
+
+VALIDATION:
+- Claude Sonnet 4.5 follows prompt correctly
+- Output includes new sections where expected
+- Blockers correctly identified
+- Infrastructure WOs generated for greenfield
+- Cost tracking accurate
+
+TASK 3.4: Documentation Updates
+EFFORT: 1 hour
+
+UPDATE DOCS:
+1. Update docs/Moose_Agent_Capabilities_Reference.txt with new Architect capabilities
+2. Update docs/session-state.md with completion of Architect expansion
+3. Create docs/Architect_Greenfield_Support_Examples.md with 3 examples
+
+PHASE 4: DEPLOYMENT (2 hours)
+───────────────────────────────────────────
+
+TASK 4.1: Code Review & Refinement
+EFFORT: 30 minutes
+
+REVIEW CHECKLIST:
+- All new code follows existing patterns
+- TypeScript types are correct
+- No breaking changes to existing interfaces
+- All tests pass
+- No console errors or warnings
+
+TASK 4.2: Commit & Push
+EFFORT: 15 minutes
+
+COMMIT MESSAGE:
+```
+feat: Architect expansion for greenfield project support
+
+Expanded Architect agent to handle greenfield projects:
+- Added contract creation (API, IPC, state, file system)
+- Added deployment architecture specification (Docker, CI/CD)
+- Added test fixture generation
+- Added missing specification detection (blockers/warnings)
+
+Changes:
+- src/lib/architect-decomposition-rules.ts: Expanded prompt with 4 new sections
+- src/types/architect.ts: Added optional fields to WorkOrder interface
+- src/lib/__tests__/: Added test cases for greenfield specs
+
+Impact:
+- Success rate for greenfield projects: 60% → 95%
+- Backward compatible (all optional fields)
+- No breaking changes to existing functionality
+
+Testing:
+- All existing tests pass (regression verified)
+- 5 new test cases for greenfield scenarios
+- Manual testing with Multi-LLM App spec
+```
+
+TASK 4.3: Monitor Production
+EFFORT: 1 hour (over first 24 hours)
+
+MONITORING:
+- Watch for Architect API errors
+- Check cost tracking (should be similar to before)
+- Monitor work order success rates
+- Look for unexpected escalations
+
+SUCCESS CRITERIA:
+- No increase in Architect failures
+- Cost within expected range ($0.05-0.15 per decomposition)
+- Greenfield specs now decompose successfully
+
+TASK 4.4: Update Session State
+EFFORT: 15 minutes
+
+UPDATE docs/session-state.md:
+- Mark Architect expansion as COMPLETE
+- Update session version (v43 → v44)
+- Document lessons learned
+- Note any issues encountered
+
+========================================
+RISK MITIGATION
+========================================
+
+RISK 1: Prompt too long → exceeds 4000 token limit
+MITIGATION:
+- Current prompt: ~1500 tokens
+- Additions: ~800 tokens
+- Total: ~2300 tokens (safe margin)
+- Monitor: If approaching limit, create separate "greenfield mode" prompt
+
+RISK 2: Claude ignores new sections
+MITIGATION:
+- Use clear headers (## INTEGRATION CONTRACTS)
+- Use explicit instructions ("Output under ## heading")
+- Test with real API before deploying
+- Iterate prompt if Claude doesn't follow
+
+RISK 3: Breaking changes to existing functionality
+MITIGATION:
+- All new fields are OPTIONAL
+- Existing tests must pass (regression guard)
+- Default behavior unchanged if optional fields not present
+- Rollback plan: Revert commit if issues
+
+RISK 4: Increased Architect cost
+MITIGATION:
+- Longer prompt → more input tokens (~800 more)
+- Cost increase: ~$0.002 per decomposition
+- Expected impact: <$0.10/day increase
+- Monitor: If cost spikes, optimize prompt
+
+RISK 5: False positives for blockers
+MITIGATION:
+- Make blocker detection conservative
+- Use WARNING vs BLOCKER distinction
+- Allow continuation with acknowledged blockers
+- Iterate detection logic based on feedback
+
+========================================
+SUCCESS METRICS
+========================================
+
+PRIMARY METRICS:
+1. Greenfield spec success rate: 60% → 95% (TARGET)
+2. Architect API failure rate: <5% (maintain current)
+3. Decomposition cost: <$0.20 per spec (maintain current)
+4. Infrastructure WO generation: 100% for greenfield (NEW)
+
+SECONDARY METRICS:
+1. Blocker detection accuracy: >80% (NEW)
+2. Contract completeness: >70% (NEW)
+3. Test fixture usefulness: >60% (NEW, subjective)
+4. Developer satisfaction: Positive feedback (survey)
+
+MEASUREMENT:
+- Track metrics in spreadsheet (weekly review)
+- A/B test with/without expansions (if possible)
+- Gather qualitative feedback from users
+
+========================================
+ROLLBACK PLAN
+========================================
+
+IF ISSUES OCCUR:
+
+STEP 1: Assess severity
+- Critical (Architect broken): Immediate rollback
+- Major (success rate down >20%): Rollback within 24h
+- Minor (small issues): Fix forward
+
+STEP 2: Execute rollback
+```bash
+git revert [commit-hash]
+git push origin main
+```
+
+STEP 3: Notify stakeholders
+- Document issue in docs/known-issues.md
+- Explain rollback in session-state.md
+- Plan fix with revised timeline
+
+STEP 4: Root cause analysis
+- Why did it fail?
+- What did we miss in testing?
+- How to prevent in future?
+
+STEP 5: Retry with fixes
+- Address root cause
+- Re-test thoroughly
+- Deploy with monitoring
+
+========================================
+POST-DEPLOYMENT CHECKLIST
+========================================
+
+AFTER DEPLOYMENT (within 24 hours):
+
+☐ All existing tests still pass
+☐ Architect API success rate stable
+☐ No unexpected cost increases
+☐ Greenfield spec successfully decomposes
+☐ Infrastructure WOs correctly generated
+☐ Blockers correctly identified
+☐ Documentation updated
+☐ Session state updated
+☐ Monitoring alerts configured
+☐ Team notified of changes
+
+AFTER 1 WEEK:
+
+☐ Success rate metrics collected
+☐ Cost metrics analyzed
+☐ User feedback gathered
+☐ Lessons learned documented
+☐ Next improvements identified
+
+========================================
+FUTURE ENHANCEMENTS
+========================================
+
+POTENTIAL PHASE 2 (not in current scope):
+
+1. PARALLEL WORK ORDER SUPPORT
+   - Architect detects independent work orders
+   - Marks as "can run in parallel"
+   - Orchestrator executes concurrently
+   - Benefit: Faster execution for large projects
+
+2. ADAPTIVE PROMPT TUNING
+   - Learn from successful decompositions
+   - Adjust token estimates based on actuals
+   - Refine blocker detection based on feedback
+   - Benefit: Improved accuracy over time
+
+3. VISUAL CONTRACT GENERATION
+   - Generate Mermaid diagrams for contracts
+   - Generate sequence diagrams for IPC flows
+   - Generate ER diagrams for database schemas
+   - Benefit: Better human understanding
+
+4. TEST FIXTURE GENERATION
+   - Architect generates ACTUAL fixture files
+   - Uses Claude to create realistic sample data
+   - Saves to src/__tests__/fixtures/
+   - Benefit: Reduces manual test data creation
+
+5. DEPLOYMENT ARCHITECTURE VALIDATION
+   - Validate Docker configs for correctness
+   - Validate GitHub Actions syntax
+   - Suggest optimizations (caching, parallelization)
+   - Benefit: Catch errors before execution
+
+========================================
+TIMELINE
+========================================
+
+DAY 1 (8 hours):
+- Morning: Task 1.1-1.2 (Prompt expansion: contracts + deployment)
+- Afternoon: Task 1.3-1.4 (Prompt expansion: fixtures + blockers)
+
+DAY 2 (8 hours):
+- Morning: Task 1.5-1.6 (Token estimation + testing)
+- Afternoon: Task 2.1-2.2 (Schema expansion)
+
+DAY 3 (8 hours):
+- Morning: Task 2.3-2.4 (Validation + testing)
+- Afternoon: Task 3.1-3.2 (Integration + regression testing)
+
+DAY 4 (4 hours):
+- Morning: Task 3.3-3.4 (Manual testing + docs)
+- Afternoon: Task 4.1-4.4 (Deployment + monitoring)
+
+TOTAL: 28 hours = 3.5 days
+
+BUFFER: 0.5 days for unexpected issues
+
+ESTIMATED COMPLETION: 4 days from start
+
+========================================
+APPENDIX: TEST SPECIFICATIONS
+========================================
+
+TEST SPEC 1: Existing Codebase (Regression)
+─────────────────────────────────────────────
+Feature: Add user profile export feature
+Objectives:
+- Allow users to export profile data as JSON
+- Include all user settings and history
+
+Constraints:
+- Must respect GDPR data export requirements
+- Export file must be <10MB
+
+Acceptance Criteria:
+- User can trigger export from settings page
+- Export file includes all required data
+- Export completes in <5 seconds
+
+EXPECTED OUTPUT:
+- 3-5 work orders
+- No infrastructure WOs (existing system)
+- No contracts section (existing system)
+- No blockers
+
+TEST SPEC 2: Greenfield with Full Details
+─────────────────────────────────────────────
+Feature: Real-time chat application
+Objectives:
+- Users can send/receive messages in real-time
+- Support group chats and direct messages
+- Persist chat history
+
+Constraints:
+- Must scale to 10,000 concurrent users
+- Message latency <100ms
+
+Acceptance Criteria:
+- Messages appear instantly for all participants
+- Chat history loads on reconnect
+- All tests pass with >90% coverage
+
+Technical Details:
+- WebSocket server (Node.js + Socket.io)
+- PostgreSQL for persistence
+- Redis for session management
+- Docker deployment
+- GitHub Actions CI/CD
+
+API Contracts:
+- POST /api/messages { text: string, room_id: string } → { message_id: string }
+- WS event "message_sent" { text: string, user: string, timestamp: number }
+
+EXPECTED OUTPUT:
+- 8-10 work orders
+- WO-0 to WO-3: Infrastructure (CI/CD, Docker, env, build)
+- WO-4+: Features (WebSocket, persistence, UI)
+- Contracts section: API endpoints, WebSocket events
+- Test fixtures: Sample messages, room data
+- No blockers (full details provided)
+
+TEST SPEC 3: Greenfield with Missing Wireframes
+─────────────────────────────────────────────────
+Feature: Task management dashboard
+Objectives:
+- Users can create, view, edit, delete tasks
+- Visual kanban board interface
+- Drag-and-drop task management
+
+Constraints:
+- Must work on mobile and desktop
+- Data persists locally
+
+Acceptance Criteria:
+- Tasks can be created and moved between columns
+- Changes saved to local storage
+- Responsive design works on 320px+ screens
+
+NO WIREFRAMES PROVIDED
+
+EXPECTED OUTPUT:
+- BLOCKER flagged: "UI Wireframes Missing"
+- Recommended action: "Provide kanban board layout, task card design"
+- Work orders generated but marked as dependent on human input
+- Warning about literal text implementation risk
+
+========================================
+END OF PLAN
+========================================

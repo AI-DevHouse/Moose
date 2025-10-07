@@ -1,0 +1,1063 @@
+# Wireframe Generation Service - API-Only Implementation
+
+---
+
+## 📋 **Phase 0: Wireframe Generation Service (API-Only)**
+
+### **Duration:** 1 day (8 hours)
+### **Cost:** ~$2-5 in API testing costs
+
+---
+
+## 🏗️ **Architecture Overview**
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│                    Moose Architect                            │
+│                                                               │
+│  1. Decomposes spec into features                            │
+│  2. Detects UI features                                       │
+│  3. Calls WireframeGenerationService ──────────┐            │
+│                                                 │            │
+└─────────────────────────────────────────────────┼────────────┘
+                                                  │
+                                                  ↓
+┌──────────────────────────────────────────────────────────────┐
+│              WireframeGenerationService                       │
+│                                                               │
+│  1. Builds detailed prompt from requirements                  │
+│  2. Calls Claude API (Anthropic)                             │
+│  3. Extracts React component code                            │
+│  4. Parses component structure                               │
+│  5. Saves to docs/wireframes/                                │
+│  6. Returns wireframe metadata                               │
+│                                                               │
+└──────────────────────────────────────────────────────────────┘
+                                                  │
+                                                  ↓
+┌──────────────────────────────────────────────────────────────┐
+│                   File System                                 │
+│                                                               │
+│  docs/wireframes/                                            │
+│  ├── ArbitrationView.tsx                                     │
+│  ├── ControlPanel.tsx                                        │
+│  ├── SettingsDialog.tsx                                      │
+│  └── wireframe-manifest.json                                 │
+│                                                               │
+└──────────────────────────────────────────────────────────────┘
+                                                  │
+                                                  ↓
+┌──────────────────────────────────────────────────────────────┐
+│                  Proposer Agents                              │
+│                                                               │
+│  Reads wireframe code as reference when implementing UI      │
+│                                                               │
+└──────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 📁 **File Structure**
+
+```
+src/
+├── services/
+│   └── WireframeGenerationService.ts          # NEW - Main service
+├── types/
+│   └── wireframe.ts                           # NEW - Type definitions
+├── lib/
+│   └── architect-decomposition-rules.ts       # MODIFIED - Add UI detection
+└── __tests__/
+    └── services/
+        └── wireframe-generation.test.ts       # NEW - Tests
+
+docs/
+└── wireframes/                                # NEW - Generated wireframes
+    ├── ArbitrationView.tsx
+    ├── ControlPanel.tsx
+    ├── SettingsDialog.tsx
+    └── wireframe-manifest.json
+```
+
+---
+
+## 🔧 **Implementation Details**
+
+### **Task 0.1: Create Type Definitions** (1 hour)
+
+**File:** `src/types/wireframe.ts`
+
+```typescript
+// src/types/wireframe.ts
+
+export interface UIRequirements {
+  description: string;                // What the component does
+  layout: string;                     // How elements are arranged
+  components: string[];               // Child components/elements needed
+  data_elements: string[];            // What data is displayed
+  interactions: string[];             // User interactions supported
+  constraints?: string[];             // Technical/design constraints
+  style_guidelines?: string;          // Design system, theme, etc.
+}
+
+export interface WireframeRequest {
+  component_name: string;             // "ArbitrationView"
+  feature_id: string;                 // "feat-011"
+  requirements: UIRequirements;
+  context?: string;                   // Additional context from spec
+  reference_components?: string[];    // Similar components to reference
+}
+
+export interface ComponentNode {
+  name: string;                       // Component name
+  type: 'component' | 'element';      // React component or HTML element
+  props?: string[];                   // Props used
+  children?: ComponentNode[];         // Nested components
+}
+
+export interface WireframeResult {
+  component_name: string;
+  file_path: string;                  // Path to generated .tsx file
+  code: string;                       // Full React component code
+  component_tree: ComponentNode;      // Parsed structure
+  tokens_used: number;
+  cost: number;
+  generated_at: string;               // ISO timestamp
+}
+
+export interface WireframeManifest {
+  generated_at: string;
+  total_wireframes: number;
+  total_cost: number;
+  wireframes: WireframeResult[];
+}
+```
+
+---
+
+### **Task 0.2: Implement WireframeGenerationService** (4 hours)
+
+**File:** `src/services/WireframeGenerationService.ts`
+
+```typescript
+// src/services/WireframeGenerationService.ts
+
+import Anthropic from '@anthropic-ai/sdk';
+import * as fs from 'fs/promises';
+import * as path from 'path';
+import {
+  WireframeRequest,
+  WireframeResult,
+  UIRequirements,
+  ComponentNode,
+  WireframeManifest
+} from '../types/wireframe';
+
+export class WireframeGenerationService {
+  private anthropic: Anthropic;
+  private wireframesDir: string;
+  private manifestPath: string;
+
+  constructor(apiKey: string, outputDir: string = 'docs/wireframes') {
+    this.anthropic = new Anthropic({ apiKey });
+    this.wireframesDir = outputDir;
+    this.manifestPath = path.join(outputDir, 'wireframe-manifest.json');
+  }
+
+  /**
+   * Initialize wireframes directory
+   */
+  async initialize(): Promise<void> {
+    await fs.mkdir(this.wireframesDir, { recursive: true });
+    
+    // Initialize manifest if doesn't exist
+    try {
+      await fs.access(this.manifestPath);
+    } catch {
+      const emptyManifest: WireframeManifest = {
+        generated_at: new Date().toISOString(),
+        total_wireframes: 0,
+        total_cost: 0,
+        wireframes: []
+      };
+      await this.saveManifest(emptyManifest);
+    }
+  }
+
+  /**
+   * Generate a single wireframe
+   */
+  async generateWireframe(request: WireframeRequest): Promise<WireframeResult> {
+    console.log(`🎨 Generating wireframe: ${request.component_name}...`);
+
+    // Build prompt
+    const prompt = this.buildPrompt(request);
+
+    // Call Claude API
+    const startTime = Date.now();
+    const response = await this.anthropic.messages.create({
+      model: 'claude-sonnet-4-5-20250929',
+      max_tokens: 8000,
+      messages: [{
+        role: 'user',
+        content: prompt
+      }]
+    });
+    const duration = Date.now() - startTime;
+
+    // Extract code from response
+    const code = this.extractCodeBlock(response.content[0].text);
+
+    // Parse component structure
+    const componentTree = this.parseComponentStructure(code);
+
+    // Save to file
+    const fileName = `${request.component_name}.tsx`;
+    const filePath = path.join(this.wireframesDir, fileName);
+    await fs.writeFile(filePath, code, 'utf-8');
+
+    // Calculate cost
+    const cost = this.calculateCost(
+      response.usage.input_tokens,
+      response.usage.output_tokens
+    );
+
+    const result: WireframeResult = {
+      component_name: request.component_name,
+      file_path: filePath,
+      code,
+      component_tree: componentTree,
+      tokens_used: response.usage.input_tokens + response.usage.output_tokens,
+      cost,
+      generated_at: new Date().toISOString()
+    };
+
+    // Update manifest
+    await this.updateManifest(result);
+
+    console.log(`   ✅ ${fileName} (${duration}ms, $${cost.toFixed(4)}, ${response.usage.output_tokens} tokens)`);
+
+    return result;
+  }
+
+  /**
+   * Generate multiple wireframes in batch
+   */
+  async generateBatch(requests: WireframeRequest[]): Promise<WireframeResult[]> {
+    console.log(`📐 Generating ${requests.length} wireframes...`);
+    
+    const results: WireframeResult[] = [];
+    
+    for (const request of requests) {
+      const result = await this.generateWireframe(request);
+      results.push(result);
+    }
+
+    const totalCost = results.reduce((sum, r) => sum + r.cost, 0);
+    console.log(`✅ Generated ${results.length} wireframes (total: $${totalCost.toFixed(2)})`);
+
+    return results;
+  }
+
+  /**
+   * Build detailed prompt for Claude
+   */
+  private buildPrompt(request: WireframeRequest): string {
+    const { component_name, requirements, context, reference_components } = request;
+
+    return `
+Create a React TypeScript component wireframe for: ${component_name}
+
+## Component Description
+${requirements.description}
+
+## Layout Structure
+${requirements.layout}
+
+## Required Components/Elements
+${requirements.components.map((c, i) => `${i + 1}. ${c}`).join('\n')}
+
+## Data Elements to Display
+${requirements.data_elements.map((d, i) => `${i + 1}. ${d}`).join('\n')}
+
+## User Interactions
+${requirements.interactions.map((int, i) => `${i + 1}. ${int}`).join('\n')}
+
+${requirements.constraints ? `
+## Constraints
+${requirements.constraints.map((c, i) => `${i + 1}. ${c}`).join('\n')}
+` : ''}
+
+${requirements.style_guidelines ? `
+## Style Guidelines
+${requirements.style_guidelines}
+` : ''}
+
+${context ? `
+## Additional Context
+${context}
+` : ''}
+
+${reference_components && reference_components.length > 0 ? `
+## Similar Components (for reference)
+${reference_components.join(', ')}
+` : ''}
+
+## Requirements
+1. Create as a React functional component using TypeScript
+2. Use Tailwind CSS for styling (utility classes only)
+3. Use shadcn/ui components where applicable (Button, Card, Dialog, etc.)
+4. Include mock/sample data so the wireframe is fully functional
+5. Make all interactive elements functional (buttons, inputs, tabs, etc.)
+6. Ensure responsive design (mobile-first, works on all screen sizes)
+7. Add clear comments explaining each major section
+8. Use modern React patterns (hooks, proper TypeScript types)
+9. Include proper accessibility attributes (aria-label, role, etc.)
+10. Export as default export
+
+## Output Format
+Return ONLY the complete component code in a single TypeScript code block.
+Do NOT include explanations, markdown headings, or additional text outside the code block.
+The code should be production-ready and self-contained.
+
+Example structure:
+\`\`\`typescript
+import React from 'react';
+// ... other imports
+
+interface ${component_name}Props {
+  // props
+}
+
+const ${component_name}: React.FC<${component_name}Props> = (props) => {
+  // component implementation
+};
+
+export default ${component_name};
+\`\`\`
+`;
+  }
+
+  /**
+   * Extract code block from Claude's response
+   */
+  private extractCodeBlock(text: string): string {
+    // Try to match code blocks with various language tags
+    const patterns = [
+      /```typescript\n([\s\S]+?)\n```/,
+      /```tsx\n([\s\S]+?)\n```/,
+      /```react\n([\s\S]+?)\n```/,
+      /```jsx\n([\s\S]+?)\n```/,
+      /```\n([\s\S]+?)\n```/
+    ];
+
+    for (const pattern of patterns) {
+      const match = text.match(pattern);
+      if (match) {
+        return match[1].trim();
+      }
+    }
+
+    // If no code block found, return entire text (fallback)
+    console.warn('⚠️  No code block found in response, using raw text');
+    return text.trim();
+  }
+
+  /**
+   * Parse component structure from code
+   * This is a simplified parser - extracts basic component hierarchy
+   */
+  private parseComponentStructure(code: string): ComponentNode {
+    // Extract component name from default export or function declaration
+    const componentNameMatch = code.match(
+      /(?:const|function)\s+(\w+):|export\s+default\s+(?:function\s+)?(\w+)/
+    );
+    const componentName = componentNameMatch?.[1] || componentNameMatch?.[2] || 'UnknownComponent';
+
+    // Extract child components/elements (simplified regex approach)
+    const jsxPattern = /<(\w+)[^>]*>/g;
+    const matches = [...code.matchAll(jsxPattern)];
+    const childNames = [...new Set(matches.map(m => m[1]))].filter(
+      name => name !== componentName && name !== 'React' && name !== 'Fragment'
+    );
+
+    const children: ComponentNode[] = childNames.map(name => ({
+      name,
+      type: name.charAt(0) === name.charAt(0).toUpperCase() ? 'component' : 'element',
+      children: []
+    }));
+
+    return {
+      name: componentName,
+      type: 'component',
+      children
+    };
+  }
+
+  /**
+   * Calculate cost based on Claude Sonnet 4.5 pricing
+   */
+  private calculateCost(inputTokens: number, outputTokens: number): number {
+    const INPUT_COST_PER_TOKEN = 0.000003;   // $3 per million tokens
+    const OUTPUT_COST_PER_TOKEN = 0.000015;  // $15 per million tokens
+
+    return (inputTokens * INPUT_COST_PER_TOKEN) + (outputTokens * OUTPUT_COST_PER_TOKEN);
+  }
+
+  /**
+   * Load manifest
+   */
+  private async loadManifest(): Promise<WireframeManifest> {
+    const content = await fs.readFile(this.manifestPath, 'utf-8');
+    return JSON.parse(content);
+  }
+
+  /**
+   * Save manifest
+   */
+  private async saveManifest(manifest: WireframeManifest): Promise<void> {
+    await fs.writeFile(
+      this.manifestPath,
+      JSON.stringify(manifest, null, 2),
+      'utf-8'
+    );
+  }
+
+  /**
+   * Update manifest with new wireframe
+   */
+  private async updateManifest(result: WireframeResult): Promise<void> {
+    const manifest = await this.loadManifest();
+
+    // Remove existing entry if updating
+    manifest.wireframes = manifest.wireframes.filter(
+      w => w.component_name !== result.component_name
+    );
+
+    // Add new entry
+    manifest.wireframes.push(result);
+    manifest.total_wireframes = manifest.wireframes.length;
+    manifest.total_cost = manifest.wireframes.reduce((sum, w) => sum + w.cost, 0);
+    manifest.generated_at = new Date().toISOString();
+
+    await this.saveManifest(manifest);
+  }
+
+  /**
+   * Get wireframe by component name
+   */
+  async getWireframe(componentName: string): Promise<WireframeResult | null> {
+    const manifest = await this.loadManifest();
+    return manifest.wireframes.find(w => w.component_name === componentName) || null;
+  }
+
+  /**
+   * List all wireframes
+   */
+  async listWireframes(): Promise<WireframeResult[]> {
+    const manifest = await this.loadManifest();
+    return manifest.wireframes;
+  }
+}
+```
+
+---
+
+### **Task 0.3: Integrate with Architect** (2 hours)
+
+**File:** `src/lib/architect-decomposition-rules.ts` (modifications)
+
+```typescript
+// src/lib/architect-decomposition-rules.ts
+
+import { WireframeGenerationService } from '../services/WireframeGenerationService';
+import { WireframeRequest, UIRequirements } from '../types/wireframe';
+
+// ... existing imports and code ...
+
+export class HierarchicalArchitect {
+  private wireframeService: WireframeGenerationService;
+
+  constructor(apiKey: string) {
+    this.wireframeService = new WireframeGenerationService(apiKey);
+  }
+
+  async decomposeIntoFeatures(spec: TechnicalSpec): Promise<FeatureDecomposition> {
+    
+    // ... existing decomposition logic ...
+    
+    // STEP: Detect UI features
+    const uiFeatures = features.filter(f => this.hasUIComponents(f));
+    
+    if (uiFeatures.length > 0) {
+      console.log(`\n🎨 Detected ${uiFeatures.length} UI features requiring wireframes`);
+      
+      // Initialize wireframe service
+      await this.wireframeService.initialize();
+      
+      // Generate wireframes for each UI feature
+      for (const feature of uiFeatures) {
+        await this.generateWireframesForFeature(feature, spec);
+      }
+    }
+    
+    return { features, ... };
+  }
+
+  /**
+   * Check if feature has UI components
+   */
+  private hasUIComponents(feature: Feature): boolean {
+    const uiKeywords = [
+      'ui', 'view', 'component', 'screen', 'page', 'dialog', 'modal',
+      'panel', 'form', 'button', 'interface', 'display', 'render'
+    ];
+
+    const text = `${feature.title} ${feature.description}`.toLowerCase();
+    return uiKeywords.some(keyword => text.includes(keyword));
+  }
+
+  /**
+   * Generate wireframes for a UI feature
+   */
+  private async generateWireframesForFeature(
+    feature: Feature,
+    spec: TechnicalSpec
+  ): Promise<void> {
+    
+    // Extract UI component names from feature
+    const uiComponents = this.extractUIComponentNames(feature);
+    
+    if (uiComponents.length === 0) {
+      console.log(`   ⏭️  ${feature.title}: No specific UI components identified`);
+      return;
+    }
+
+    console.log(`   📐 ${feature.title}: ${uiComponents.length} components`);
+
+    // Generate wireframe for each component
+    for (const componentName of uiComponents) {
+      
+      // Build requirements from spec and feature
+      const requirements = this.buildUIRequirements(componentName, feature, spec);
+      
+      const request: WireframeRequest = {
+        component_name: componentName,
+        feature_id: feature.feature_id,
+        requirements
+      };
+
+      try {
+        const wireframe = await this.wireframeService.generateWireframe(request);
+        
+        // Attach wireframe to feature
+        if (!feature.wireframes) {
+          feature.wireframes = [];
+        }
+        feature.wireframes.push(wireframe);
+
+        // Remove "missing wireframes" blocker if present
+        if (feature.blockers) {
+          feature.blockers = feature.blockers.filter(
+            b => !b.toLowerCase().includes('wireframe')
+          );
+        }
+
+      } catch (error) {
+        console.error(`   ❌ Failed to generate ${componentName}:`, error.message);
+        // Continue with other components
+      }
+    }
+  }
+
+  /**
+   * Extract UI component names from feature description
+   */
+  private extractUIComponentNames(feature: Feature): string[] {
+    const components: string[] = [];
+
+    // Look for component patterns in files_in_scope
+    if (feature.files_in_scope) {
+      feature.files_in_scope.forEach(file => {
+        const match = file.match(/\/([A-Z][a-zA-Z]+)\.tsx?$/);
+        if (match) {
+          components.push(match[1]);
+        }
+      });
+    }
+
+    // If no files, try to extract from description
+    if (components.length === 0) {
+      const componentPattern = /\b([A-Z][a-zA-Z]+(?:View|Panel|Dialog|Modal|Form|Component))\b/g;
+      const matches = feature.description.matchAll(componentPattern);
+      for (const match of matches) {
+        if (!components.includes(match[1])) {
+          components.push(match[1]);
+        }
+      }
+    }
+
+    return components;
+  }
+
+  /**
+   * Build UI requirements from feature and spec
+   */
+  private buildUIRequirements(
+    componentName: string,
+    feature: Feature,
+    spec: TechnicalSpec
+  ): UIRequirements {
+    
+    // Extract relevant context from spec
+    const context = this.extractRelevantContext(componentName, spec);
+
+    return {
+      description: this.generateComponentDescription(componentName, feature, context),
+      layout: this.generateLayoutDescription(componentName, context),
+      components: this.inferChildComponents(componentName, context),
+      data_elements: this.inferDataElements(componentName, context),
+      interactions: this.inferInteractions(componentName, context),
+      constraints: this.inferConstraints(feature, spec),
+      style_guidelines: 'Modern, clean, professional. Use shadcn/ui + Tailwind CSS.'
+    };
+  }
+
+  private generateComponentDescription(
+    componentName: string,
+    feature: Feature,
+    context: string
+  ): string {
+    // Extract description from context or generate from component name
+    return `${componentName} component for ${feature.title}. ${context}`;
+  }
+
+  private generateLayoutDescription(componentName: string, context: string): string {
+    // Analyze context for layout keywords
+    if (context.includes('grid') || context.includes('side-by-side')) {
+      return 'Grid layout with multiple columns';
+    }
+    if (context.includes('header') && context.includes('footer')) {
+      return 'Vertical layout with header, main content area, and footer';
+    }
+    return 'Flexible layout with clear visual hierarchy';
+  }
+
+  private inferChildComponents(componentName: string, context: string): string[] {
+    const components: string[] = [];
+    
+    // Common UI patterns
+    const patterns = {
+      'View': ['Header', 'Content', 'Footer'],
+      'Dialog': ['DialogHeader', 'DialogContent', 'DialogFooter', 'Button'],
+      'Form': ['Input', 'Button', 'Label', 'ErrorMessage'],
+      'Panel': ['PanelHeader', 'PanelContent'],
+      'Card': ['CardHeader', 'CardContent', 'CardFooter']
+    };
+
+    for (const [suffix, children] of Object.entries(patterns)) {
+      if (componentName.includes(suffix)) {
+        components.push(...children);
+        break;
+      }
+    }
+
+    // Add common shadcn/ui components
+    if (context.includes('button')) components.push('Button');
+    if (context.includes('input')) components.push('Input');
+    if (context.includes('select')) components.push('Select');
+    if (context.includes('checkbox')) components.push('Checkbox');
+
+    return components.length > 0 ? components : ['div', 'p', 'button'];
+  }
+
+  private inferDataElements(componentName: string, context: string): string[] {
+    const elements: string[] = [];
+
+    // Extract data patterns from context
+    const dataPatterns = [
+      /display(?:s|ing)?\s+([a-z\s]+)/gi,
+      /shows?\s+([a-z\s]+)/gi,
+      /include(?:s)?\s+([a-z\s]+)/gi
+    ];
+
+    for (const pattern of dataPatterns) {
+      const matches = context.matchAll(pattern);
+      for (const match of matches) {
+        elements.push(match[1].trim());
+      }
+    }
+
+    return elements.length > 0 ? elements : ['sample data', 'placeholder content'];
+  }
+
+  private inferInteractions(componentName: string, context: string): string[] {
+    const interactions: string[] = [];
+
+    // Common interaction patterns
+    if (context.includes('click')) interactions.push('Click to select/activate');
+    if (context.includes('submit')) interactions.push('Submit form on button click');
+    if (context.includes('close')) interactions.push('Close dialog/modal');
+    if (context.includes('select')) interactions.push('Select from options');
+    if (context.includes('edit')) interactions.push('Edit content inline');
+    if (context.includes('export')) interactions.push('Export data to file');
+
+    return interactions.length > 0 ? interactions : ['Basic click interactions'];
+  }
+
+  private inferConstraints(feature: Feature, spec: TechnicalSpec): string[] {
+    const constraints: string[] = [];
+
+    // Extract from spec constraints
+    if (spec.constraints) {
+      constraints.push(...spec.constraints.filter(c => 
+        c.toLowerCase().includes('ui') || 
+        c.toLowerCase().includes('responsive') ||
+        c.toLowerCase().includes('accessible')
+      ));
+    }
+
+    // Add default constraints
+    constraints.push('Must be keyboard navigable');
+    constraints.push('Must have proper ARIA labels');
+    constraints.push('Must work on mobile and desktop');
+
+    return constraints;
+  }
+
+  private extractRelevantContext(componentName: string, spec: TechnicalSpec): string {
+    // Search spec for sections mentioning this component
+    // This is a simplified version - would need more sophisticated extraction
+    const specText = JSON.stringify(spec).toLowerCase();
+    const componentLower = componentName.toLowerCase();
+    
+    // Find context around component mentions
+    const index = specText.indexOf(componentLower);
+    if (index !== -1) {
+      return specText.substring(
+        Math.max(0, index - 200),
+        Math.min(specText.length, index + 200)
+      );
+    }
+
+    return '';
+  }
+}
+```
+
+---
+
+### **Task 0.4: Add to Feature Type** (30 minutes)
+
+**File:** `src/types/architect.ts` (modifications)
+
+```typescript
+// src/types/architect.ts
+
+import { WireframeResult } from './wireframe';
+
+export interface Feature {
+  feature_id: string;
+  title: string;
+  description: string;
+  objectives: string[];
+  acceptance_criteria: string[];
+  context_budget_estimate: number;
+  components: string[];
+  dependencies: string[];
+  work_orders: WorkOrder[];
+  contracts?: IntegrationContracts;
+  deployment_config?: DeploymentConfig;
+  wireframes?: WireframeResult[];  // NEW - Generated wireframes
+  blockers?: string[];
+}
+
+// ... rest of existing types ...
+```
+
+---
+
+### **Task 0.5: Create Tests** (2 hours)
+
+**File:** `src/__tests__/services/wireframe-generation.test.ts`
+
+```typescript
+// src/__tests__/services/wireframe-generation.test.ts
+
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { WireframeGenerationService } from '../../services/WireframeGenerationService';
+import { WireframeRequest, UIRequirements } from '../../types/wireframe';
+import * as fs from 'fs/promises';
+import * as path from 'path';
+
+describe('WireframeGenerationService', () => {
+  let service: WireframeGenerationService;
+  const testOutputDir = path.join(__dirname, 'test-wireframes');
+
+  beforeAll(async () => {
+    const apiKey = process.env.ANTHROPIC_API_KEY || 'test-key';
+    service = new WireframeGenerationService(apiKey, testOutputDir);
+    await service.initialize();
+  });
+
+  afterAll(async () => {
+    // Cleanup test directory
+    await fs.rm(testOutputDir, { recursive: true, force: true });
+  });
+
+  describe('generateWireframe', () => {
+    it('should generate a basic component wireframe', async () => {
+      const requirements: UIRequirements = {
+        description: 'A simple button component',
+        layout: 'Single button centered on screen',
+        components: ['Button'],
+        data_elements: ['Button text'],
+        interactions: ['Click to trigger action']
+      };
+
+      const request: WireframeRequest = {
+        component_name: 'SimpleButton',
+        feature_id: 'test-001',
+        requirements
+      };
+
+      const result = await service.generateWireframe(request);
+
+      expect(result).toBeDefined();
+      expect(result.component_name).toBe('SimpleButton');
+      expect(result.code).toContain('React');
+      expect(result.code).toContain('SimpleButton');
+      expect(result.tokens_used).toBeGreaterThan(0);
+      expect(result.cost).toBeGreaterThan(0);
+
+      // Verify file was created
+      const fileExists = await fs.access(result.file_path)
+        .then(() => true)
+        .catch(() => false);
+      expect(fileExists).toBe(true);
+    });
+
+    it('should generate a complex component with multiple child components', async () => {
+      const requirements: UIRequirements = {
+        description: 'Dashboard view with header, sidebar, and main content',
+        layout: 'Grid layout: header spanning full width, sidebar on left, content on right',
+        components: ['Header', 'Sidebar', 'MainContent', 'Card', 'Button'],
+        data_elements: ['User name', 'Navigation items', 'Dashboard metrics'],
+        interactions: [
+          'Click sidebar item to navigate',
+          'Click metrics card to see details'
+        ],
+        constraints: ['Must be responsive', 'Must support dark mode']
+      };
+
+      const request: WireframeRequest = {
+        component_name: 'DashboardView',
+        feature_id: 'test-002',
+        requirements
+      };
+
+      const result = await service.generateWireframe(request);
+
+      expect(result.component_name).toBe('DashboardView');
+      expect(result.code).toContain('DashboardView');
+      expect(result.component_tree).toBeDefined();
+      expect(result.component_tree.children.length).toBeGreaterThan(0);
+    });
+
+    it('should handle errors gracefully', async () => {
+      const invalidRequest: WireframeRequest = {
+        component_name: '',
+        feature_id: 'test-error',
+        requirements: {
+          description: '',
+          layout: '',
+          components: [],
+          data_elements: [],
+          interactions: []
+        }
+      };
+
+      await expect(service.generateWireframe(invalidRequest)).rejects.toThrow();
+    });
+  });
+
+  describe('generateBatch', () => {
+    it('should generate multiple wireframes', async () => {
+      const requests: WireframeRequest[] = [
+        {
+          component_name: 'ComponentA',
+          feature_id: 'batch-001',
+          requirements: {
+            description: 'Component A',
+            layout: 'Simple layout',
+            components: ['Button'],
+            data_elements: ['Text'],
+            interactions: ['Click']
+          }
+        },
+        {
+          component_name: 'ComponentB',
+          feature_id: 'batch-002',
+          requirements: {
+            description: 'Component B',
+            layout: 'Simple layout',
+            components: ['Input'],
+            data_elements: ['User input'],
+            interactions: ['Type text']
+          }
+        }
+      ];
+
+      const results = await service.generateBatch(requests);
+
+      expect(results).toHaveLength(2);
+      expect(results[0].component_name).toBe('ComponentA');
+      expect(results[1].component_name).toBe('ComponentB');
+    });
+  });
+
+  describe('manifest management', () => {
+    it('should update manifest after generating wireframe', async () => {
+      const request: WireframeRequest = {
+        component_name: 'TestComponent',
+        feature_id: 'manifest-test',
+        requirements: {
+          description: 'Test component for manifest',
+          layout: 'Simple',
+          components: ['div'],
+          data_elements: ['text'],
+          interactions: ['none']
+        }
+      };
+
+      await service.generateWireframe(request);
+
+      const wireframes = await service.listWireframes();
+      expect(wireframes.length).toBeGreaterThan(0);
+      
+      const found = wireframes.find(w => w.component_name === 'TestComponent');
+      expect(found).toBeDefined();
+    });
+
+    it('should retrieve wireframe by name', async () => {
+      const wireframe = await service.getWireframe('TestComponent');
+      expect(wireframe).toBeDefined();
+      expect(wireframe?.component_name).toBe('TestComponent');
+    });
+  });
+});
+```
+
+---
+
+## 📋 **Integration Example: Multi-LLM App**
+
+### **Expected Output When Running:**
+
+```bash
+$ moose decompose --spec multi-llm-app-spec.md
+
+🏗️  Moose Architect: Analyzing specification...
+📊 Complexity: COMPLEX (11 components, greenfield, 15K tokens)
+🔄 Using hierarchical decomposition...
+
+Phase 1: Feature Extraction
+✅ Extracted 11 features from specification
+
+Phase 2: UI Detection
+🎨 Detected 3 UI features requiring wireframes
+
+Phase 3: Wireframe Generation
+📐 Generating wireframes via Claude API...
+
+   📐 Control Panel: 3 components
+      ✅ ControlPanel.tsx (6.2s, $0.0875, 5,243 tokens)
+      ✅ ModelSelector.tsx (5.8s, $0.0792, 4,891 tokens)
+      ✅ CycleControls.tsx (5.4s, $0.0734, 4,672 tokens)
+
+   📐 Arbitration View: 3 components
+      ✅ ArbitrationView.tsx (7.1s, $0.1043, 6,821 tokens)
+      ✅ SynthesizedAnswer.tsx (5.9s, $0.0819, 5,134 tokens)
+      ✅ ResponseGrid.tsx (6.3s, $0.0892, 5,487 tokens)
+
+   📐 Settings Dialog: 2 components
+      ✅ SettingsDialog.tsx (6.5s, $0.0921, 5,723 tokens)
+      ✅ AlignmentSettings.tsx (5.7s, $0.0798, 4,983 tokens)
+
+✅ Generated 8 wireframes in 48.9s
+💰 Wireframe cost: $0.69
+📁 Saved to: docs/wireframes/
+
+Phase 4: Work Order Generation
+🔨 Decomposing features into work orders...
+✅ 28 work orders generated
+
+📋 Decomposition Complete:
+   Features: 11
+   Wireframes: 8
+   Work Orders: 28
+   Total Cost: $0.84 (decomposition + wireframes)
+   
+🎯 Ready for execution!
+```
+
+---
+
+## 💰 **Cost Analysis**
+
+### **Per Wireframe:**
+- Average input tokens: ~1,200 (prompt)
+- Average output tokens: ~5,000 (React component)
+- Cost: (1,200 × $0.000003) + (5,000 × $0.000015) = **$0.079**
+
+### **Multi-LLM App (8 wireframes):**
+- Total cost: 8 × $0.079 = **$0.63**
+- Time: ~50-60 seconds
+
+### **Comparison to Manual:**
+- **AI**: $0.63, 1 minute
+- **Human**: $400-800, 4-8 hours
+
+---
+
+## ✅ **Success Criteria**
+
+### **After Implementation:**
+- ✅ WireframeGenerationService generates valid React components
+- ✅ Components include TypeScript types
+- ✅ Components use Tailwind CSS
+- ✅ Files saved to docs/wireframes/
+- ✅ Manifest tracks all generated wireframes
+- ✅ Architect automatically detects UI features
+- ✅ Architect generates wireframes before work order creation
+- ✅ Total cost <$1 for Multi-LLM App
+
+### **Code Quality:**
+- ✅ All tests pass
+- ✅ TypeScript strict mode enabled
+- ✅ No linting errors
+- ✅ Proper error handling
+- ✅ Clear logging
+
+---
+
+## 📦 **Deliverables**
+
+1. `src/types/wireframe.ts` - Type definitions
+2. `src/services/WireframeGenerationService.ts` - Main service (350 lines)
+3. `src/lib/architect-decomposition-rules.ts` - Modified with UI detection
+4. `src/types/architect.ts` - Modified with wireframes field
+5. `src/__tests__/services/wireframe-generation.test.ts` - Test suite
+6. `docs/wireframes/` - Generated wireframes directory
+
+---
+
+## 🚀 **Next Steps**
+
+1. **Approve this API-only approach**
+2. **Implement Phase 0 (1 day)**
+3. **Test with sample component**
+4. **Test with Multi-LLM App UI features**
+5. **Proceed with Phases 1-4 (hierarchical decomposition, etc.)**
+
+**Ready to proceed?**

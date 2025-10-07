@@ -1,0 +1,34 @@
+{
+  "spec": {
+    "feature_name": "Multi-LLM Discussion App",
+    "objectives": [
+      "Orchestrate synchronized discussions between four LLM providers (ChatGPT, Claude, Gemini, Grok)",
+      "Implement clipboard automation for response harvesting",
+      "Create alignment evaluation service using GPT-4o-mini",
+      "Build Electron desktop application with multi-process architecture",
+      "Provide arbitration UI for comparing and synthesizing responses",
+      "Support encrypted archiving and crash recovery"
+    ],
+    "constraints": [
+      "Must use Electron v28+ for desktop framework",
+      "TypeScript 5.3+ with strict mode required",
+      "Clipboard-based harvesting (no direct API integration)",
+      "Separate process for alignment service (Express + OpenAI)",
+      "WebView isolation for each LLM provider",
+      "Local-only operation with encrypted storage"
+    ],
+    "acceptance_criteria": [
+      "Successfully orchestrate discussion cycles with 2-4 LLM providers",
+      "Harvest responses via clipboard automation with <2s per model",
+      "Compute alignment scores with <3s API latency",
+      "Display arbitration view with synthesized answer",
+      "Create encrypted archives with manifest and scoreboard",
+      "Recover from crashes using autosaved state",
+      "Support keyboard navigation and WCAG 2.1 AA accessibility"
+    ],
+    "budget_estimate": 50000,
+    "time_estimate": "12 weeks"
+  },
+  "generateWireframes": true,
+  "generateContracts": true
+}

@@ -1,0 +1,834 @@
+MOOSE AGENT CAPABILITIES REFERENCE
+Development-Agnostic Specification Assessment Guide
+Version: 1.0
+Last Updated: October 7, 2025
+
+========================================
+PURPOSE OF THIS DOCUMENT
+========================================
+
+This document describes the capabilities of Moose's AI agent system in a development-agnostic manner.
+Use this document to assess whether a technical specification can be successfully processed by Moose
+WITHOUT needing access to the underlying codebase or implementation details.
+
+TARGET AUDIENCE: AI models evaluating technical specifications for Moose compatibility
+
+========================================
+MOOSE SYSTEM OVERVIEW
+========================================
+
+Moose is an autonomous software development system composed of 7 specialized AI agents that work
+together to decompose technical specifications, generate code, validate quality, and deploy changes.
+
+CORE WORKFLOW:
+1. Architect decomposes technical specification into work orders
+2. Director validates contracts and approves work orders
+3. Manager routes work orders to appropriate AI models
+4. Proposers generate code implementations
+5. Orchestrator executes work orders, manages deployment pipeline
+6. Sentinel validates test results and deployment success
+7. Client Manager handles escalations and learns from outcomes
+
+SUCCESS CRITERIA:
+- Moose can autonomously execute 85-95% of software development tasks
+- Human intervention required only for strategic decisions, UI design, domain expertise
+- Budget-constrained ($100/day hard cap)
+- Quality-gated (all tests must pass before merge)
+
+========================================
+AGENT 1: ARCHITECT
+========================================
+
+PRIMARY FUNCTION:
+Decomposes technical specifications into 3-8 executable work orders with clear dependencies,
+acceptance criteria, and resource estimates.
+
+INPUTS REQUIRED:
+- Feature name (string)
+- Objectives (list of goals)
+- Constraints (list of limitations)
+- Acceptance criteria (list of success conditions)
+- Budget estimate (optional, dollars)
+- Time estimate (optional, human-readable string)
+
+CAPABILITIES:
+
+1. SPECIFICATION ANALYSIS
+   - Analyzes complexity and scope of requested feature
+   - Identifies technical dependencies between components
+   - Estimates token/context requirements per work order
+   - Assesses risk level (low/medium/high) per work order
+   - Validates feasibility within budget constraints
+
+2. WORK ORDER DECOMPOSITION
+   - Creates 3-8 work orders (enforced range for optimal granularity)
+   - Each work order includes:
+     * Clear title and description
+     * Acceptance criteria (testable conditions)
+     * Files in scope (specific file paths)
+     * Token budget estimate (500-4000 tokens)
+     * Risk level assessment
+     * Dependencies (sequential execution order)
+   - Prevents work orders >4000 tokens (warns if exceeded)
+   - Total cost estimation based on token budgets
+
+3. DEPENDENCY MANAGEMENT
+   - Maps sequential dependencies (A must complete before B)
+   - Detects circular dependencies (fails if cycles found)
+   - Currently supports SEQUENTIAL dependencies only (no parallel execution yet)
+   - Uses array indices to reference dependencies (e.g., WO-0, WO-1)
+
+4. DOCUMENTATION GENERATION
+   - Creates decomposition documentation (markdown format)
+   - Includes:
+     * Dependency graph (visual representation)
+     * Integration points (component boundaries)
+     * Chunking rationale (why work split this way)
+     * Sequencing requirements (execution order explanation)
+
+5. COMPLEXITY ESTIMATION
+   Token estimation rules:
+   - Low complexity (CRUD, config): 500-1000 tokens
+   - Medium complexity (business logic, API): 1000-2000 tokens
+   - High complexity (architecture, security): 2000-4000 tokens
+
+LIMITATIONS:
+
+1. EXISTING CODEBASE ASSUMPTION
+   - Assumes work orders modify EXISTING files in EXISTING projects
+   - Does NOT create contracts for new systems (assumes contracts exist)
+   - Does NOT specify deployment architecture (Docker, CI/CD)
+   - Does NOT generate test fixtures or mock data
+   - Does NOT validate presence of UI wireframes or design specifications
+
+2. GREENFIELD PROJECT GAPS
+   For NEW systems (no existing codebase), Architect CANNOT:
+   - Define API contracts (endpoints, schemas, validation rules)
+   - Define IPC contracts (message channels, formats)
+   - Define state management contracts (Redux actions, state shape)
+   - Define file system contracts (directory structure, formats)
+   - Specify containerization strategy (Dockerfile, docker-compose)
+   - Specify CI/CD pipeline configuration (GitHub Actions workflows)
+   - Define environment configuration (.env variables, secrets)
+   - Generate test fixtures (sample inputs/outputs)
+   - Detect missing UI specifications (wireframes, mockups)
+
+3. PARALLELIZATION
+   - Work orders executed SEQUENTIALLY only
+   - No support for parallel execution of independent work orders
+   - Dependency graph is linear (A→B→C), not tree-based
+
+OUTPUT FORMAT:
+{
+  "work_orders": [
+    {
+      "title": "Implement OAuth provider config",
+      "description": "Create configuration for Google/GitHub OAuth providers",
+      "acceptance_criteria": ["Config file created", "Provider credentials validated"],
+      "files_in_scope": ["config/oauth.ts", "types/auth.ts"],
+      "context_budget_estimate": 800,
+      "risk_level": "low",
+      "dependencies": []
+    }
+  ],
+  "decomposition_doc": "# Implementation Plan\n## Dependencies\n...",
+  "total_estimated_cost": 25.50
+}
+
+ASSESSMENT GUIDELINES:
+
+✅ ARCHITECT CAN HANDLE:
+- Technical specifications for EXISTING codebases
+- Feature additions to established systems
+- Bug fixes with clear scope
+- Refactoring tasks with defined boundaries
+- Integration tasks with existing contracts
+- Specifications with 3-8 logical components
+- Tasks with clear sequential dependencies
+- Specifications with defined acceptance criteria
+
+❌ ARCHITECT CANNOT HANDLE (requires human augmentation):
+- Greenfield projects (new systems from scratch) WITHOUT deployment specs
+- Projects requiring >8 work orders (too granular)
+- Projects requiring <3 work orders (too coarse)
+- Specifications without clear objectives
+- Specifications without acceptance criteria
+- Projects requiring parallel execution of independent components
+- Projects without defined file structure
+- Projects without existing test infrastructure
+
+⚠️ ARCHITECT NEEDS HELP WITH:
+- UI-heavy projects without wireframes (needs design input)
+- New APIs without schema definitions (needs contract definitions)
+- Projects with complex state management (needs state contracts)
+- Projects requiring specific deployment platforms (needs deployment architecture)
+- Projects with external integrations (needs integration contracts)
+
+========================================
+AGENT 2: DIRECTOR (LLM Service)
+========================================
+
+PRIMARY FUNCTION:
+Validates contracts, approves work orders, and ensures changes don't break existing system contracts.
+
+CAPABILITIES:
+
+1. CONTRACT VALIDATION
+   - Analyzes code changes against existing contracts
+   - Detects breaking changes (API changes, interface modifications)
+   - Generates warnings for risky changes
+   - Provides recommendations for safe implementation
+   - Calculates confidence score (0.0-1.0)
+   - Makes merge safety determination (safeToMerge: boolean)
+
+2. WORK ORDER GENERATION
+   - Generates structured work order from natural language request
+   - Includes:
+     * Title and description
+     * Risk level (low/medium/high)
+     * Estimated cost (dollars)
+     * Pattern confidence (0.0-1.0)
+     * Complexity score (0.0-1.0)
+     * Acceptance criteria (testable conditions)
+     * Metadata (complexity factors, affected contracts, time estimate)
+
+3. COMPLEXITY ASSESSMENT
+   Complexity indicators (triggers high-capability model):
+   - authentication, database, api, websocket, real-time
+   - security, encryption, payment, integration, architecture
+   - Complexity score = (matching_keywords × 0.2), max 1.0
+
+4. MODEL SELECTION
+   - Complexity > 0.3 → Claude Sonnet 4.5 (high-quality code)
+   - Complexity < 0.3 → GPT-4o-mini (cost-effective)
+   - Can override with explicit complexity flag
+
+CONTRACT VALIDATION OUTPUT:
+{
+  "hasBreakingChanges": false,
+  "breakingChanges": [],
+  "warnings": ["Method signature changed but backward compatible"],
+  "recommendations": ["Add deprecation notice for old method"],
+  "safeToMerge": true,
+  "confidence": 0.95
+}
+
+LIMITATIONS:
+- Requires EXISTING contracts to validate against
+- Cannot CREATE initial contracts for new systems
+- Contract validation accuracy depends on contract completeness
+- Does not validate runtime behavior (only static analysis)
+
+ASSESSMENT GUIDELINES:
+
+✅ DIRECTOR CAN HANDLE:
+- Validating changes to existing APIs
+- Detecting breaking changes in interfaces
+- Evaluating merge safety for established systems
+- Generating work orders from clear requirements
+
+❌ DIRECTOR CANNOT HANDLE:
+- Validating NEW systems without existing contracts
+- Runtime behavior validation (needs testing)
+- Performance regression detection (needs benchmarking)
+
+========================================
+AGENT 3: MANAGER
+========================================
+
+PRIMARY FUNCTION:
+Routes work orders to appropriate AI models based on complexity, enforces budget constraints,
+manages retry strategies.
+
+CAPABILITIES:
+
+1. INTELLIGENT ROUTING
+   - Complexity-based routing (low → GPT-4o-mini, high → Claude Sonnet 4.5)
+   - Hard Stop detection (20 security/architecture keywords)
+   - Context requirement analysis
+   - Proposer performance tracking
+   - Fallback proposer selection
+
+   Hard Stop Keywords (always route to Claude Sonnet 4.5):
+   - authentication, authorization, security, encryption, payment
+   - architecture, database schema, migration, api contract
+   - websocket, real-time, concurrency, rate limiting
+   - production deployment, infrastructure, critical path
+
+2. BUDGET ENFORCEMENT (3-tier system)
+   - Soft cap: $20/day (alert, continue operations)
+   - Hard cap: $50/day (force GPT-4o-mini for all requests)
+   - Emergency kill: $100/day (stop all operations, escalate)
+
+   Budget reservation flow:
+   1. Estimate cost BEFORE routing ($0.10-$2.50 based on complexity)
+   2. Reserve budget slot (prevents overruns)
+   3. If over budget → escalate immediately
+   4. After LLM call → update reservation with actual cost
+   5. On failure → cancel reservation
+
+3. RETRY STRATEGY CALCULATION
+   - Attempt 1: Standard prompt with selected proposer
+   - Attempt 2: Add failure context from attempt 1, same proposer
+   - Attempt 3: Switch to higher-capability model OR escalate
+   - Max 3 attempts before escalation to Client Manager
+
+4. PERFORMANCE METRICS TRACKING
+   - Tracks success rate per proposer (7-day window)
+   - Tracks average cost per proposer
+   - Tracks average execution time per proposer
+   - Uses metrics to inform routing decisions
+
+ROUTING DECISION OUTPUT:
+{
+  "selected_proposer": "claude-sonnet-4-5-20250929",
+  "reason": "Hard Stop required for security keyword",
+  "confidence": 0.95,
+  "fallback_proposer": "gpt-4o-mini",
+  "routing_metadata": {
+    "budget_reservation_id": "res_123",
+    "hard_stop_detected": true,
+    "estimated_cost": 2.50
+  }
+}
+
+LIMITATIONS:
+- Daily budget cap is HARD ($100/day max)
+- Cannot override emergency kill threshold
+- Routing decisions are IRREVERSIBLE per work order
+- No support for custom proposers (only Claude Sonnet 4.5, GPT-4o-mini)
+
+ASSESSMENT GUIDELINES:
+
+✅ MANAGER CAN HANDLE:
+- Budget-constrained projects ($0-$100/day)
+- Complexity-based routing decisions
+- Automatic retry with different strategies
+- Cost optimization (uses cheap model when possible)
+
+❌ MANAGER CANNOT HANDLE:
+- Projects requiring >$100/day (exceeds emergency kill)
+- Projects requiring custom LLM models
+- Projects requiring immediate execution (budget check adds latency)
+
+========================================
+AGENT 4: PROPOSERS (Model Registry)
+========================================
+
+PRIMARY FUNCTION:
+Generates code implementations using registered AI models (Claude Sonnet 4.5, GPT-4o-mini).
+
+REGISTERED MODELS:
+
+1. CLAUDE SONNET 4.5 (Primary proposer)
+   - Model: claude-sonnet-4-5-20250929
+   - Provider: Anthropic
+   - Context limit: 200,000 tokens
+   - Cost: $0.000003/input token, $0.000015/output token
+   - Strengths: high-quality code, multi-file reasoning, consistent diffs
+   - Best for: Complex features, architecture changes, security-critical code
+
+2. GPT-4O-MINI (Fallback proposer)
+   - Model: gpt-4o-mini
+   - Provider: OpenAI
+   - Context limit: 128,000 tokens
+   - Cost: $0.00000015/input token, $0.0000006/output token (20x cheaper)
+   - Strengths: fast responses, cost-effective, simple tasks
+   - Best for: CRUD operations, config changes, simple bug fixes
+
+CAPABILITIES:
+- Code generation from work order descriptions
+- Multi-file reasoning (understands cross-file dependencies)
+- Consistent diff generation (clean, reviewable changes)
+- JSON output parsing with markdown cleanup
+- Rate limiting (50 req/min Anthropic, 60 req/min OpenAI)
+- Automatic cost calculation per request
+- Mock mode if API keys not configured (for testing)
+
+LIMITATIONS:
+- Only 2 models supported (no custom models)
+- No streaming responses (batch-only)
+- No fine-tuning or custom prompts
+- Rate limits enforced by providers
+- Token limits enforced by providers
+
+ASSESSMENT GUIDELINES:
+
+✅ PROPOSERS CAN HANDLE:
+- Code generation tasks within token limits (200K tokens max)
+- Tasks requiring multi-file changes
+- Tasks requiring understanding of existing codebase
+- Tasks with clear specifications and acceptance criteria
+
+❌ PROPOSERS CANNOT HANDLE:
+- Tasks requiring >200K tokens of context
+- Tasks requiring custom LLM models
+- Tasks requiring real-time streaming responses
+- Tasks requiring human creativity (UI design, UX)
+
+========================================
+AGENT 5: ORCHESTRATOR
+========================================
+
+PRIMARY FUNCTION:
+Executes work orders through full pipeline: code generation → application → testing → deployment.
+
+CAPABILITIES:
+
+1. WORK ORDER EXECUTION PIPELINE
+   Full 5-step process:
+   1. Get routing decision from Manager
+   2. Reserve model capacity (prevents rate limits)
+   3. Generate code via Proposer
+   4. Apply code via Aider (git commits)
+   5. Push branch + create PR on GitHub
+   6. Track results in database
+   7. Release model capacity
+
+2. CONCURRENCY MANAGEMENT
+   - Max concurrent executions: 3 work orders (configurable)
+   - Per-model capacity limits:
+     * Claude Sonnet 4.5: max 2 concurrent
+     * GPT-4o-mini: max 4 concurrent
+   - 60-second timeout waiting for capacity
+   - Automatic capacity release on completion/failure
+
+3. POLLING MECHANISM
+   - Polls for pending work orders (10-second interval default)
+   - Retrieves only APPROVED work orders (Director approval required)
+   - Skips already-executing work orders
+   - Continues polling until stopped
+
+4. FAILURE HANDLING
+   - Automatic rollback on code application failure
+   - Automatic PR deletion on GitHub push failure
+   - Tracks failure stage (routing/proposer/aider/github)
+   - Escalates to Client Manager after max retries
+   - Maintains error log (last 50 errors)
+
+5. STATUS TRACKING
+   - Polling status (on/off)
+   - Currently executing work orders
+   - Total executed count
+   - Total failed count
+   - Last poll timestamp
+   - Recent errors with timestamps
+
+EXECUTION RESULT:
+{
+  "success": true,
+  "work_order_id": "wo_123",
+  "pr_url": "https://github.com/owner/repo/pull/42",
+  "pr_number": 42,
+  "branch_name": "feature/wo-123-implement-oauth",
+  "execution_time_ms": 45000
+}
+
+LIMITATIONS:
+- Requires Aider (code application tool) to be installed
+- Requires GitHub credentials for PR creation
+- Sequential execution only (no parallel work order processing)
+- Max 3 concurrent executions (prevents overwhelming system)
+- Polling interval adds latency (10s minimum)
+
+ASSESSMENT GUIDELINES:
+
+✅ ORCHESTRATOR CAN HANDLE:
+- Automated end-to-end execution
+- Multiple work orders in sequence
+- Concurrent execution of independent work orders (up to 3)
+- Automatic failure recovery and rollback
+- Integration with GitHub workflow
+
+❌ ORCHESTRATOR CANNOT HANDLE:
+- Deployment to non-GitHub platforms
+- Manual code application (requires Aider)
+- Work orders requiring human approval mid-execution
+- Parallel execution of >3 work orders
+
+========================================
+AGENT 6: SENTINEL
+========================================
+
+PRIMARY FUNCTION:
+Validates test results, analyzes GitHub workflow outcomes, determines pass/fail verdict.
+
+CAPABILITIES:
+
+1. WORKFLOW ANALYSIS
+   - Fetches workflow results from GitHub (via API)
+   - Supports workflows: "Test", "Integration Tests", "Build", "Deploy"
+   - Parses workflow logs for test output
+   - Handles race conditions (retries with 2s delay, max 3 attempts)
+
+2. TEST RESULT PARSING
+   - Extracts test counts (passed, failed, skipped)
+   - Identifies specific failing tests
+   - Parses error messages and stack traces
+   - Detects test timeouts
+   - Handles multiple test frameworks (Vitest, Jest, Pytest)
+
+3. DECISION MAKING
+   - Makes pass/fail verdict based on:
+     * All expected workflows completed
+     * All workflows passed (success status)
+     * No test failures detected
+     * No timeout/crash detected
+   - Calculates confidence score (0.0-1.0)
+   - Generates reasoning (human-readable explanation)
+   - Determines if escalation required
+
+4. ESCALATION TRIGGERS
+   Escalates to Client Manager if:
+   - Confidence < 0.8 (uncertain verdict)
+   - Flaky tests detected (intermittent failures)
+   - Unexpected workflow failures
+   - Missing expected workflows
+
+5. WORK ORDER STATUS UPDATES
+   - Updates work order status: "completed" or "failed"
+   - Stores decision metadata (verdict, confidence, reasoning)
+   - Timestamps analysis
+
+DECISION OUTPUT:
+{
+  "verdict": "pass",
+  "confidence": 0.95,
+  "reasoning": "All workflows passed, 49/49 tests passed, no failures detected",
+  "escalation_required": false,
+  "escalation_reason": null
+}
+
+FALLBACK BEHAVIOR:
+- If escalation API fails → updates work order to "needs_human_review"
+- If GitHub API fails → marks as "failed" with error metadata
+- If work order not found → retries with exponential backoff
+
+LIMITATIONS:
+- Requires GitHub workflow logs to be accessible
+- Only supports GitHub-based testing (no Jenkins, CircleCI, etc.)
+- Cannot detect runtime errors in production (only test-time errors)
+- Cannot validate performance regressions (only pass/fail)
+- Relies on test framework output format (may miss custom formats)
+
+ASSESSMENT GUIDELINES:
+
+✅ SENTINEL CAN HANDLE:
+- GitHub Actions workflow validation
+- Standard test framework output (Vitest, Jest, Pytest)
+- Pass/fail determination for clear test results
+- Escalation of ambiguous results
+
+❌ SENTINEL CANNOT HANDLE:
+- Non-GitHub CI/CD platforms
+- Custom test output formats (without parser updates)
+- Performance regression detection
+- Runtime error monitoring in production
+- Visual regression testing
+
+========================================
+AGENT 7: CLIENT MANAGER
+========================================
+
+PRIMARY FUNCTION:
+Handles escalations, generates resolution options, learns from outcomes, manages budget thresholds.
+
+CAPABILITIES:
+
+1. ESCALATION CLASSIFICATION (6 trigger types)
+   1. proposer_exhausted_retries: 2+ failed code generation attempts
+   2. sentinel_hard_failure: >3 consecutive test failures
+   3. budget_overrun: Approaching emergency kill ($100/day)
+   4. conflicting_requirements: Work order has contradictory specs
+   5. technical_blocker: Unforeseen dependency/library issue
+   6. contract_violation: Change breaks existing contracts
+
+2. RESOLUTION OPTION GENERATION (4 strategies)
+   Generates 2-4 options per escalation:
+
+   a) retry_different_approach
+      - Reset work order to "pending"
+      - Force Claude Sonnet 4.5 (highest capability)
+      - Increase context budget by 50%
+      - Typical success rate: 75%
+
+   b) pivot_solution
+      - Mark work order for human review
+      - Human provides alternative approach
+      - Resume with new strategy
+      - Typical success rate: 65%
+
+   c) amend_upstream
+      - Mark work order as "blocked"
+      - Identify upstream work order causing issue
+      - Fix upstream, then retry current work order
+      - Typical success rate: 70%
+
+   d) abort_redesign
+      - Mark work order as "failed"
+      - Escalate to Architect for decomposition redesign
+      - May require specification changes
+      - Typical success rate: 50% (requires human input)
+
+3. HISTORICAL DATA ANALYSIS
+   - Queries last 50 resolved escalations
+   - Calculates success rate per strategy
+   - Weights options by historical success
+   - Defaults to 65% confidence if no historical data
+   - Learns patterns: "trigger → strategy → outcome"
+
+4. RECOMMENDATION GENERATION
+   - Ranks options by success probability
+   - Considers estimated cost per option
+   - Considers human effort required
+   - Provides confidence score (0.0-1.0)
+   - Explains reasoning for recommendation
+
+5. DECISION EXECUTION
+   - Executes human's chosen option
+   - Tracks outcome (success/failure/partial)
+   - Records lessons learned
+   - Stores pattern for future escalations
+
+6. BUDGET THRESHOLD MONITORING
+   - Checks daily spend against thresholds
+   - Soft cap ($20): Alert, continue
+   - Hard cap ($50): Force GPT-4o-mini only
+   - Emergency kill ($100): Stop all operations
+   - Creates system-level escalation if threshold exceeded
+
+ESCALATION OUTPUT:
+{
+  "escalation_id": "esc_123",
+  "trigger": {
+    "trigger_type": "proposer_exhausted_retries",
+    "details": "2 attempts failed, complexity score: 0.8"
+  },
+  "options": [
+    {
+      "option_id": "opt_1",
+      "strategy": "retry_different_approach",
+      "description": "Retry with Claude Sonnet 4.5, increase budget by 50%",
+      "estimated_cost": 3.75,
+      "success_probability": 0.75,
+      "human_effort": "none"
+    }
+  ],
+  "recommendation": {
+    "recommended_option_id": "opt_1",
+    "confidence": 0.85,
+    "reasoning": "Historical success rate for this trigger is 75%, low human effort required"
+  }
+}
+
+LIMITATIONS:
+- Requires human decision for final resolution (cannot auto-execute)
+- Historical data limited to last 50 escalations
+- Success probability estimates may be inaccurate with sparse data
+- Cannot prevent escalations (only handles them reactively)
+
+ASSESSMENT GUIDELINES:
+
+✅ CLIENT MANAGER CAN HANDLE:
+- Typical failure scenarios (retries, test failures)
+- Budget overrun prevention
+- Learning from past escalations
+- Providing data-driven recommendations
+
+❌ CLIENT MANAGER CANNOT HANDLE:
+- Preventing escalations before they occur
+- Executing resolutions without human approval
+- Domain-specific technical blockers (needs human expertise)
+- Strategic decisions (architectural changes, business logic)
+
+========================================
+SYSTEM-LEVEL CAPABILITIES
+========================================
+
+INTEGRATED FEATURES:
+
+1. BUDGET MANAGEMENT
+   - Pre-flight cost estimation
+   - Budget reservation before execution
+   - 3-tier budget enforcement (soft/hard/emergency)
+   - Daily spend tracking
+   - Automatic escalation on overrun
+
+2. QUALITY ASSURANCE
+   - Director validates contracts before execution
+   - Sentinel validates tests after execution
+   - Automatic rollback on failure
+   - Escalation on low-confidence results
+
+3. RATE LIMIT PREVENTION
+   - Per-model capacity management
+   - Max concurrent executions per model
+   - Wait queues with timeout
+   - Automatic capacity release
+
+4. LEARNING & ADAPTATION
+   - Historical escalation analysis
+   - Pattern recognition (trigger → strategy → outcome)
+   - Success rate tracking per proposer
+   - Adaptive routing based on performance
+
+5. FAILURE RECOVERY
+   - Automatic rollback (git revert)
+   - Retry with different strategies
+   - Escalation to human when stuck
+   - Error logging and tracking
+
+========================================
+SPECIFICATION ASSESSMENT FRAMEWORK
+========================================
+
+Use this framework to evaluate if a technical specification is compatible with Moose.
+
+ASSESSMENT CRITERIA:
+
+1. PROJECT TYPE
+   ✅ EXCELLENT FIT: Existing codebase, feature addition, bug fix, refactoring
+   ⚠️ PARTIAL FIT: Greenfield project WITH deployment architecture specified
+   ❌ POOR FIT: Greenfield project WITHOUT deployment architecture
+
+2. DECOMPOSITION COMPLEXITY
+   ✅ EXCELLENT FIT: Can be broken into 3-8 logical components
+   ⚠️ PARTIAL FIT: Requires 9-15 components (may need specification refinement)
+   ❌ POOR FIT: Requires >15 components (too granular) or <3 components (too coarse)
+
+3. DEPENDENCIES
+   ✅ EXCELLENT FIT: Clear sequential dependencies (A→B→C)
+   ⚠️ PARTIAL FIT: Some parallel work possible (Moose will execute sequentially)
+   ❌ POOR FIT: Complex dependency graph with cycles
+
+4. ACCEPTANCE CRITERIA
+   ✅ EXCELLENT FIT: Clear, testable acceptance criteria provided
+   ⚠️ PARTIAL FIT: Vague criteria (Architect can refine)
+   ❌ POOR FIT: No acceptance criteria (requires human definition)
+
+5. CONTRACTS & INTERFACES
+   ✅ EXCELLENT FIT: Existing contracts, or new contracts fully specified
+   ⚠️ PARTIAL FIT: New contracts partially specified (needs completion)
+   ❌ POOR FIT: New system, no contracts specified
+
+6. DEPLOYMENT ARCHITECTURE
+   ✅ EXCELLENT FIT: Existing deployment pipeline, or new pipeline fully specified
+   ⚠️ PARTIAL FIT: Deployment requirements mentioned but not detailed
+   ❌ POOR FIT: New system, no deployment architecture specified
+
+7. TESTING INFRASTRUCTURE
+   ✅ EXCELLENT FIT: Existing test suite, or test requirements fully specified
+   ⚠️ PARTIAL FIT: Test requirements mentioned but not detailed
+   ❌ POOR FIT: New system, no testing strategy specified
+
+8. UI/UX REQUIREMENTS
+   ✅ EXCELLENT FIT: No UI changes, or wireframes/mockups provided
+   ⚠️ PARTIAL FIT: UI changes described in text (Moose will implement literally)
+   ❌ POOR FIT: UI changes required but no design provided
+
+9. BUDGET CONSTRAINTS
+   ✅ EXCELLENT FIT: Estimated cost <$50/day
+   ⚠️ PARTIAL FIT: Estimated cost $50-$100/day (near emergency kill)
+   ❌ POOR FIT: Estimated cost >$100/day (exceeds hard limit)
+
+10. TOKEN/CONTEXT REQUIREMENTS
+    ✅ EXCELLENT FIT: Each work order requires <4000 tokens of context
+    ⚠️ PARTIAL FIT: Some work orders require 4000-8000 tokens (may need splitting)
+    ❌ POOR FIT: Work orders require >8000 tokens (exceeds model limits)
+
+SCORING RUBRIC:
+- Count ✅ (Excellent): 3 points each
+- Count ⚠️ (Partial): 1 point each
+- Count ❌ (Poor): 0 points each
+
+TOTAL SCORE INTERPRETATION:
+- 25-30 points: READY FOR MOOSE (high success probability 85-95%)
+- 15-24 points: NEEDS AUGMENTATION (moderate success probability 60-85%)
+- 0-14 points: NOT READY (low success probability <60%)
+
+========================================
+EXAMPLE ASSESSMENT
+========================================
+
+SPECIFICATION: "Multi-LLM Discussion App - Electron app with WebView grid, clipboard automation,
+alignment service, arbitration UI"
+
+ASSESSMENT:
+
+1. Project Type: ❌ POOR FIT (greenfield, no deployment architecture)
+2. Decomposition: ✅ EXCELLENT (8 major components: UI, orchestration, clipboard, alignment, state, archive, error, testing)
+3. Dependencies: ⚠️ PARTIAL (some parallel work possible, Moose will do sequentially)
+4. Acceptance Criteria: ✅ EXCELLENT (clear success conditions provided)
+5. Contracts: ❌ POOR FIT (new system, IPC/API contracts not fully specified)
+6. Deployment: ❌ POOR FIT (no Docker/CI/CD specified)
+7. Testing: ✅ EXCELLENT (test pyramid defined, coverage targets specified)
+8. UI/UX: ❌ POOR FIT (arbitration UI needs wireframes)
+9. Budget: ✅ EXCELLENT (estimated <$30 total, well under daily limit)
+10. Context: ✅ EXCELLENT (each component <4000 tokens)
+
+SCORE: 15 points (5 excellent × 3 + 1 partial × 1 + 4 poor × 0)
+VERDICT: NEEDS AUGMENTATION (60% success probability)
+
+REQUIRED AUGMENTATIONS:
+1. Add deployment architecture (Docker, CI/CD, build configs)
+2. Define IPC contracts (WebView↔Main, Main↔AlignmentService)
+3. Define API contracts (Alignment service request/response schemas)
+4. Provide UI wireframes (at minimum for arbitration view)
+
+AFTER AUGMENTATION: 27 points → READY FOR MOOSE (90% success probability)
+
+========================================
+COMMON AUGMENTATION PATTERNS
+========================================
+
+IF SPECIFICATION LACKS:
+
+1. DEPLOYMENT ARCHITECTURE
+   Add to specification:
+   - Dockerfile (base image, dependencies, entry point)
+   - docker-compose.yml (if multi-service)
+   - GitHub Actions workflows (build, test, deploy)
+   - Environment variables (.env.example)
+   - Build scripts (package.json scripts)
+   - Platform-specific instructions (Windows/Mac/Linux)
+
+2. CONTRACTS/INTERFACES
+   Add to specification:
+   - API contracts: REST endpoints, request/response schemas, error codes
+   - IPC contracts: Channel names, message formats, event sequences
+   - State contracts: Redux actions, state shape, selectors
+   - File contracts: Directory structure, file formats
+   - Database contracts: Table schemas, relationships
+
+3. TEST FIXTURES
+   Add to specification:
+   - Sample inputs for each component (3-5 examples)
+   - Expected outputs for each component
+   - Mock data for external dependencies
+   - Edge case scenarios
+
+4. UI WIREFRAMES
+   Add to specification:
+   - Wireframes or mockups for each view
+   - Component hierarchy
+   - User interaction flows
+   - Responsive design requirements
+
+5. ACCEPTANCE CRITERIA
+   Add to specification:
+   - Functional requirements (features implemented)
+   - Test coverage requirements (% thresholds)
+   - Performance benchmarks (latency, throughput)
+   - Security requirements (authentication, encryption)
+
+========================================
+END OF REFERENCE
+========================================
+
+This document describes Moose's capabilities as of October 7, 2025.
+Use this as the authoritative source for assessing specification compatibility.
+
+For implementation details, see:
+- Moose Agent Organizational Hierarchy.txt
+- Moose Agent Organizational Workflow.txt
+- Moose_Role_Modifications_for_Spec_Processing.txt

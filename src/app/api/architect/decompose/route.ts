@@ -14,8 +14,27 @@ export async function POST(request: NextRequest) {
     try {
       const body = await request.json();
 
+      // Extract spec and options from body
+      // Supports both formats:
+      // 1. { spec: {...}, options: {...} }
+      // 2. { spec: {...}, generateWireframes: true, generateContracts: true }
+      // 3. Direct spec { feature_name: ..., ... }
+      let specData: any;
+      let wireframesFlag = false;
+      let contractsFlag = false;
+
+      if (body.spec) {
+        specData = body.spec;
+        wireframesFlag = body.options?.generateWireframes ?? body.generateWireframes ?? false;
+        contractsFlag = body.options?.generateContracts ?? body.generateContracts ?? false;
+      } else {
+        specData = body;
+        wireframesFlag = false;
+        contractsFlag = false;
+      }
+
       // Validate and sanitize input
-      const spec = validateTechnicalSpec(body);
+      const spec = validateTechnicalSpec(specData);
 
       // Security check on feature_name
       const secCheck = securityCheck(spec.feature_name);
@@ -26,7 +45,14 @@ export async function POST(request: NextRequest) {
         }, { status: 400 });
       }
 
-      const decomposition = await architectService.decomposeSpec(spec as TechnicalSpec);
+      // Call architect with options (including generateWireframes and generateContracts flags)
+      const decomposition = await architectService.decomposeSpec(
+        spec as TechnicalSpec,
+        {
+          generateWireframes: wireframesFlag,
+          generateContracts: contractsFlag
+        }
+      );
 
       return NextResponse.json({
         success: true,

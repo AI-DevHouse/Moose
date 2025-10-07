@@ -6,7 +6,7 @@ import type { TechnicalSpec, WorkOrder } from '@/types/architect';
 // Decomposition thresholds (easily modifiable)
 export const DECOMPOSITION_THRESHOLDS = {
   MIN_WORK_ORDERS: 3,
-  MAX_WORK_ORDERS: 8,
+  MAX_WORK_ORDERS: 20,  // Increased from 8 to support greenfield projects
   MAX_TOKENS_PER_WO: 4000,
   COST_PER_1K_TOKENS: 0.001, // dollars
 };
@@ -35,6 +35,68 @@ ${spec.constraints.map(c => `- ${c}`).join('\n')}
 
 Acceptance Criteria:
 ${spec.acceptance_criteria.map(a => `- ${a}`).join('\n')}
+
+SPECIFICATION STRUCTURE ANALYSIS (check FIRST):
+
+Before standard decomposition, scan for existing structural indicators:
+- Numbered section headers (## 4.1, ## 4.2, ### 4.1.1, etc.)
+- "Component Specifications" or "Detailed Component Specifications" sections
+- Clear module/service/component boundaries with descriptions
+- Existing work breakdown structure
+
+IF STRUCTURED DECOMPOSITION DETECTED:
+1. EXTRACT sections as work units (preserve numbering and hierarchy)
+2. USE existing titles as work order titles
+3. USE existing descriptions as work order descriptions
+4. INFER files_in_scope from section content (look for file paths, component names)
+5. GENERATE acceptance_criteria from section requirements and constraints
+6. MAP dependencies from cross-references between sections (e.g., "depends on 4.1", "uses API from 4.2")
+7. AUGMENT with missing pieces:
+   - Add integration contracts if components communicate
+   - Add deployment configs if infrastructure mentioned
+   - Add test fixture requirements if testing mentioned
+8. OUTPUT with metadata in decomposition_doc:
+   - Add "## Decomposition Metadata" section at top
+   - decomposition_source: "extracted"
+   - extraction_confidence: 0.0-1.0 (1.0 = perfect structure, 0.5 = partial)
+   - original_structure: "section_based"
+   - modifications_made: [list what was augmented]
+
+IF NO CLEAR STRUCTURE:
+- Proceed with standard decomposition (below)
+- decomposition_source: "generated"
+
+SPECIFICATION VALIDATION (check for blockers):
+
+Scan specification for missing critical information:
+
+UI-HEAVY PROJECTS (mentions: UI, views, screens, components, interface, frontend):
+- CHECK FOR: Wireframes, mockups, Figma links, component hierarchy, design specs
+- IF MISSING: Add to decomposition_doc:
+  ## ⚠️ BLOCKERS - REQUIRES INPUT
+
+  **UI Wireframes Missing:**
+  Components requiring design: [list UI component names from spec]
+
+  **Impact:** Moose will implement based on literal text descriptions only, which may not match intended design.
+
+  **Recommendation:** Provide wireframes before executing work orders.
+
+  **Auto-Resolution:** Enable wireframe generation with --generate-wireframes flag.
+
+API/SERVICE PROJECTS (mentions: endpoints, API, routes, services, REST, GraphQL):
+- CHECK FOR: API schemas, endpoint definitions, request/response formats, error codes
+- IF MISSING: Flag as WARNING (can infer from context but may be incomplete)
+
+DEPLOYMENT PROJECTS (mentions: production, deployment, infrastructure, Docker, CI/CD):
+- CHECK FOR: Deployment platform, infrastructure requirements, environment variables
+- IF MISSING: Flag as WARNING (can use defaults but may need customization)
+
+DATABASE PROJECTS (mentions: database, persistence, storage, tables, collections):
+- CHECK FOR: Database schemas, relationships, indexes, constraints
+- IF MISSING: Flag as WARNING (can infer but may miss optimization opportunities)
+
+CONTINUE with decomposition regardless of blockers (user decides whether to proceed).
 
 YOUR TASK:
 1. Analyze complexity and scope
