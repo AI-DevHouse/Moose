@@ -6,6 +6,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { handleCriticalError } from '@/lib/error-escalation';
+import { proposerRegistry } from '@/lib/proposer-registry';
 import type { WorkOrder, AiderResult } from './types';
 import type { EnhancedProposerResponse } from '@/lib/enhanced-proposer-service';
 
@@ -136,14 +137,16 @@ export async function executeAider(
   // 2. Create feature branch
   const branchName = await createFeatureBranch(wo);
 
-  // 3. Map proposer to Aider model
-  const modelMap: Record<string, string> = {
-    'claude-sonnet-4-5': 'claude-3-5-sonnet-20241022',
-    'claude-sonnet-4': 'claude-3-5-sonnet-20241022',
-    'gpt-4o-mini': 'gpt-4o-mini',
-    'gpt-4o': 'gpt-4o'
-  };
-  const aiderModel = modelMap[selectedProposer] || 'claude-3-5-sonnet-20241022';
+  // 3. Lookup Aider model from ProposerRegistry (uses model field from database)
+  await proposerRegistry.initialize();
+  const proposerConfig = proposerRegistry.getProposer(selectedProposer);
+
+  if (!proposerConfig) {
+    throw new Error(`Proposer '${selectedProposer}' not found in registry`);
+  }
+
+  const aiderModel = proposerConfig.model || 'claude-sonnet-4-20250514'; // Fallback to Claude Sonnet 4.5
+  console.log(`[AiderExecutor] Using Aider model: ${aiderModel} (from proposer: ${selectedProposer})`);
 
   // 4. Build file list
   const files = wo.files_in_scope || [];

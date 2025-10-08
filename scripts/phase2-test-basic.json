@@ -1,0 +1,14 @@
+{
+  "spec": {
+    "feature_name": "Multi-LLM Discussion App",
+    "objectives": [
+      "Orchestrate synchronized discussions between four LLM providers"
+    ],
+    "constraints": [
+      "Must use Electron v28+ for desktop framework"
+    ],
+    "acceptance_criteria": [
+      "Successfully orchestrate discussion cycles with 2-4 LLM providers"
+    ]
+  }
+}
