@@ -3,7 +3,7 @@ export const runtime = 'nodejs'
 
 // src/app/api/architect/decompose/route.ts
 import { NextRequest, NextResponse} from 'next/server';
-import { architectService } from '@/lib/architect-service';
+import { batchedArchitectService } from '@/lib/batched-architect-service';
 import type { TechnicalSpec } from '@/types/architect';
 import { withRateLimit, architectApiLimiter } from '@/lib/rate-limiter';
 import { validateTechnicalSpec, securityCheck } from '@/lib/input-sanitizer';
@@ -45,8 +45,8 @@ export async function POST(request: NextRequest) {
         }, { status: 400 });
       }
 
-      // Call architect with options (including generateWireframes and generateContracts flags)
-      const decomposition = await architectService.decomposeSpec(
+      // Call batched architect service (automatically handles batching when needed)
+      const decomposition = await batchedArchitectService.decompose(
         spec as TechnicalSpec,
         {
           generateWireframes: wireframesFlag,
