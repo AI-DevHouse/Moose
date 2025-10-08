@@ -349,8 +349,10 @@ export class ContractValidator {
         .single();
 
       if (patterns) {
-        const totalAttempts = patterns.success_count + patterns.failure_count;
-        return totalAttempts > 0 ? patterns.success_count / totalAttempts : 0.5;
+        const successCount = patterns.success_count || 0;
+        const failureCount = patterns.failure_count || 0;
+        const totalAttempts = successCount + failureCount;
+        return totalAttempts > 0 ? successCount / totalAttempts : 0.5;
       }
 
       return 0.5; // Default confidence for new patterns

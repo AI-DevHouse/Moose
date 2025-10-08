@@ -1,0 +1,218 @@
+ Mental Walkthrough: End-to-End Moose Flow
+
+  Current Communication Mechanism:
+
+  You interact with Moose via HTTP API calls (curl, Postman, scripts). Moose responds with JSON. No UI, no CLI wrapper - pure REST     
+  API.
+
+- What is the user interface that I will type into and receive responses from?
+- How can we make it so that I can interact with Moose using English language typing.
+- This will be used by people who do not know how to code or use tech languages.  Mainly me.
+
+  Me (Claude Code) = Helping you build Moose itselfMoose = The web server you're building (runs on localhost:3000)
+
+- Will the new project need to run on a different localhost, so that the two don't conflict with each other?
+
+  ---
+  The Flow (As It Should Work):
+
+  Phase 1: Project Setup
+
+  You:
+  curl -X POST http://localhost:3000/api/projects/initialize \
+    -H "Content-Type: application/json" \
+    -d '{
+      "name": "multi_LLM_discussion",
+      "root_directory": "C:\\dev"
+    }'
+
+  Moose Returns:
+  {
+    "success": true,
+    "project": { "id": "abc-123", ... },
+    "message": "✅ Project created at C:\\dev\\multi_LLM_discussion",
+    "next_steps": {
+      "steps": [
+        { "step": 1, "title": "Create GitHub Repository", ... },
+        { "step": 2, "title": "Add Git Remote", ... },
+        ...
+      ]
+    },
+    "instructions_file": "C:\\dev\\multi_LLM_discussion\\SETUP_INSTRUCTIONS.md"
+  }
+
+  You: Read SETUP_INSTRUCTIONS.md, create GitHub repo, Supabase, fill in .env.local
+
+  ---
+  Phase 2: Decomposition ⚠️ GAP IDENTIFIED
+
+- So am I provided with a folder pathway to past the technical spec into?
+- Will a .txt file be OK and then Moose can convert it as needed (as done earlier for the test run)
+
+  You (providing tech spec):
+  curl -X POST http://localhost:3000/api/architect/decompose \
+    -H "Content-Type: application/json" \
+    -d '{
+      "project_id": "abc-123",
+      "technical_spec": "Build a Multi-LLM Discussion app..."
+    }'
+
+  🚨 PROBLEM: Current /api/architect/decompose endpoint doesn't accept project_id!It creates orphaned work orders not linked to any    
+   project.
+
+  Moose Should:
+  1. Accept project_id parameter
+  2. Analyze spec for requirements (API keys, services, etc.)
+  3. Create work orders linked to project
+  4. Return work order list + detected requirements
+
+  Moose Should Return:
+  {
+    "success": true,
+    "project_id": "abc-123",
+    "work_orders_created": 53,
+    "work_orders": [ ... ],
+    "detected_requirements": {
+      "api_keys_needed": [
+        {
+          "service": "OpenAI GPT-4o-mini",
+          "env_var": "OPENAI_API_KEY",
+          "instructions": "Get from https://platform.openai.com/api-keys"
+        },
+        {
+          "service": "Anthropic Claude",
+          "env_var": "ANTHROPIC_API_KEY",
+          "instructions": "Get from https://console.anthropic.com/"
+        }
+      ],
+      "external_services": ["Supabase", "Vercel"]
+    }
+  }
+
+  🚨 CURRENTLY MISSING: Requirement analysis - Moose can't detect "you'll need GPT-4o-mini API key"
+
+- How do you propose to fix this and what is your logic/process (I don't need to know the code)
+
+  ---
+  Phase 3: Execution
+
+  You:
+  curl -X POST http://localhost:3000/api/orchestrator/execute \
+    -H "Content-Type: application/json" \
+    -d '{"work_order_id": "wo-0"}'
+
+  Moose Does:
+  1. ✅ Looks up work order
+  2. ✅ Finds linked project
+  3. ✅ Executes Aider in C:\dev\multi_LLM_discussion\
+  4. ✅ Creates git branch
+  5. ⚠️ Tries to push to GitHub (fails if no remote)
+  6. ❌ Can't create PR (no remote)
+
+  Moose Returns:
+  {
+    "success": false,
+    "error": "Failed to create PR: 'origin' does not appear to be a git repository",
+    "work_order_id": "wo-0"
+  }
+
+  🚨 PROBLEM: Moose doesn't gracefully handle missing GitHub remote
+
+  ---
+  Critical Gaps:
+
+  1. Decompose Endpoint Doesn't Link Projects (MAJOR)
+
+  - Current: /api/architect/decompose has no project_id parameter
+  - Work orders created without project linkage
+  - Execution can't find project directory
+
+  Fix Required: Update decompose endpoint to accept and require project_id
+
+  2. No Requirement Analysis (YOUR QUESTION)
+
+  - Moose can't detect "you'll need GPT-4o-mini API" from spec
+  - No proactive guidance on API keys needed
+  - Could be built as a pre-decomposition analysis step
+
+  Fix Required: Build a RequirementAnalyzer service that:
+  - Parses technical spec
+  - Detects API mentions (OpenAI, Anthropic, Stripe, etc.)
+  - Detects service dependencies (Supabase, Redis, etc.)
+  - Returns checklist of credentials needed
+  - Updates .env.local.template with placeholders
+
+  3. No Graceful GitHub Handling
+
+  - Execution fails hard if GitHub remote missing
+  - Should allow "local-only" mode
+  - Should guide user to add remote
+
+  Fix Required: Check for remote before PR creation, return helpful message
+
+- For now I want it to fail hard - leave this unless it will cause a problem with the development.
+- Explain why I need this?
+
+  4. No Progress Feedback
+
+  - You POST and wait
+  - No streaming updates
+  - No "Moose is working..." indicator
+
+  Could Add: Server-sent events or WebSocket for progress
+
+- Feedback would be good.
+
+  ---
+  What Needs to Be Built (Priority Order):
+
+  1. CRITICAL: Update /api/architect/decompose to require project_id
+  2. CRITICAL: Link work orders to projects in database
+  3. HIGH: Add requirement analysis (detect API keys from spec)
+  4. HIGH: Graceful GitHub remote handling
+  5. MEDIUM: Progress/status mechanism
+  6. LOW: CLI wrapper or simple web UI
+
+  ---
+  Example: Full Flow (If Complete)
+
+  # 1. Create project
+  POST /api/projects/initialize { name, root_directory }
+  # Returns: project_id, setup checklist
+
+  # 2. Manual: Create GitHub, Supabase, fill .env.local
+
+  # 3. Decompose spec
+  POST /api/architect/decompose { project_id, technical_spec }
+  # Moose analyzes spec, detects GPT-4o-mini needed
+  # Returns: work_orders[], detected_requirements[]
+  # You see: "⚠️ You'll need OPENAI_API_KEY - add to .env.local"
+
+  # 4. Add missing API key to .env.local
+
+  # 5. Execute work orders
+  for wo in work_orders:
+    POST /api/orchestrator/execute { work_order_id: wo.id }
+    # Moose executes in project directory, creates PRs
+
+  # 6. Done! App built in C:\dev\multi_LLM_discussion
+
+  ---
+  Answer to Your Question:
+
+  "Will Moose be able to spot that [GPT-4o-mini API key is needed] and give me instructions?"
+
+  Currently: NO - Moose doesn't analyze specs for requirementsCould Build: YES - Add a RequirementAnalyzer that parses the spec and    
+   returns detected dependencies
+
+  Should I build that now?
+
+───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+> Explain the logic that you intend to  
+───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ accept edits on (shift+tab to cycle)
+
+
+
+
+

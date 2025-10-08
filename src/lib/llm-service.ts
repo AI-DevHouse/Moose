@@ -544,17 +544,15 @@ Analyze the contracts and code changes for breaking changes.`;
       id: "a40c5caf-b0fb-4a8b-a544-ca82bb2ab939",
       name: "claude-sonnet-4-5-20250929",
       provider: "anthropic",
-      endpoint: "https://api.anthropic.com/v1/messages",
-      context_limit: 200000,
-      cost_profile: { 
+      model: "claude-sonnet-4-5-20250929",
+      cost_profile: {
         input_cost_per_token: 0.000003,
-        output_cost_per_token: 0.000015
-      },
-      strengths: ["high-quality-code", "multi-file-reasoning", "consistent-diffs"],
+        output_cost_per_token: 0.000015,
+        endpoint: "https://api.anthropic.com/v1/messages",
+        context_limit: 200000
+      } as any,
       complexity_threshold: 0.30,
-      success_patterns: null,
-      notes: "Primary proposer for complex work - Claude Sonnet 4",
-      is_active: true,
+      active: true,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
@@ -565,17 +563,15 @@ Analyze the contracts and code changes for breaking changes.`;
       id: "fallback-gpt-4o-mini",
       name: "gpt-4o-mini",
       provider: "openai",
-      endpoint: "https://api.openai.com/v1/chat/completions",
-      context_limit: 128000,
-      cost_profile: { 
+      model: "gpt-4o-mini",
+      cost_profile: {
         input_cost_per_token: 0.00000015,
-        output_cost_per_token: 0.0000006
-      },
-      strengths: ["fast-responses", "cost-effective", "simple-tasks"],
+        output_cost_per_token: 0.0000006,
+        endpoint: "https://api.openai.com/v1/chat/completions",
+        context_limit: 128000
+      } as any,
       complexity_threshold: 0.30,
-      success_patterns: null,
-      notes: "Cost-optimized fallback for simple work - GPT-4o-mini",
-      is_active: true,
+      active: true,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     };

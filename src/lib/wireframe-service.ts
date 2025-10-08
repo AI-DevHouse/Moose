@@ -8,16 +8,28 @@ import type { WireframeRequest, WireframeResult } from '@/types/wireframe';
 export class WireframeService {
   private static instance: WireframeService;
   private anthropic: Anthropic;
-  private supabase: ReturnType<typeof createClient>;
+  private supabase?: ReturnType<typeof createClient>;
 
   private constructor() {
-    this.anthropic = new Anthropic({
-      apiKey: process.env.ANTHROPIC_API_KEY!
-    });
-    this.supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    );
+    // Defensive initialization with clear error messages
+    const anthropicKey = process.env.ANTHROPIC_API_KEY;
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+    if (!anthropicKey) {
+      throw new Error('[WireframeService] ANTHROPIC_API_KEY environment variable is required');
+    }
+
+    if (!supabaseUrl || !supabaseKey) {
+      console.warn('[WireframeService] Supabase credentials missing - wireframe generation will not be available');
+      console.warn('[WireframeService] Required: NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY');
+    }
+
+    this.anthropic = new Anthropic({ apiKey: anthropicKey });
+
+    if (supabaseUrl && supabaseKey) {
+      this.supabase = createClient(supabaseUrl, supabaseKey);
+    }
   }
 
   static getInstance(): WireframeService {
@@ -31,6 +43,10 @@ export class WireframeService {
    * Generate a wireframe for a UI component
    */
   async generateWireframe(request: WireframeRequest): Promise<WireframeResult> {
+    if (!this.supabase) {
+      throw new Error('[WireframeService] Cannot generate wireframe - Supabase not configured. Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY environment variables.');
+    }
+
     console.log(`🎨 Generating wireframe: ${request.component_name}...`);
 
     const startTime = Date.now();
@@ -198,6 +214,10 @@ export default ${request.component_name};
     const fileName = `${result.component_name}.tsx`;
     const filePath = `wireframes/${fileName}`;
 
+    if (!this.supabase) {
+      throw new Error('[WireframeService] Cannot upload to Supabase - not configured');
+    }
+
     const { error } = await this.supabase.storage
       .from('moose-artifacts')
       .upload(filePath, result.code, {
@@ -214,6 +234,10 @@ export default ${request.component_name};
    * Retrieve a wireframe from Supabase Storage
    */
   async getWireframe(componentName: string): Promise<string | null> {
+    if (!this.supabase) {
+      throw new Error('[WireframeService] Cannot download from Supabase - not configured');
+    }
+
     const filePath = `wireframes/${componentName}.tsx`;
 
     const { data, error } = await this.supabase.storage
@@ -232,6 +256,10 @@ export default ${request.component_name};
    * List all wireframes in storage
    */
   async listWireframes(): Promise<string[]> {
+    if (!this.supabase) {
+      throw new Error('[WireframeService] Cannot list wireframes from Supabase - not configured');
+    }
+
     const { data, error } = await this.supabase.storage
       .from('moose-artifacts')
       .list('wireframes');

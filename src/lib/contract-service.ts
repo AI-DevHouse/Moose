@@ -23,9 +23,13 @@ export class ContractGenerationService {
   private anthropic: Anthropic;
 
   private constructor() {
-    this.anthropic = new Anthropic({
-      apiKey: process.env.ANTHROPIC_API_KEY!
-    });
+    const anthropicKey = process.env.ANTHROPIC_API_KEY;
+
+    if (!anthropicKey) {
+      throw new Error('[ContractService] ANTHROPIC_API_KEY environment variable is required');
+    }
+
+    this.anthropic = new Anthropic({ apiKey: anthropicKey });
   }
 
   static getInstance(): ContractGenerationService {

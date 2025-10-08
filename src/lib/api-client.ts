@@ -72,33 +72,33 @@ export class ApiClient {
     return data
   }
 
-  // System Status
-  async getSystemStatus(): Promise<Tables<'system_status'>[]> {
-    const { data, error } = await this.supabase
-      .from('system_status')
-      .select('*')
-      .order('component_name')
-    
-    if (error) throw error
-    return data || []
-  }
+  // System Status (DISABLED - table does not exist in current schema)
+  // async getSystemStatus(): Promise<any[]> {
+  //   const { data, error } = await this.supabase
+  //     .from('system_status')
+  //     .select('*')
+  //     .order('component_name')
+  //
+  //   if (error) throw error
+  //   return data || []
+  // }
 
-  async updateSystemStatus(id: string, status: 'online' | 'offline' | 'degraded'): Promise<Tables<'system_status'>> {
-    const updateData: TablesUpdate<'system_status'> = { 
-      status,
-      last_heartbeat: new Date().toISOString(),
-    }
-
-    const { data, error } = await this.supabase
-      .from('system_status')
-      .update(updateData)
-      .eq('id', id)
-      .select()
-      .single()
-    
-    if (error) throw error
-    return data
-  }
+  // async updateSystemStatus(id: string, status: 'online' | 'offline' | 'degraded'): Promise<any> {
+  //   const updateData = {
+  //     status,
+  //     last_heartbeat: new Date().toISOString(),
+  //   }
+  //
+  //   const { data, error } = await this.supabase
+  //     .from('system_status')
+  //     .update(updateData)
+  //     .eq('id', id)
+  //     .select()
+  //     .single()
+  //
+  //   if (error) throw error
+  //   return data
+  // }
 
   // Escalations
   async getEscalations(): Promise<any[]> {
@@ -230,22 +230,23 @@ class WorkOrderService {
   }
 }
 
-class SystemStatusService {
-  private apiClient = new ApiClient()
-
-  async getAll() {
-    try {
-      const data = await this.apiClient.getSystemStatus()
-      return NextResponse.json(data)
-    } catch (error) {
-      console.error('Error fetching system status:', error)
-      return NextResponse.json(
-        { error: 'Failed to fetch system status' }, 
-        { status: 500 }
-      )
-    }
-  }
-}
+// DISABLED: system_status table does not exist
+// class SystemStatusService {
+//   private apiClient = new ApiClient()
+//
+//   async getAll() {
+//     try {
+//       const data = await this.apiClient.getSystemStatus()
+//       return NextResponse.json(data)
+//     } catch (error) {
+//       console.error('Error fetching system status:', error)
+//       return NextResponse.json(
+//         { error: 'Failed to fetch system status' },
+//         { status: 500 }
+//       )
+//     }
+//   }
+// }
 
 class BudgetService {
   private apiClient = new ApiClient()
@@ -348,9 +349,8 @@ class DashboardMetricsService {
 
   async getAll() {
     try {
-      const [workOrders, systemStatus, escalations, costData] = await Promise.all([
+      const [workOrders, escalations, costData] = await Promise.all([
         this.apiClient.getWorkOrders(),
-        this.apiClient.getSystemStatus(),
         this.apiClient.getEscalations(),
         this.apiClient.getCostData()
       ])
@@ -359,8 +359,8 @@ class DashboardMetricsService {
         activeWorkOrders: workOrders.filter((wo: Tables<'work_orders'>) => wo.status === 'processing').length,
         pendingEscalations: escalations.filter((esc: Tables<'escalations'>) => esc.status === 'open').length,
         systemHealth: {
-          active: systemStatus.filter((comp: Tables<'system_status'>) => comp.status === 'online').length,
-          total: systemStatus.length
+          active: 0, // system_status table disabled
+          total: 0
         },
         monthlySpend: costData.reduce((sum: number, record: Tables<'cost_tracking'>) => sum + (record.cost || 0), 0)
       }
@@ -378,7 +378,7 @@ class DashboardMetricsService {
 
 // Export service instances
 export const workOrderService = new WorkOrderService()
-export const systemStatusService = new SystemStatusService()
+// export const systemStatusService = new SystemStatusService() // DISABLED - table doesn't exist
 export const budgetService = new BudgetService()
 export const escalationsService = new EscalationsService()
 export const decisionLogsService = new DecisionLogsService()

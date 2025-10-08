@@ -7,6 +7,9 @@ import * as path from 'path';
 import * as os from 'os';
 import { handleCriticalError } from '@/lib/error-escalation';
 import { proposerRegistry } from '@/lib/proposer-registry';
+import { validateWorkOrderSafety } from './project-safety';
+import { projectService } from '@/lib/project-service';
+import { projectValidator } from '@/lib/project-validator';
 import type { WorkOrder, AiderResult } from './types';
 import type { EnhancedProposerResponse } from '@/lib/enhanced-proposer-service';
 
@@ -71,9 +74,13 @@ export function createAiderInstructionFile(
  * Create feature branch for Work Order
  *
  * @param wo - Work Order
+ * @param workingDirectory - Directory to execute git commands in
  * @returns Branch name
  */
-export async function createFeatureBranch(wo: WorkOrder): Promise<string> {
+export async function createFeatureBranch(
+  wo: WorkOrder,
+  workingDirectory: string
+): Promise<string> {
   const slug = wo.title
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
@@ -83,11 +90,12 @@ export async function createFeatureBranch(wo: WorkOrder): Promise<string> {
   const branchName = `feature/wo-${wo.id.substring(0, 8)}-${slug}`;
 
   console.log(`[AiderExecutor] Creating feature branch: ${branchName}`);
+  console.log(`[AiderExecutor] Working directory: ${workingDirectory}`);
 
   try {
     // Get current branch (don't switch - create feature branch from wherever we are)
     const currentBranch = execSync('git branch --show-current', {
-      cwd: process.cwd(),
+      cwd: workingDirectory,
       encoding: 'utf-8'
     }).trim();
 
@@ -95,7 +103,7 @@ export async function createFeatureBranch(wo: WorkOrder): Promise<string> {
     console.log(`[AiderExecutor] Creating feature branch from current branch`);
 
     // Create feature branch from current branch
-    execSync(`git checkout -b ${branchName}`, { cwd: process.cwd(), stdio: 'pipe' });
+    execSync(`git checkout -b ${branchName}`, { cwd: workingDirectory, stdio: 'pipe' });
 
     console.log(`[AiderExecutor] Feature branch created successfully`);
     return branchName;
@@ -106,7 +114,7 @@ export async function createFeatureBranch(wo: WorkOrder): Promise<string> {
       error: error,
       workOrderId: wo.id,
       severity: 'critical',
-      metadata: { branchName }
+      metadata: { branchName, workingDirectory }
     });
     throw new Error(`Failed to create feature branch: ${error.message}`);
   }
@@ -131,13 +139,34 @@ export async function executeAider(
 ): Promise<AiderResult> {
   console.log(`[AiderExecutor] Starting Aider execution for WO ${wo.id}`);
 
-  // 1. Create instruction file
+  // 0. SAFETY CHECK: Prevent self-modification
+  validateWorkOrderSafety(wo.id, wo.project_id);
+
+  // 1. Get and validate project (if project_id exists)
+  let workingDirectory = process.cwd(); // Default: current directory (for backward compatibility)
+
+  if (wo.project_id) {
+    console.log(`[AiderExecutor] Work order linked to project: ${wo.project_id}`);
+
+    // Validate project and get working directory
+    const project = await projectValidator.validateOrThrow(wo.project_id);
+    workingDirectory = project.local_path;
+
+    console.log(`[AiderExecutor] Using project directory: ${workingDirectory}`);
+  } else {
+    console.warn(
+      `[AiderExecutor] ⚠️  Work order ${wo.id} has no project_id. ` +
+      `Executing in current directory: ${workingDirectory}`
+    );
+  }
+
+  // 2. Create instruction file
   const instructionPath = createAiderInstructionFile(wo, proposerResponse);
 
-  // 2. Create feature branch
-  const branchName = await createFeatureBranch(wo);
+  // 3. Create feature branch
+  const branchName = await createFeatureBranch(wo, workingDirectory);
 
-  // 3. Lookup Aider model from ProposerRegistry (uses model field from database)
+  // 4. Lookup Aider model from ProposerRegistry (uses model field from database)
   await proposerRegistry.initialize();
   const proposerConfig = proposerRegistry.getProposer(selectedProposer);
 
@@ -145,10 +174,10 @@ export async function executeAider(
     throw new Error(`Proposer '${selectedProposer}' not found in registry`);
   }
 
-  const aiderModel = proposerConfig.model || 'claude-sonnet-4-20250514'; // Fallback to Claude Sonnet 4.5
+  const aiderModel = proposerConfig.name || 'claude-sonnet-4-20250514'; // Fallback to Claude Sonnet 4.5
   console.log(`[AiderExecutor] Using Aider model: ${aiderModel} (from proposer: ${selectedProposer})`);
 
-  // 4. Build file list
+  // 5. Build file list
   const files = wo.files_in_scope || [];
   if (files.length === 0) {
     throw new Error('files_in_scope is empty - cannot execute Aider without target files');
@@ -156,7 +185,7 @@ export async function executeAider(
 
   console.log(`[AiderExecutor] Executing Aider with model ${aiderModel} on ${files.length} files`);
 
-  // 5. Spawn Aider process
+  // 6. Spawn Aider process in project directory
   return new Promise((resolve, reject) => {
     const aiderArgs = [
       '--message-file', instructionPath,
@@ -170,7 +199,7 @@ export async function executeAider(
 
     // Use Python 3.11 to run Aider (installed via: py -3.11 -m pip install aider-chat)
     const aiderProcess = spawn('py', ['-3.11', '-m', 'aider', ...aiderArgs], {
-      cwd: process.cwd(),
+      cwd: workingDirectory,  // Execute in project directory
       env: {
         ...process.env,
         ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,

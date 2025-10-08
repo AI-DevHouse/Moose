@@ -25,7 +25,7 @@ export function shouldEscalate(workOrder: Tables<'work_orders'>): boolean {
   }
 
   // 3. Cost exceeds estimate by >200%
-  if (workOrder.estimated_cost > 0 && workOrder.actual_cost) {
+  if (workOrder.estimated_cost && workOrder.estimated_cost > 0 && workOrder.actual_cost) {
     const overrun = workOrder.actual_cost / workOrder.estimated_cost
     if (overrun > 2.0) {
       return true
@@ -33,6 +33,7 @@ export function shouldEscalate(workOrder: Tables<'work_orders'>): boolean {
   }
 
   // 4. Work Order processing for >24 hours
+  if (!workOrder.created_at) return false
   const createdAt = new Date(workOrder.created_at)
   const hoursSinceCreation = (Date.now() - createdAt.getTime()) / (1000 * 60 * 60)
   if (workOrder.status === 'processing' && hoursSinceCreation > 24) {
@@ -108,7 +109,7 @@ export function generateResolutionOptions(
     option_id: 'A',
     strategy: 'retry_different_approach',
     description: `Retry Work Order with Claude Sonnet 4.5 (highest capability model) and increased context budget (+50%)`,
-    estimated_cost: workOrder.estimated_cost * 1.5,
+    estimated_cost: (workOrder.estimated_cost || 0) * 1.5,
     success_probability: historicalData.success_rate_by_strategy['retry_different_approach'] || 0.65,
     time_to_resolution: '2-4 hours',
     risk_assessment: {
@@ -129,7 +130,7 @@ export function generateResolutionOptions(
       option_id: 'B',
       strategy: 'pivot_solution',
       description: `Pivot to alternative technical approach (e.g., use different library, simpler architecture)`,
-      estimated_cost: workOrder.estimated_cost * 2.0,
+      estimated_cost: (workOrder.estimated_cost || 0) * 2.0,
       success_probability: historicalData.success_rate_by_strategy['pivot_solution'] || 0.75,
       time_to_resolution: '4-8 hours',
       risk_assessment: {
@@ -155,7 +156,7 @@ export function generateResolutionOptions(
       option_id: 'C',
       strategy: 'amend_upstream',
       description: `Fix root cause in earlier Work Orders (likely dependency issue or incomplete foundation)`,
-      estimated_cost: workOrder.estimated_cost * 1.2,
+      estimated_cost: (workOrder.estimated_cost || 0) * 1.2,
       success_probability: historicalData.success_rate_by_strategy['amend_upstream'] || 0.80,
       time_to_resolution: '6-12 hours',
       risk_assessment: {
@@ -181,7 +182,7 @@ export function generateResolutionOptions(
       option_id: 'D',
       strategy: 'abort_redesign',
       description: `Abort current approach and escalate to Architect for complete re-decomposition`,
-      estimated_cost: workOrder.estimated_cost * 3.0,
+      estimated_cost: (workOrder.estimated_cost || 0) * 3.0,
       success_probability: historicalData.success_rate_by_strategy['abort_redesign'] || 0.90,
       time_to_resolution: '1-2 days',
       risk_assessment: {

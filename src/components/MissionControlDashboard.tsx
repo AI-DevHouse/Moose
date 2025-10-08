@@ -39,7 +39,7 @@ interface WorkOrder {
   escalations?: Array<{
     id: string;
     status: string;
-    reason: string;
+    trigger_type: string;
     created_at: string;
   }>;
 }
@@ -84,11 +84,11 @@ interface DashboardMetrics {
 interface Escalation {
   id: string;
   work_order_id: string;
-  reason: string;
+  trigger_type: string;
   status: 'open' | 'in_progress' | 'resolved' | 'dismissed';
-  escalation_data?: any;
+  context?: any;
   resolution_notes?: string;
-  assigned_to?: string;
+  resolution_type?: string;
   created_at: string;
   updated_at: string;
   resolved_at?: string;
@@ -1015,7 +1015,7 @@ export default function MissionControlDashboard() {
                             </div>
 
                             <p className="text-sm text-gray-600 mb-3">
-                              <span className="font-medium">Reason:</span> {escalation.reason}
+                              <span className="font-medium">Trigger Type:</span> {escalation.trigger_type}
                             </p>
 
                             <div className="flex items-center space-x-4 text-xs text-gray-500 mb-4">
@@ -1501,7 +1501,7 @@ export default function MissionControlDashboard() {
                     <span className="font-medium">Work Order:</span> {selectedEscalation.work_orders?.title || 'Unknown'}
                   </p>
                   <p className="text-sm text-gray-600 mb-1">
-                    <span className="font-medium">Reason:</span> {selectedEscalation.reason}
+                    <span className="font-medium">Trigger Type:</span> {selectedEscalation.trigger_type}
                   </p>
                   <p className="text-sm text-gray-600">
                     <span className="font-medium">Created:</span> {new Date(selectedEscalation.created_at).toLocaleString()}

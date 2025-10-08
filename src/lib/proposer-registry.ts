@@ -22,7 +22,9 @@ export interface ProposerConfig {
   complexity_threshold: number;
   success_patterns?: Record<string, any>;
   notes?: string;
-  is_active: boolean;
+  active: boolean;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface RoutingDecision {
@@ -43,25 +45,37 @@ export class ProposerRegistry {
     try {
       const { data: configs, error } = await supabase
         .from('proposer_configs')
-        .select('id, name, model, provider, complexity_threshold, cost_profile, active')
+        .select('id, name, provider, complexity_threshold, cost_profile, active, created_at, updated_at')
         .eq('active', true)
         .order('created_at');
 
       if (error) throw error;
 
       for (const config of configs || []) {
+        // Parse cost_profile if it's a stringified JSON
+        const costProfile = typeof config.cost_profile === 'string'
+          ? JSON.parse(config.cost_profile)
+          : config.cost_profile;
+
+        // Parse complexity_threshold if it's a string
+        const complexityThreshold = typeof config.complexity_threshold === 'string'
+          ? parseFloat(config.complexity_threshold)
+          : config.complexity_threshold;
+
         this.proposers.set(config.name, {
           id: config.id,
           name: config.name,
           provider: config.provider as 'anthropic' | 'openai',
           endpoint: config.provider === 'anthropic' ? 'https://api.anthropic.com/v1/messages' : 'https://api.openai.com/v1/chat/completions',
           context_limit: config.provider === 'anthropic' ? 200000 : 128000,
-          cost_profile: config.cost_profile as { input_cost_per_token: number; output_cost_per_token: number; currency?: string },
+          cost_profile: costProfile as { input_cost_per_token: number; output_cost_per_token: number; currency?: string },
           strengths: [],
-          complexity_threshold: config.complexity_threshold,
+          complexity_threshold: complexityThreshold,
           success_patterns: undefined,
           notes: undefined,
-          is_active: config.active
+          active: config.active ?? true,
+          created_at: config.created_at ?? undefined,
+          updated_at: config.updated_at ?? undefined
         });
       }
 
@@ -80,14 +94,19 @@ export class ProposerRegistry {
           id: config.id,
           name: config.name,
           provider: config.provider,
-          endpoint: config.endpoint,
-          context_limit: config.context_limit,
-          cost_profile: config.cost_profile,
-          strengths: config.strengths,
+          model: config.name,
+          cost_profile: {
+            ...config.cost_profile,
+            endpoint: config.endpoint,
+            context_limit: config.context_limit,
+            strengths: config.strengths,
+            success_patterns: config.success_patterns,
+            notes: config.notes
+          } as any,
           complexity_threshold: config.complexity_threshold,
-          success_patterns: config.success_patterns,
-          notes: config.notes,
-          is_active: config.is_active
+          active: config.active,
+          created_at: config.created_at ?? new Date().toISOString(),
+          updated_at: config.updated_at ?? new Date().toISOString()
         });
 
       if (error) throw error;
@@ -104,7 +123,7 @@ export class ProposerRegistry {
   }
 
   listActiveProposers(): ProposerConfig[] {
-    return Array.from(this.proposers.values()).filter(p => p.is_active);
+    return Array.from(this.proposers.values()).filter(p => p.active);
   }
 
   // NOTE: Routing logic has been moved to Manager service (Phase 4.1)

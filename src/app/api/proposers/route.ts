@@ -66,7 +66,9 @@ export async function POST(request: NextRequest) {
       complexity_threshold: body.complexity_threshold || 0.5,
       success_patterns: body.success_patterns,
       notes: body.notes,
-      is_active: body.is_active !== undefined ? body.is_active : true
+      active: body.active !== undefined ? body.active : true,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
     };
 
     await proposerRegistry.registerProposer(proposerConfig);
@@ -111,7 +113,9 @@ export async function PUT(request: NextRequest) {
         strengths: ["fast-execution", "simple-tasks", "cost-effective"],
         complexity_threshold: 0.3,
         notes: "Cost-optimized fallback (44x cheaper than reasoning models)",
-        is_active: true
+        active: true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
       };
 
       await proposerRegistry.registerProposer(correctedConfig);

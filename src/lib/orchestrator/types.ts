@@ -58,6 +58,7 @@ export interface WorkOrder {
   estimated_cost: number;
   pattern_confidence: number;
   proposer_id: string | null;
+  project_id?: string | null;  // NEW: Links work order to target project
   acceptance_criteria: string[] | null;
   files_in_scope: string[] | null;
   context_budget_estimate: number | null;

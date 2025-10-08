@@ -17,6 +17,7 @@ import { contractService } from './contract-service';
 export interface DecomposeOptions {
   generateWireframes?: boolean;
   generateContracts?: boolean;
+  projectId?: string;
 }
 
 export class ArchitectService {

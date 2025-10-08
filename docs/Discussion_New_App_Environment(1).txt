@@ -1,0 +1,685 @@
+## 🎯 Critical Architecture Issue - Claude Code is Absolutely Right
+
+**TL;DR: Moose currently would modify ITSELF instead of building separate apps. This must be fixed before executing ANY work orders.**
+
+---
+
+## 🚨 The Problem (Extremely Well Identified)
+
+Claude Code nailed a **fundamental architectural flaw**:
+
+### **Current Behavior:**
+```
+User: "Build a Todo App"
+Moose Architect: Decomposes into work orders
+Orchestrator: Executes work orders with Aider
+Aider: Modifies files in process.cwd()
+         = C:\dev\moose-mission-control
+         = MOOSE'S OWN CODEBASE! ❌
+
+Result:
+- Todo app code pollutes Moose repo
+- PRs created against Moose repository
+- Moose and Todo App become entangled
+- Cannot deploy Todo App separately
+```
+
+### **What Should Happen:**
+```
+User: "Build a Todo App"
+Moose: Creates isolated project
+       - C:\dev\generated-apps\todo-app\
+       - GitHub: your-org/todo-app
+       - Supabase: Separate project
+       - Vercel: Separate deployment
+
+Orchestrator: Executes in todo-app directory
+Aider: Modifies files in C:\dev\generated-apps\todo-app\
+PRs: Created against your-org/todo-app
+Deploy: Separate Vercel instance
+
+Result:
+- Todo App is independent ✅
+- Moose stays clean ✅
+- Can build multiple apps ✅
+```
+
+---
+
+## ✅ Claude Code's Solution is Perfect
+
+### **The "Projects" Concept**
+
+This is exactly the right abstraction. Each target application is a **Project** with:
+
+**1. Identity:**
+- Name: "Todo App"
+- Description: "Simple task management"
+- Status: initialized → active → deployed → archived
+
+**2. Filesystem:**
+- Local path: `C:\dev\generated-apps\todo-app\`
+- Isolated git repository
+- Own package.json, dependencies, etc.
+
+**3. GitHub Integration:**
+- Separate repository: `your-org/todo-app`
+- Own PRs, issues, branches
+- Independent CI/CD
+
+**4. Infrastructure:**
+- Supabase project (separate database)
+- Vercel project (separate deployment)
+- Environment variables (isolated)
+
+**5. Work Orders:**
+- Linked to project via `project_id`
+- Execute in project's workspace
+- Modify project's files only
+
+---
+
+## 📊 Database Schema (Approved)
+
+Claude Code's schema is excellent. I'd add a few fields:
+
+```sql
+CREATE TABLE projects (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  description TEXT,
+  
+  -- Filesystem
+  local_path TEXT NOT NULL UNIQUE,           
+  -- e.g., C:\dev\generated-apps\todo-app
+  
+  -- Git/GitHub
+  git_initialized BOOLEAN DEFAULT FALSE,
+  github_repo_url TEXT,                
+  github_repo_name TEXT,               
+  -- e.g., your-org/todo-app
+  default_branch TEXT DEFAULT 'main',
+  
+  -- Infrastructure
+  supabase_project_id TEXT,
+  supabase_url TEXT,
+  supabase_anon_key TEXT,               -- NEW: For client-side access
+  
+  vercel_project_id TEXT,
+  vercel_url TEXT,
+  vercel_deployment_id TEXT,            -- NEW: Latest deployment
+  
+  -- Metadata
+  status TEXT NOT NULL DEFAULT 'initialized',
+  -- initialized, scaffolding, active, building, deployed, failed, archived
+  
+  tech_stack JSONB,                     -- NEW: Store framework, language, etc.
+  -- e.g., {"framework": "Next.js", "language": "TypeScript"}
+  
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  created_by UUID REFERENCES auth.users(id),  -- NEW: Who created it
+  
+  CONSTRAINT valid_status CHECK (status IN (
+    'initialized', 'scaffolding', 'active', 'building', 
+    'deployed', 'failed', 'archived'
+  ))
+);
+
+-- Link work orders to projects (as Claude Code suggested)
+ALTER TABLE work_orders 
+  ADD COLUMN project_id UUID REFERENCES projects(id) ON DELETE CASCADE;
+
+-- Index for performance
+CREATE INDEX idx_work_orders_project_id ON work_orders(project_id);
+CREATE INDEX idx_projects_status ON projects(status);
+```
+
+---
+
+## 🛠️ Implementation Approach
+
+### **I Agree with Claude Code's Phased Approach, With Modifications:**
+
+---
+
+## **PHASE 0: Immediate Safety (RIGHT NOW - 10 minutes)**
+
+**Before doing ANYTHING else:**
+
+Add a safety check to prevent Moose from modifying itself:
+
+```typescript
+// aider-executor.ts - Add at the top of execute()
+export class AiderExecutor {
+  async execute(workOrder: WorkOrder): Promise<ExecutionResult> {
+    
+    // SAFETY CHECK: Prevent self-modification
+    const currentRepo = process.cwd();
+    const mooseRepoIndicators = [
+      'moose-mission-control',
+      'package.json' // Check for Moose's package.json
+    ];
+    
+    if (mooseRepoIndicators.some(indicator => 
+      currentRepo.includes(indicator)
+    )) {
+      // Check if work order has project_id
+      if (!workOrder.project_id) {
+        throw new Error(
+          '🚨 SAFETY CHECK FAILED: Work order has no project_id.\n' +
+          'This would modify Moose\'s own codebase!\n' +
+          'All work orders must be linked to a target project.'
+        );
+      }
+    }
+    
+    // ... rest of execution
+  }
+}
+```
+
+**This prevents catastrophic mistakes while we build the proper solution.**
+
+---
+
+## **PHASE 1: Minimal Project Isolation (TODAY - 2-3 hours)**
+
+### **Goal:** Todo App executes in separate directory with manual setup.
+
+### **Task 1.1: Database Schema (30 min)**
+
+```sql
+-- Run this migration
+-- migrations/add_projects_table.sql
+
+CREATE TABLE projects (
+  -- [Use schema above]
+);
+
+ALTER TABLE work_orders 
+  ADD COLUMN project_id UUID REFERENCES projects(id);
+```
+
+### **Task 1.2: Project Service (45 min)**
+
+```typescript
+// src/services/project-service.ts
+
+export class ProjectService {
+  
+  async createProject(params: CreateProjectParams): Promise<Project> {
+    // Validate local_path doesn't exist or is empty
+    if (fs.existsSync(params.local_path)) {
+      const files = fs.readdirSync(params.local_path);
+      if (files.length > 0) {
+        throw new Error(`Directory ${params.local_path} is not empty`);
+      }
+    }
+    
+    // Create directory
+    fs.mkdirSync(params.local_path, { recursive: true });
+    
+    // Initialize git
+    execSync('git init', { cwd: params.local_path });
+    execSync('git branch -M main', { cwd: params.local_path });
+    
+    // Create initial commit (empty repo)
+    fs.writeFileSync(
+      path.join(params.local_path, '.gitkeep'),
+      'Initial commit'
+    );
+    execSync('git add .gitkeep', { cwd: params.local_path });
+    execSync('git commit -m "Initial commit"', { cwd: params.local_path });
+    
+    // Store in database
+    const project = await supabase
+      .from('projects')
+      .insert({
+        name: params.name,
+        description: params.description,
+        local_path: params.local_path,
+        git_initialized: true,
+        status: 'initialized'
+      })
+      .select()
+      .single();
+    
+    return project;
+  }
+  
+  async getProject(projectId: string): Promise<Project> {
+    const { data, error } = await supabase
+      .from('projects')
+      .select('*')
+      .eq('id', projectId)
+      .single();
+    
+    if (error) throw error;
+    return data;
+  }
+  
+  async linkGitHub(
+    projectId: string, 
+    repoName: string
+  ): Promise<void> {
+    const project = await this.getProject(projectId);
+    
+    // Add remote
+    execSync(
+      `git remote add origin https://github.com/${repoName}.git`,
+      { cwd: project.local_path }
+    );
+    
+    // Update database
+    await supabase
+      .from('projects')
+      .update({
+        github_repo_name: repoName,
+        github_repo_url: `https://github.com/${repoName}`
+      })
+      .eq('id', projectId);
+  }
+}
+```
+
+### **Task 1.3: Modify Aider Executor (30 min)**
+
+```typescript
+// aider-executor.ts
+
+export class AiderExecutor {
+  async execute(workOrder: WorkOrder): Promise<ExecutionResult> {
+    
+    // Get project
+    if (!workOrder.project_id) {
+      throw new Error('Work order must have project_id');
+    }
+    
+    const project = await projectService.getProject(workOrder.project_id);
+    
+    if (!project) {
+      throw new Error(`Project not found: ${workOrder.project_id}`);
+    }
+    
+    // Verify directory exists
+    if (!fs.existsSync(project.local_path)) {
+      throw new Error(`Project directory not found: ${project.local_path}`);
+    }
+    
+    // Execute Aider in PROJECT directory
+    const aiderProcess = spawn('py', ['-3.11', '-m', 'aider', ...aiderArgs], {
+      cwd: project.local_path,  // ← KEY CHANGE
+      env: process.env,
+      stdio: ['pipe', 'pipe', 'pipe']
+    });
+    
+    // ... rest of execution
+  }
+}
+```
+
+### **Task 1.4: Modify GitHub Integration (30 min)**
+
+```typescript
+// github-integration.ts
+
+export class GitHubIntegration {
+  async createPR(
+    workOrder: WorkOrder,
+    branchName: string
+  ): Promise<PRResult> {
+    
+    const project = await projectService.getProject(workOrder.project_id);
+    
+    // Push to PROJECT's repository
+    execSync(`git push -u origin ${branchName}`, {
+      cwd: project.local_path  // ← KEY CHANGE
+    });
+    
+    // Create PR in PROJECT's repo
+    const result = execSync(
+      `gh pr create ` +
+      `--repo ${project.github_repo_name} ` +  // ← KEY CHANGE
+      `--title "${title}" ` +
+      `--body "${body}"`,
+      { 
+        cwd: project.local_path,
+        encoding: 'utf-8' 
+      }
+    );
+    
+    // ... rest of PR creation
+  }
+}
+```
+
+### **Task 1.5: Manual Project Setup API (30 min)**
+
+```typescript
+// src/app/api/projects/initialize/route.ts
+
+export async function POST(request: Request) {
+  const {
+    name,
+    description,
+    local_path,
+    github_repo_name  // Optional - can add later
+  } = await request.json();
+  
+  // Validate
+  if (!name || !local_path) {
+    return NextResponse.json(
+      { error: 'name and local_path required' },
+      { status: 400 }
+    );
+  }
+  
+  try {
+    // Create project
+    const project = await projectService.createProject({
+      name,
+      description,
+      local_path
+    });
+    
+    // Optionally link GitHub
+    if (github_repo_name) {
+      await projectService.linkGitHub(project.id, github_repo_name);
+    }
+    
+    return NextResponse.json({
+      success: true,
+      project
+    });
+    
+  } catch (error) {
+    return NextResponse.json(
+      { error: error.message },
+      { status: 500 }
+    );
+  }
+}
+```
+
+---
+
+## **PHASE 2: Automated Provisioning (NEXT WEEK - 3-4 hours)**
+
+### **Goal:** One-click project creation with full infrastructure.
+
+### **Task 2.1: GitHub Auto-Creation**
+
+```typescript
+// Use GitHub CLI or Octokit
+async createGitHubRepo(projectName: string): Promise<string> {
+  // Option A: GitHub CLI
+  const result = execSync(
+    `gh repo create ${org}/${projectName} --private --confirm`,
+    { encoding: 'utf-8' }
+  );
+  
+  // Option B: Octokit API
+  const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
+  const repo = await octokit.repos.create({
+    name: projectName,
+    private: true,
+    auto_init: false
+  });
+  
+  return repo.data.full_name; // e.g., "your-org/todo-app"
+}
+```
+
+### **Task 2.2: Supabase Auto-Creation (MANUAL FOR NOW)**
+
+Supabase doesn't have public project creation API yet. Options:
+
+**Option A: Manual (Recommended for now)**
+- User creates Supabase project in dashboard
+- Copies project URL and keys
+- Moose stores them
+
+**Option B: Supabase Management API (Future)**
+- When available, automate project creation
+- Generate migrations automatically
+- Push schema to new project
+
+### **Task 2.3: Vercel Auto-Creation**
+
+```typescript
+// Use Vercel API
+async createVercelProject(
+  projectName: string,
+  githubRepo: string
+): Promise<string> {
+  
+  const response = await fetch('https://api.vercel.com/v9/projects', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${process.env.VERCEL_TOKEN}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      name: projectName,
+      framework: 'nextjs',
+      gitRepository: {
+        repo: githubRepo,
+        type: 'github'
+      }
+    })
+  });
+  
+  const project = await response.json();
+  return project.id;
+}
+```
+
+---
+
+## **PHASE 3: Multi-Project Dashboard (FUTURE - 1 week)**
+
+### **Features:**
+
+**Project List View:**
+- All projects with status
+- Quick actions (deploy, archive, delete)
+- Filter by status
+
+**Project Detail View:**
+- Work orders for this project
+- Recent deployments
+- GitHub activity
+- Logs and errors
+
+**Project Switcher:**
+- Select active project
+- Decomposition targets that project
+- Work orders execute in that project
+
+---
+
+## 🎯 Immediate Recommendation
+
+### **My Preferred Approach: Phase 1 PROPERLY (Not a Quick Hack)**
+
+**Why not quick hack:**
+- We'll have to rebuild it anyway
+- Phase 1 is only 2-3 hours
+- Gets the architecture right from start
+- Enables testing Todo App correctly
+
+**Execution Plan for TODAY:**
+
+### **Step 1: Add Safety Check (10 min)**
+- Prevents Moose self-modification
+- Deploy immediately
+
+### **Step 2: Database Schema (30 min)**
+- Create projects table
+- Add project_id to work_orders
+- Run migration
+
+### **Step 3: Core Services (1 hour)**
+- ProjectService (create, get, linkGitHub)
+- Modify AiderExecutor
+- Modify GitHubIntegration
+
+### **Step 4: Manual Setup API (30 min)**
+- POST /api/projects/initialize
+- Simple form in UI (or Postman)
+
+### **Step 5: Test with Todo App (30 min)**
+- Create project: "Todo App"
+- Local path: `C:\dev\generated-apps\todo-app`
+- Create GitHub repo manually: `your-org/todo-app`
+- Link to project
+- Link work orders to project
+- Execute WO-1 and WO-2
+- Verify files modified in todo-app, not moose
+
+---
+
+## 📋 Todo App Test Checklist
+
+**After Phase 1 implementation:**
+
+```bash
+# 1. Create project
+POST /api/projects/initialize
+{
+  "name": "Todo App",
+  "description": "Simple task management",
+  "local_path": "C:\\dev\\generated-apps\\todo-app"
+}
+
+# Response: { project_id: "abc-123" }
+
+# 2. Create GitHub repo (manual for now)
+gh repo create your-org/todo-app --private
+
+# 3. Link GitHub to project
+POST /api/projects/{project_id}/link-github
+{
+  "github_repo_name": "your-org/todo-app"
+}
+
+# 4. Update work orders with project_id
+UPDATE work_orders 
+SET project_id = 'abc-123' 
+WHERE title LIKE 'WO-%';
+
+# 5. Execute work orders
+POST /api/orchestrator/execute
+{
+  "work_order_id": "wo_1_id"
+}
+
+# 6. Verify
+- Check C:\dev\generated-apps\todo-app\ for files
+- Check GitHub for PR in your-org/todo-app
+- Verify Moose repo unchanged
+```
+
+---
+
+## ⚠️ Critical Warnings
+
+### **DO NOT execute ANY work orders until Phase 1 is complete!**
+
+**Current risk:**
+- Executing Todo App WO-1 would modify Moose
+- Create PRs against Moose repository
+- Mix Todo App code with Moose code
+- **Impossible to untangle later**
+
+### **Phase 0 safety check is MANDATORY**
+
+Even if you're tempted to "just test one work order" - DON'T.
+
+---
+
+## 💡 Additional Suggestions
+
+### **1. Default Project Location**
+
+Create a standard location for generated apps:
+
+```typescript
+const DEFAULT_PROJECTS_ROOT = path.join(
+  os.homedir(),
+  'moose-projects'
+);
+
+// Projects created at:
+// Windows: C:\Users\YourName\moose-projects\todo-app\
+// Mac: /Users/YourName/moose-projects/todo-app/
+// Linux: /home/yourname/moose-projects/todo-app/
+```
+
+### **2. Project Templates**
+
+In the future, support scaffolding:
+
+```typescript
+{
+  "template": "nextjs-typescript",
+  "features": ["auth", "database", "api"]
+}
+
+// Moose generates:
+// - Next.js 14 setup
+// - TypeScript config
+// - Supabase integration
+// - API routes structure
+```
+
+### **3. Environment Variable Management**
+
+Each project needs its own `.env`:
+
+```typescript
+// When creating project:
+fs.writeFileSync(
+  path.join(project.local_path, '.env.local'),
+  `
+NEXT_PUBLIC_SUPABASE_URL=${project.supabase_url}
+NEXT_PUBLIC_SUPABASE_ANON_KEY=${project.supabase_anon_key}
+# Add more as needed
+  `.trim()
+);
+```
+
+---
+
+## 🎯 Final Recommendation
+
+**Tell Claude Code:**
+
+> **"You're absolutely right - this is critical. We cannot execute any work orders until project isolation is implemented.**
+>
+> **Let's do Phase 1 properly (no quick hacks):**
+> 
+> **Phase 0 (RIGHT NOW):**
+> - Add safety check to prevent Moose self-modification
+> 
+> **Phase 1 (TODAY - 2-3 hours):**
+> - Database schema (projects table, project_id foreign key)
+> - ProjectService (create, get, linkGitHub)
+> - Modify AiderExecutor to use project.local_path
+> - Modify GitHubIntegration to use project's repo
+> - Manual setup API endpoint
+> 
+> **Test with Todo App (after Phase 1):**
+> - Create project for Todo App
+> - Link to separate GitHub repo
+> - Execute WO-1 and WO-2
+> - Verify isolation works
+> 
+> **Phase 2 and 3 can wait until after we validate Phase 1 works.**
+> 
+> **Start with Phase 0 safety check, then proceed to Phase 1 database schema. This is blocking all work order execution.** 🚨"
+
+---
+
+**This is non-negotiable. Without project isolation, Moose is dangerous to use.** ⚠️

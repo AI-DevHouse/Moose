@@ -9,6 +9,7 @@ import { executeAider, rollbackAider } from './aider-executor';
 import { pushBranchAndCreatePR, rollbackPR } from './github-integration';
 import { trackSuccessfulExecution, trackFailedExecution } from './result-tracker';
 import { CapacityManager } from './capacity-manager';
+import { executionEvents } from '@/lib/event-emitter';
 
 /**
  * Orchestrator Service (Singleton)
@@ -175,6 +176,13 @@ export class OrchestratorService {
 
     console.log(`[Orchestrator] Starting execution for WO ${workOrderId}`);
 
+    // Emit started event
+    executionEvents.emit(workOrderId, {
+      type: 'started',
+      message: 'Starting work order execution...',
+      progress: 0
+    });
+
     try {
       // 1. Get Work Order
       const wo = await getWorkOrder(workOrderId);
@@ -182,12 +190,24 @@ export class OrchestratorService {
         throw new Error(`Work Order ${workOrderId} not found`);
       }
 
+      executionEvents.emit(workOrderId, {
+        type: 'progress',
+        message: `Loaded work order: ${wo.title}`,
+        progress: 10
+      });
+
       // 2. Get routing decision from Manager
       console.log(`[Orchestrator] Step 1/5: Getting routing decision for WO ${workOrderId}`);
       let routingDecision;
       try {
         routingDecision = await getRoutingDecision(wo);
         modelName = routingDecision.selected_proposer;
+
+        executionEvents.emit(workOrderId, {
+          type: 'progress',
+          message: `Selected model: ${modelName}`,
+          progress: 20
+        });
 
         // Reserve capacity for this model
         const capacityAvailable = await capacityManager.waitForCapacity(modelName, 60000);
@@ -206,9 +226,20 @@ export class OrchestratorService {
 
       // 3. Generate code via Proposer
       console.log(`[Orchestrator] Step 2/5: Generating code for WO ${workOrderId}`);
+      executionEvents.emit(workOrderId, {
+        type: 'progress',
+        message: `Generating code solution...`,
+        progress: 30
+      });
       let proposerResponse;
       try {
         proposerResponse = await generateCode(wo);
+
+        executionEvents.emit(workOrderId, {
+          type: 'progress',
+          message: `Code solution generated successfully`,
+          progress: 50
+        });
       } catch (error: any) {
         await trackFailedExecution(wo, error, 'proposer');
         throw error;
@@ -216,9 +247,20 @@ export class OrchestratorService {
 
       // 4. Apply code via Aider
       console.log(`[Orchestrator] Step 3/5: Applying code via Aider for WO ${workOrderId}`);
+      executionEvents.emit(workOrderId, {
+        type: 'progress',
+        message: `Executing with Aider...`,
+        progress: 60
+      });
       let aiderResult;
       try {
         aiderResult = await executeAider(wo, proposerResponse, routingDecision.selected_proposer);
+
+        executionEvents.emit(workOrderId, {
+          type: 'progress',
+          message: `Code applied successfully, branch: ${aiderResult.branch_name}`,
+          progress: 80
+        });
       } catch (error: any) {
         await trackFailedExecution(wo, error, 'aider');
         // Rollback Aider changes
@@ -230,6 +272,11 @@ export class OrchestratorService {
 
       // 5. Create PR on GitHub
       console.log(`[Orchestrator] Step 4/5: Creating PR for WO ${workOrderId}`);
+      executionEvents.emit(workOrderId, {
+        type: 'progress',
+        message: `Creating pull request...`,
+        progress: 90
+      });
       let prResult;
       try {
         prResult = await pushBranchAndCreatePR(wo, aiderResult.branch_name, routingDecision, proposerResponse);
@@ -249,6 +296,19 @@ export class OrchestratorService {
 
       console.log(`[Orchestrator] Successfully executed WO ${workOrderId} in ${executionTime}ms`);
 
+      // Emit completed event
+      executionEvents.emit(workOrderId, {
+        type: 'completed',
+        message: `✅ Work order completed! PR created: ${prResult.pr_url}`,
+        progress: 100,
+        metadata: {
+          pr_url: prResult.pr_url,
+          pr_number: prResult.pr_number,
+          branch_name: prResult.branch_name,
+          execution_time_ms: executionTime
+        }
+      });
+
       return {
         success: true,
         work_order_id: workOrderId,
@@ -260,6 +320,17 @@ export class OrchestratorService {
     } catch (error: any) {
       const executionTime = Date.now() - startTime;
       this.totalFailed++;
+
+      // Emit failed event
+      executionEvents.emit(workOrderId, {
+        type: 'failed',
+        message: `❌ Execution failed: ${error.message}`,
+        progress: 0,
+        metadata: {
+          stage: error.stage || 'unknown',
+          error: error.message
+        }
+      });
 
       await handleCriticalError({
         component: 'Orchestrator',

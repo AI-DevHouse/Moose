@@ -1,0 +1,169 @@
+{
+  "success": true,
+  "data": {
+    "work_orders": [
+      {
+        "title": "Setup project structure and TypeScript configuration",
+        "description": "Initialize React project with TypeScript, configure tsconfig.json, setup necessary dependencies (React, TypeScript, type definitions), and create basic folder structure for components, types, and utilities.",
+        "acceptance_criteria": [
+          "Project builds without TypeScript errors",
+          "tsconfig.json properly configured for React",
+          "Folder structure created (components/, types/, utils/)",
+          "Dependencies installed and verified"
+        ],
+        "files_in_scope": [
+          "package.json",
+          "tsconfig.json",
+          "src/types/todo.ts"
+        ],
+        "context_budget_estimate": 800,
+        "risk_level": "low",
+        "dependencies": []
+      },
+      {
+        "title": "Implement localStorage utility layer",
+        "description": "Create a localStorage wrapper utility with TypeScript types for saving, loading, and managing todo data. Include error handling for quota exceeded and JSON parsing errors.",
+        "acceptance_criteria": [
+          "localStorage utility functions created with proper typing",
+          "Error handling for storage operations implemented",
+          "Unit tests for save/load/delete operations pass",
+          "Data persistence verified across page refreshes"
+        ],
+        "files_in_scope": [
+          "src/utils/localStorage.ts",
+          "src/types/todo.ts"
+        ],
+        "context_budget_estimate": 1200,
+        "risk_level": "low",
+        "dependencies": [
+          "0"
+        ]
+      },
+      {
+        "title": "Create Todo data model and state management",
+        "description": "Define TypeScript interfaces for Todo items, implement React state management (useState/useReducer) for todo list operations, and create hooks for managing todo state with localStorage integration.",
+        "acceptance_criteria": [
+          "Todo interface defined with id, text, completed properties",
+          "Custom hook created for todo operations (add, toggle, delete)",
+          "State updates trigger localStorage saves",
+          "Initial state loads from localStorage on mount"
+        ],
+        "files_in_scope": [
+          "src/types/todo.ts",
+          "src/hooks/useTodos.ts"
+        ],
+        "context_budget_estimate": 1500,
+        "risk_level": "medium",
+        "dependencies": [
+          "1"
+        ]
+      },
+      {
+        "title": "Build TodoInput component",
+        "description": "Create a controlled input component for adding new todos. Include form validation, submit handling, and mobile-responsive styling. Component should clear input after submission.",
+        "acceptance_criteria": [
+          "Input component renders correctly",
+          "Form submission creates new todo",
+          "Input clears after successful submission",
+          "Empty submissions are prevented",
+          "Component is mobile-responsive"
+        ],
+        "files_in_scope": [
+          "src/components/TodoInput.tsx",
+          "src/components/TodoInput.module.css"
+        ],
+        "context_budget_estimate": 1000,
+        "risk_level": "low",
+        "dependencies": [
+          "2"
+        ]
+      },
+      {
+        "title": "Build TodoItem component",
+        "description": "Create individual todo item component with checkbox for completion toggle, delete button, and conditional styling for completed items. Ensure mobile-responsive design with touch-friendly controls.",
+        "acceptance_criteria": [
+          "Todo item displays text, checkbox, and delete button",
+          "Checkbox toggles completion status",
+          "Delete button removes todo",
+          "Completed todos show visual distinction (strikethrough/opacity)",
+          "Touch targets are minimum 44x44px for mobile"
+        ],
+        "files_in_scope": [
+          "src/components/TodoItem.tsx",
+          "src/components/TodoItem.module.css"
+        ],
+        "context_budget_estimate": 1200,
+        "risk_level": "low",
+        "dependencies": [
+          "2"
+        ]
+      },
+      {
+        "title": "Build TodoList component",
+        "description": "Create container component that renders the list of TodoItem components. Handle empty state messaging and ensure proper list rendering with keys.",
+        "acceptance_criteria": [
+          "TodoList renders all todos from state",
+          "Each todo has unique key prop",
+          "Empty state displays helpful message",
+          "List updates reflect state changes immediately",
+          "Component is mobile-responsive"
+        ],
+        "files_in_scope": [
+          "src/components/TodoList.tsx",
+          "src/components/TodoList.module.css"
+        ],
+        "context_budget_estimate": 900,
+        "risk_level": "low",
+        "dependencies": [
+          "4"
+        ]
+      },
+      {
+        "title": "Build main App component and integrate all features",
+        "description": "Create main App component that integrates TodoInput, TodoList, and useTodos hook. Implement overall layout, mobile-responsive design, and ensure all acceptance criteria are met.",
+        "acceptance_criteria": [
+          "All components integrated and functional",
+          "Users can add new todos via text input",
+          "Users can toggle todo completion status",
+          "Users can delete individual todos",
+          "Todo list persists across page refreshes",
+          "Mobile-responsive design verified on multiple screen sizes"
+        ],
+        "files_in_scope": [
+          "src/App.tsx",
+          "src/App.module.css",
+          "src/index.css"
+        ],
+        "context_budget_estimate": 1400,
+        "risk_level": "medium",
+        "dependencies": [
+          "5"
+        ]
+      },
+      {
+        "title": "Add responsive styling and polish",
+        "description": "Implement comprehensive mobile-responsive CSS, add media queries for various screen sizes, improve accessibility (ARIA labels, keyboard navigation), and add visual polish (transitions, hover states).",
+        "acceptance_criteria": [
+          "App works on mobile (320px+), tablet (768px+), and desktop",
+          "Touch interactions work smoothly on mobile",
+          "Keyboard navigation functional",
+          "ARIA labels present for screen readers",
+          "Visual feedback for user interactions (hover, focus, active states)"
+        ],
+        "files_in_scope": [
+          "src/App.module.css",
+          "src/components/TodoInput.module.css",
+          "src/components/TodoItem.module.css",
+          "src/components/TodoList.module.css"
+        ],
+        "context_budget_estimate": 1000,
+        "risk_level": "low",
+        "dependencies": [
+          "6"
+        ]
+      }
+    ],
+    "decomposition_doc": "# Todo App Implementation Plan\n\n## Decomposition Metadata\n- **decomposition_source**: generated\n- **total_work_orders**: 8\n- **estimated_duration**: Sequential completion required\n\n## Overview\nThis implementation plan breaks down the Todo App into 8 sequential work orders, progressing from foundational setup through to polished UI. The approach follows a bottom-up architecture pattern: infrastructure → data layer → components → integration → polish.\n\n## Dependency Chain\n```\nWO-0 (Project Setup)\n  ↓\nWO-1 (localStorage utility)\n  ↓\nWO-2 (State management)\n  ↓\nWO-3 (TodoInput) ──┐\n                    ├→ WO-6 (App integration)\n  ↓                 │      ↓\nWO-4 (TodoItem)     │   WO-7 (Styling & polish)\n  ↓                 │\nWO-5 (TodoList) ────┘\n```\n\n## Rationale\n\n### Work Order Chunking Strategy\n1. **WO-0: Foundation First** - Establishes TypeScript configuration and project structure to enable type-safe development from the start\n2. **WO-1: Data Persistence Layer** - Isolates localStorage logic into reusable utility before state management needs it\n3. **WO-2: State Management Core** - Creates the central data management layer that all components will consume\n4. **WO-3-5: Component Isolation** - Each UI component built independently with clear contracts, enabling parallel development in future iterations\n5. **WO-6: Integration** - Brings all pieces together in main App component\n6. **WO-7: Polish** - Final UX refinements and responsive design completion\n\n### Risk Assessment\n- **Low Risk (6 WOs)**: Standard React patterns, well-documented APIs\n- **Medium Risk (2 WOs)**: State management integration and App-level coordination\n- **No High Risk**: Project scope is well-defined with proven technologies\n\n### Token Budget Analysis\n- All work orders within safe limits (<2000 tokens each)\n- Total estimated context budget: 9,000 tokens\n- No work orders require splitting\n\n### Mobile-Responsive Strategy\n- Mobile-first CSS approach throughout component development\n- Dedicated polish phase (WO-7) for cross-device testing\n- Touch target sizing enforced in TodoItem component\n\n## Testing Strategy\nEach work order includes implicit testing requirements:\n- WO-1: localStorage utility testing\n- WO-2-6: Component functionality verification\n- WO-7: Cross-device responsive testing\n\n## Acceptance Criteria Mapping\n| Specification Requirement | Work Order | Validation Point |\n|---------------------------|------------|------------------|\n| Create todos | WO-3, WO-6 | TodoInput integration |\n| Mark complete | WO-4, WO-6 | TodoItem toggle functionality |\n| Delete todos | WO-4, WO-6 | TodoItem delete button |\n| localStorage persistence | WO-1, WO-2 | Page refresh test |\n| Mobile-responsive | WO-3-7 | Multi-device testing |\n\n## Notes\n- TypeScript strict mode recommended for type safety\n- Consider adding todo ID generation strategy in WO-2\n- localStorage quota limits should be documented in WO-1\n- Accessibility testing should be included in WO-7 validation",
+    "total_estimated_cost": 9
+  }
+}

@@ -172,7 +172,7 @@ export class FlakyDetector {
         pass_rate: passRate,
         classification,
         should_ignore: shouldIgnore,
-        last_seen: new Date(data[0].created_at)
+        last_seen: new Date(data[0].created_at || new Date().toISOString())
       };
 
       // Cache stats

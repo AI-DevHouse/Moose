@@ -1,0 +1,209 @@
+Vercel env vars are correct.
+
+**If Vercel env vars are correct, then the issue is MORE fundamental.**
+
+The fact that **BOTH local AND deployed are failing identically** with env vars present means we're looking at a **code logic error**, not configuration.
+
+---
+
+## 🔍 My New Hypothesis: Singleton Pattern Timing Issue
+
+Looking more carefully at the architecture, I suspect the problem is:
+
+**The services are trying to initialize BEFORE Next.js has loaded environment variables.**
+
+### Why This Happens in Next.js:
+
+```typescript
+// route.ts (runs at module import time)
+import { WireframeGenerationService } from '@/services/wireframe-service';
+import { ContractGenerationService } from '@/services/contract-service';
+
+// These services create singletons on import:
+// - WireframeGenerationService.getInstance() 
+// - ContractGenerationService.getInstance()
+
+// But in Next.js API routes, process.env might not be fully populated yet!
+```
+
+**Next.js has a quirk:** Environment variables in API routes aren't always available at module import time, especially:
+- `ANTHROPIC_API_KEY` (not prefixed with `NEXT_PUBLIC_`)
+- `SUPABASE_SERVICE_ROLE_KEY` (not prefixed with `NEXT_PUBLIC_`)
+
+Only `NEXT_PUBLIC_*` vars are guaranteed at import time.
+
+---
+
+## 🎯 The Real Fix: Lazy Initialization
+
+**Problem:** Services initialize in constructors (eager)  
+**Solution:** Services initialize on first use (lazy)
+
+### Pattern to Implement:
+
+```typescript
+// wireframe-service.ts
+export class WireframeGenerationService {
+  private static instance: WireframeGenerationService | null = null;
+  private anthropic: Anthropic | null = null;
+  private supabase: SupabaseClient | null = null;
+  private initialized = false;
+
+  private constructor() {
+    // Don't initialize anything here!
+  }
+
+  public static getInstance(): WireframeGenerationService {
+    if (!WireframeGenerationService.instance) {
+      WireframeGenerationService.instance = new WireframeGenerationService();
+    }
+    return WireframeGenerationService.instance;
+  }
+
+  private initialize(): void {
+    if (this.initialized) return;
+
+    // NOW check env vars (at first use, not import time)
+    const anthropicKey = process.env.ANTHROPIC_API_KEY;
+    if (!anthropicKey) {
+      throw new Error(
+        'ANTHROPIC_API_KEY is required. Set it in .env.local or Vercel dashboard.'
+      );
+    }
+
+    this.anthropic = new Anthropic({ apiKey: anthropicKey });
+
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    
+    if (supabaseUrl && supabaseKey) {
+      this.supabase = createClient(supabaseUrl, supabaseKey);
+    } else {
+      console.warn('[WireframeService] Supabase not configured');
+    }
+
+    this.initialized = true;
+  }
+
+  async generateWireframe(request: WireframeRequest): Promise<WireframeResult> {
+    // Initialize on first actual use
+    this.initialize();
+    
+    if (!this.anthropic) {
+      throw new Error('Anthropic client not initialized');
+    }
+    if (!this.supabase) {
+      throw new Error('Supabase not configured');
+    }
+
+    // ... rest of implementation
+  }
+}
+```
+
+---
+
+## 🔬 Why This Explains Your Symptoms
+
+| Symptom | Explanation |
+|---------|-------------|
+| Both local AND deployed fail | Env vars not available at import time in both |
+| Health endpoint works | Doesn't import these services |
+| Minimal payload fails | Error at import time, before payload parsed |
+| 500 error (not 400) | Uncaught exception during module load |
+| ~9 second delay local | Next.js trying/retrying module initialization |
+| ~60 second delay deployed | Vercel timeout waiting for module to load |
+
+---
+
+## 🧪 Test This Theory
+
+Tell Claude Code to add **temporary debug logging** to see when things execute:
+
+```typescript
+// At the TOP of route.ts, before any imports
+console.log('[Route] Module loading started');
+console.log('[Route] ANTHROPIC_API_KEY available?', !!process.env.ANTHROPIC_API_KEY);
+
+import { WireframeGenerationService } from '@/services/wireframe-service';
+import { ContractGenerationService } from '@/services/contract-service';
+
+console.log('[Route] Services imported');
+
+export async function POST(request: Request) {
+  console.log('[Route] POST handler called');
+  // ...
+}
+```
+
+**If my theory is correct:**
+- You'll see "Module loading started"
+- You'll see `false` for ANTHROPIC_API_KEY
+- You'll NEVER see "Services imported" (crash happens during import)
+
+---
+
+## 📋 Action Plan
+
+### **Tell Claude Code:**
+
+> "Implement lazy initialization for WireframeGenerationService and ContractGenerationService. Move all environment variable access and client initialization from constructors to a private `initialize()` method that runs on first use. Add the debug logging to route.ts to verify when env vars become available."
+
+### **Expected Result:**
+
+After this change:
+- Services import successfully (constructors do nothing)
+- First API call triggers `initialize()`
+- Env vars ARE available at that point
+- Everything works
+
+---
+
+## 🤔 Alternative Theory: Import Cycle
+
+**Second possibility:** Circular dependency
+
+If `route.ts` imports services, and services somehow import something that imports `route.ts`, you get:
+- Partial module loading
+- Undefined exports
+- 500 errors
+
+**Check:** Do your services import anything from the routes directory?
+
+---
+
+## 💭 My Strategic Take
+
+**This is actually revealing a deeper architectural issue:**
+
+You're discovering that **singleton services in Next.js API routes are tricky** because:
+1. Module import timing is unpredictable
+2. Environment variables aren't guaranteed at import time
+3. Next.js does weird things with module caching
+
+**Two philosophical approaches:**
+
+### **Approach A: Fight Next.js (current state)**
+- Try to make singletons work
+- Deal with timing issues
+- Complex initialization logic
+
+### **Approach B: Work with Next.js**
+- Don't use singletons in API routes
+- Instantiate services per-request
+- Accept slight overhead for simplicity
+
+**My recommendation for Phase 1:** Fix with lazy initialization (Approach A) because:
+- Services are stateless (no memory leak risk)
+- Initialization is cheap
+- Keeps current architecture
+
+**My recommendation for Phase 2:** Consider Approach B because:
+- Simpler mental model
+- No timing issues
+- More "Next.js idiomatic"
+
+---
+
+ **Debug logging first (2 min), then lazy initialization (15 min)** 
+

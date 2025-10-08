@@ -164,12 +164,13 @@ export const gpt4oMiniLimiter = createRateLimiter({
 });
 
 // Architect API - Uses Claude Sonnet 4.5
-// Claude Tier 1: 50 RPM, but 30k input TPM is more restrictive
-// Architect uses ~7500 input tokens per request
-// 30,000 TPM / 7,500 tokens = 4 requests per minute (TPM-limited)
+// Claude Sonnet 4.x actual limits: 1,000 RPM, 450k input TPM, 90k output TPM
+// Previously set to 4 req/min based on incorrect TPM assumption (30k instead of 450k)
+// Setting to 100 req/min (conservative, well below 1000 RPM limit)
+// Output TPM (90k) is the real constraint for high-volume use
 export const architectApiLimiter = createRateLimiter({
   windowMs: 60 * 1000,
-  maxRequests: 4, // TPM limit: 30k / 7.5k tokens per request
+  maxRequests: 100, // Conservative limit, actual API supports 1000 RPM
 });
 
 // Proposer API - Mixed (Claude + OpenAI), use lower limit

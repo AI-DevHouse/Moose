@@ -146,14 +146,17 @@ async function logApprovalDecision(
   try {
     await supabase.from('decision_logs').insert({
       decision_type: 'director_approval',
-      approved: decision.approved,
-      reasoning: decision.reasoning,
-      decision_data: {
+      agent_type: 'director',
+      input_context: {
         feature_name,
-        auto_approved: decision.auto_approved,
-        aggregate_risk: decision.aggregate_risk,
-        total_cost: decision.total_cost,
         work_order_ids,
+        aggregate_risk: decision.aggregate_risk,
+        total_cost: decision.total_cost
+      } as any,
+      decision_output: {
+        approved: decision.approved,
+        reasoning: decision.reasoning,
+        auto_approved: decision.auto_approved,
         risk_assessments: decision.risk_assessments
       } as any
     });

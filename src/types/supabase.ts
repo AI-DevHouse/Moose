@@ -18,36 +18,36 @@ export type Database = {
         Row: {
           breaking_changes: Json | null
           contract_type: string
-          created_at: string
+          created_at: string | null
           id: string
-          is_active: boolean
+          is_active: boolean | null
           name: string
           specification: Json
-          updated_at: string
+          updated_at: string | null
           validation_rules: Json
           version: string
         }
         Insert: {
           breaking_changes?: Json | null
           contract_type: string
-          created_at?: string
+          created_at?: string | null
           id?: string
-          is_active?: boolean
+          is_active?: boolean | null
           name: string
           specification: Json
-          updated_at?: string
+          updated_at?: string | null
           validation_rules: Json
           version: string
         }
         Update: {
           breaking_changes?: Json | null
           contract_type?: string
-          created_at?: string
+          created_at?: string | null
           id?: string
-          is_active?: boolean
+          is_active?: boolean | null
           name?: string
           specification?: Json
-          updated_at?: string
+          updated_at?: string | null
           validation_rules?: Json
           version?: string
         }
@@ -56,21 +56,21 @@ export type Database = {
       cost_tracking: {
         Row: {
           cost: number
-          created_at: string
+          created_at: string | null
           id: string
           metadata: Json | null
           service_name: string
         }
         Insert: {
           cost: number
-          created_at?: string
+          created_at?: string | null
           id?: string
           metadata?: Json | null
           service_name: string
         }
         Update: {
           cost?: number
-          created_at?: string
+          created_at?: string | null
           id?: string
           metadata?: Json | null
           service_name?: string
@@ -79,81 +79,103 @@ export type Database = {
       }
       decision_logs: {
         Row: {
-          approved: boolean
-          approved_by: string | null
-          created_at: string
-          decision_data: Json
+          agent_type: string
+          confidence: number | null
+          created_at: string | null
+          decision_output: Json
           decision_type: string
+          execution_time_ms: number | null
           id: string
-          reasoning: string | null
-          work_order_id: string | null
+          input_context: Json
         }
         Insert: {
-          approved?: boolean
-          approved_by?: string | null
-          created_at?: string
-          decision_data: Json
+          agent_type: string
+          confidence?: number | null
+          created_at?: string | null
+          decision_output: Json
           decision_type: string
+          execution_time_ms?: number | null
           id?: string
-          reasoning?: string | null
-          work_order_id?: string | null
+          input_context: Json
         }
         Update: {
-          approved?: boolean
-          approved_by?: string | null
-          created_at?: string
-          decision_data?: Json
+          agent_type?: string
+          confidence?: number | null
+          created_at?: string | null
+          decision_output?: Json
           decision_type?: string
+          execution_time_ms?: number | null
           id?: string
-          reasoning?: string | null
-          work_order_id?: string | null
+          input_context?: Json
         }
-        Relationships: [
-          {
-            foreignKeyName: "decision_logs_work_order_id_fkey"
-            columns: ["work_order_id"]
-            isOneToOne: false
-            referencedRelation: "work_orders"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
+      }
+      escalation_scripts: {
+        Row: {
+          created_at: string | null
+          effectiveness_score: number | null
+          escalation_type: string
+          id: string
+          resolution_options: Json
+          updated_at: string | null
+          usage_patterns: Json | null
+        }
+        Insert: {
+          created_at?: string | null
+          effectiveness_score?: number | null
+          escalation_type: string
+          id?: string
+          resolution_options: Json
+          updated_at?: string | null
+          usage_patterns?: Json | null
+        }
+        Update: {
+          created_at?: string | null
+          effectiveness_score?: number | null
+          escalation_type?: string
+          id?: string
+          resolution_options?: Json
+          updated_at?: string | null
+          usage_patterns?: Json | null
+        }
+        Relationships: []
       }
       escalations: {
         Row: {
-          assigned_to: string | null
-          created_at: string
-          escalation_data: Json | null
+          context: Json
+          created_at: string | null
           id: string
-          reason: string
           resolution_notes: string | null
+          resolution_type: string | null
           resolved_at: string | null
           status: string
-          updated_at: string
-          work_order_id: string
+          trigger_type: string
+          updated_at: string | null
+          work_order_id: string | null
         }
         Insert: {
-          assigned_to?: string | null
-          created_at?: string
-          escalation_data?: Json | null
+          context: Json
+          created_at?: string | null
           id?: string
-          reason: string
           resolution_notes?: string | null
+          resolution_type?: string | null
           resolved_at?: string | null
           status?: string
-          updated_at?: string
-          work_order_id: string
+          trigger_type: string
+          updated_at?: string | null
+          work_order_id?: string | null
         }
         Update: {
-          assigned_to?: string | null
-          created_at?: string
-          escalation_data?: Json | null
+          context?: Json
+          created_at?: string | null
           id?: string
-          reason?: string
           resolution_notes?: string | null
+          resolution_type?: string | null
           resolved_at?: string | null
           status?: string
-          updated_at?: string
-          work_order_id?: string
+          trigger_type?: string
+          updated_at?: string | null
+          work_order_id?: string | null
         }
         Relationships: [
           {
@@ -167,96 +189,80 @@ export type Database = {
       }
       github_events: {
         Row: {
-          action: string
-          branch_name: string | null
-          check_name: string | null
-          commit_sha: string | null
-          conclusion: string | null
           created_at: string | null
-          event_data: Json | null
           event_type: string
           id: string
-          pr_number: number | null
-          repository_id: number
-          repository_name: string
+          payload: Json
           status: string | null
+          work_order_id: string | null
           workflow_name: string | null
         }
         Insert: {
-          action: string
-          branch_name?: string | null
-          check_name?: string | null
-          commit_sha?: string | null
-          conclusion?: string | null
           created_at?: string | null
-          event_data?: Json | null
           event_type: string
           id?: string
-          pr_number?: number | null
-          repository_id: number
-          repository_name: string
+          payload: Json
           status?: string | null
+          work_order_id?: string | null
           workflow_name?: string | null
         }
         Update: {
-          action?: string
-          branch_name?: string | null
-          check_name?: string | null
-          commit_sha?: string | null
-          conclusion?: string | null
           created_at?: string | null
-          event_data?: Json | null
           event_type?: string
           id?: string
-          pr_number?: number | null
-          repository_id?: number
-          repository_name?: string
+          payload?: Json
           status?: string | null
+          work_order_id?: string | null
           workflow_name?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "github_events_work_order_id_fkey"
+            columns: ["work_order_id"]
+            isOneToOne: false
+            referencedRelation: "work_orders"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       outcome_vectors: {
         Row: {
           cost: number
-          created_at: string
-          diff_size_lines: number
+          created_at: string | null
+          diff_size_lines: number | null
           execution_time_ms: number
-          failure_classes: string[] | null
+          failure_classes: Json | null
           id: string
           metadata: Json | null
           model_used: string
-          route_reason: string
+          route_reason: string | null
           success: boolean
-          test_duration_ms: number | null
           work_order_id: string
         }
         Insert: {
           cost: number
-          created_at?: string
-          diff_size_lines?: number
+          created_at?: string | null
+          diff_size_lines?: number | null
           execution_time_ms: number
-          failure_classes?: string[] | null
+          failure_classes?: Json | null
           id?: string
           metadata?: Json | null
           model_used: string
-          route_reason: string
+          route_reason?: string | null
           success: boolean
-          test_duration_ms?: number | null
           work_order_id: string
         }
         Update: {
           cost?: number
-          created_at?: string
-          diff_size_lines?: number
+          created_at?: string | null
+          diff_size_lines?: number | null
           execution_time_ms?: number
-          failure_classes?: string[] | null
+          failure_classes?: Json | null
           id?: string
           metadata?: Json | null
           model_used?: string
-          route_reason?: string
+          route_reason?: string | null
           success?: boolean
-          test_duration_ms?: number | null
           work_order_id?: string
         }
         Relationships: [
@@ -271,196 +277,196 @@ export type Database = {
       }
       pattern_confidence_scores: {
         Row: {
-          confidence_score: number
-          created_at: string
-          failure_count: number
+          avg_cost: number | null
+          avg_execution_time_ms: number | null
+          confidence_score: number | null
+          created_at: string | null
+          failure_count: number | null
           id: string
-          last_failure_at: string | null
-          last_success_at: string | null
-          pattern_hash: string
-          success_count: number
-          updated_at: string
-          work_order_type: string
+          last_updated: string | null
+          pattern_signature: string
+          pattern_type: string
+          success_count: number | null
         }
         Insert: {
-          confidence_score?: number
-          created_at?: string
-          failure_count?: number
+          avg_cost?: number | null
+          avg_execution_time_ms?: number | null
+          confidence_score?: number | null
+          created_at?: string | null
+          failure_count?: number | null
           id?: string
-          last_failure_at?: string | null
-          last_success_at?: string | null
-          pattern_hash: string
-          success_count?: number
-          updated_at?: string
-          work_order_type: string
+          last_updated?: string | null
+          pattern_signature: string
+          pattern_type: string
+          success_count?: number | null
         }
         Update: {
-          confidence_score?: number
-          created_at?: string
-          failure_count?: number
+          avg_cost?: number | null
+          avg_execution_time_ms?: number | null
+          confidence_score?: number | null
+          created_at?: string | null
+          failure_count?: number | null
           id?: string
-          last_failure_at?: string | null
-          last_success_at?: string | null
-          pattern_hash?: string
-          success_count?: number
-          updated_at?: string
-          work_order_type?: string
+          last_updated?: string | null
+          pattern_signature?: string
+          pattern_type?: string
+          success_count?: number | null
         }
         Relationships: []
       }
       playbook_memory: {
         Row: {
-          confidence_score: number
-          created_at: string
-          fixes: Json | null
+          created_at: string | null
           id: string
-          last_used_at: string | null
-          pattern_name: string
-          pattern_type: string
-          prompts: Json
-          success_variations: Json | null
-          updated_at: string
-          usage_count: number
+          metadata: Json | null
+          solution_steps: Json
+          solution_type: string
+          success_rate: number | null
+          trigger_pattern: string
+          updated_at: string | null
+          usage_count: number | null
         }
         Insert: {
-          confidence_score?: number
-          created_at?: string
-          fixes?: Json | null
+          created_at?: string | null
           id?: string
-          last_used_at?: string | null
-          pattern_name: string
-          pattern_type: string
-          prompts: Json
-          success_variations?: Json | null
-          updated_at?: string
-          usage_count?: number
+          metadata?: Json | null
+          solution_steps: Json
+          solution_type: string
+          success_rate?: number | null
+          trigger_pattern: string
+          updated_at?: string | null
+          usage_count?: number | null
         }
         Update: {
-          confidence_score?: number
-          created_at?: string
-          fixes?: Json | null
+          created_at?: string | null
           id?: string
-          last_used_at?: string | null
-          pattern_name?: string
-          pattern_type?: string
-          prompts?: Json
-          success_variations?: Json | null
-          updated_at?: string
-          usage_count?: number
+          metadata?: Json | null
+          solution_steps?: Json
+          solution_type?: string
+          success_rate?: number | null
+          trigger_pattern?: string
+          updated_at?: string | null
+          usage_count?: number | null
+        }
+        Relationships: []
+      }
+      projects: {
+        Row: {
+          created_at: string | null
+          default_branch: string | null
+          description: string | null
+          git_initialized: boolean | null
+          github_org: string | null
+          github_repo_name: string | null
+          github_repo_url: string | null
+          id: string
+          infrastructure_status: string | null
+          local_path: string
+          name: string
+          setup_notes: Json | null
+          status: string
+          supabase_anon_key: string | null
+          supabase_project_url: string | null
+          updated_at: string | null
+          vercel_team_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          default_branch?: string | null
+          description?: string | null
+          git_initialized?: boolean | null
+          github_org?: string | null
+          github_repo_name?: string | null
+          github_repo_url?: string | null
+          id?: string
+          infrastructure_status?: string | null
+          local_path: string
+          name: string
+          setup_notes?: Json | null
+          status?: string
+          supabase_anon_key?: string | null
+          supabase_project_url?: string | null
+          updated_at?: string | null
+          vercel_team_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          default_branch?: string | null
+          description?: string | null
+          git_initialized?: boolean | null
+          github_org?: string | null
+          github_repo_name?: string | null
+          github_repo_url?: string | null
+          id?: string
+          infrastructure_status?: string | null
+          local_path?: string
+          name?: string
+          setup_notes?: Json | null
+          status?: string
+          supabase_anon_key?: string | null
+          supabase_project_url?: string | null
+          updated_at?: string | null
+          vercel_team_id?: string | null
         }
         Relationships: []
       }
       proposer_configs: {
         Row: {
+          active: boolean | null
           complexity_threshold: number
-          context_limit: number
           cost_profile: Json
-          created_at: string
-          endpoint: string
+          created_at: string | null
           id: string
-          is_active: boolean
+          model: string
           name: string
-          notes: string | null
           provider: string
-          strengths: string[]
-          success_patterns: Json | null
-          updated_at: string
+          updated_at: string | null
         }
         Insert: {
+          active?: boolean | null
           complexity_threshold?: number
-          context_limit?: number
           cost_profile: Json
-          created_at?: string
-          endpoint: string
+          created_at?: string | null
           id?: string
-          is_active?: boolean
+          model: string
           name: string
-          notes?: string | null
           provider: string
-          strengths?: string[]
-          success_patterns?: Json | null
-          updated_at?: string
+          updated_at?: string | null
         }
         Update: {
+          active?: boolean | null
           complexity_threshold?: number
-          context_limit?: number
           cost_profile?: Json
-          created_at?: string
-          endpoint?: string
+          created_at?: string | null
           id?: string
-          is_active?: boolean
+          model?: string
           name?: string
-          notes?: string | null
           provider?: string
-          strengths?: string[]
-          success_patterns?: Json | null
-          updated_at?: string
+          updated_at?: string | null
         }
         Relationships: []
       }
       system_config: {
         Row: {
-          config_key: string
-          config_type: string
-          config_value: Json
           created_at: string | null
           description: string | null
-          id: string
+          key: string
           updated_at: string | null
-          updated_by: string | null
+          value: string
         }
         Insert: {
-          config_key: string
-          config_type: string
-          config_value: Json
           created_at?: string | null
           description?: string | null
-          id?: string
+          key: string
           updated_at?: string | null
-          updated_by?: string | null
+          value: string
         }
         Update: {
-          config_key?: string
-          config_type?: string
-          config_value?: Json
           created_at?: string | null
           description?: string | null
-          id?: string
+          key?: string
           updated_at?: string | null
-          updated_by?: string | null
-        }
-        Relationships: []
-      }
-      system_status: {
-        Row: {
-          component_name: string
-          created_at: string
-          id: string
-          last_heartbeat: string
-          metadata: Json | null
-          response_time_ms: number
-          status: string
-          updated_at: string
-        }
-        Insert: {
-          component_name: string
-          created_at?: string
-          id?: string
-          last_heartbeat?: string
-          metadata?: Json | null
-          response_time_ms?: number
-          status: string
-          updated_at?: string
-        }
-        Update: {
-          component_name?: string
-          created_at?: string
-          id?: string
-          last_heartbeat?: string
-          metadata?: Json | null
-          response_time_ms?: number
-          status?: string
-          updated_at?: string
+          value?: string
         }
         Relationships: []
       }
@@ -471,22 +477,23 @@ export type Database = {
           architect_version: string | null
           completed_at: string | null
           context_budget_estimate: number | null
-          created_at: string
+          created_at: string | null
           decomposition_doc: string | null
           description: string
-          estimated_cost: number
+          estimated_cost: number | null
           files_in_scope: Json | null
           github_branch: string | null
           github_pr_number: number | null
           github_pr_url: string | null
           id: string
           metadata: Json | null
-          pattern_confidence: number
-          proposer_id: string
+          pattern_confidence: number | null
+          project_id: string | null
+          proposer_id: string | null
           risk_level: string
           status: string
           title: string
-          updated_at: string
+          updated_at: string | null
         }
         Insert: {
           acceptance_criteria?: Json | null
@@ -494,22 +501,23 @@ export type Database = {
           architect_version?: string | null
           completed_at?: string | null
           context_budget_estimate?: number | null
-          created_at?: string
+          created_at?: string | null
           decomposition_doc?: string | null
           description: string
-          estimated_cost?: number
+          estimated_cost?: number | null
           files_in_scope?: Json | null
           github_branch?: string | null
           github_pr_number?: number | null
           github_pr_url?: string | null
           id?: string
           metadata?: Json | null
-          pattern_confidence?: number
-          proposer_id: string
-          risk_level: string
+          pattern_confidence?: number | null
+          project_id?: string | null
+          proposer_id?: string | null
+          risk_level?: string
           status?: string
           title: string
-          updated_at?: string
+          updated_at?: string | null
         }
         Update: {
           acceptance_criteria?: Json | null
@@ -517,61 +525,37 @@ export type Database = {
           architect_version?: string | null
           completed_at?: string | null
           context_budget_estimate?: number | null
-          created_at?: string
+          created_at?: string | null
           decomposition_doc?: string | null
           description?: string
-          estimated_cost?: number
+          estimated_cost?: number | null
           files_in_scope?: Json | null
           github_branch?: string | null
           github_pr_number?: number | null
           github_pr_url?: string | null
           id?: string
           metadata?: Json | null
-          pattern_confidence?: number
-          proposer_id?: string
+          pattern_confidence?: number | null
+          project_id?: string | null
+          proposer_id?: string | null
           risk_level?: string
           status?: string
           title?: string
-          updated_at?: string
+          updated_at?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "work_orders_proposer_id_fkey"
-            columns: ["proposer_id"]
+            foreignKeyName: "work_orders_project_id_fkey"
+            columns: ["project_id"]
             isOneToOne: false
-            referencedRelation: "proposer_configs"
+            referencedRelation: "projects"
             referencedColumns: ["id"]
           },
         ]
       }
     }
     Views: {
-      dashboard_summary: {
-        Row: {
-          avg_confidence_7d: number | null
-          daily_spend: number | null
-          escalated_work_orders: number | null
-          monthly_spend: number | null
-          open_escalations: number | null
-          pending_work_orders: number | null
-          processing_work_orders: number | null
-        }
-        Relationships: []
-      }
-      github_integration_status: {
-        Row: {
-          events_last_24h: number | null
-          integration_status: string | null
-          last_api_check: string | null
-          last_event_received: string | null
-          prs_last_24h: number | null
-          pushes_last_24h: number | null
-          webhook_status: string | null
-          work_orders_with_prs: number | null
-          workflows_last_24h: number | null
-        }
-        Relationships: []
-      }
+      [_ in never]: never
     }
     Functions: {
       check_and_reserve_budget: {
@@ -584,21 +568,6 @@ export type Database = {
           can_proceed: boolean
           current_total: number
           reservation_id: string
-        }[]
-      }
-      get_work_order_github_events: {
-        Args: { work_order_id_param: string }
-        Returns: {
-          action: string
-          branch_name: string
-          commit_sha: string
-          conclusion: string
-          created_at: string
-          event_id: string
-          event_summary: Json
-          event_type: string
-          pr_number: number
-          status: string
         }[]
       }
     }

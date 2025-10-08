@@ -35,7 +35,7 @@ interface WorkOrder {
   escalations?: Array<{
     id: string;
     status: string;
-    reason: string;
+    trigger_type: string;
     created_at: string;
   }>;
 }

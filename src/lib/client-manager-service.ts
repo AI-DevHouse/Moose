@@ -71,7 +71,7 @@ export class ClientManagerService {
     // 5. Fetch historical data for resolution options
     const { data: similarEscalations } = await this.supabase
       .from('escalations')
-      .select('*, escalation_data')
+      .select('*')
       .eq('status', 'resolved')
       .limit(50)
 
@@ -83,9 +83,9 @@ export class ClientManagerService {
     // 7. Create escalation record
     const escalationData: TablesInsert<'escalations'> = {
       work_order_id: workOrderId,
-      reason: trigger.trigger_type,
+      trigger_type: trigger.trigger_type,
       status: 'open',
-      escalation_data: {
+      context: {
         trigger,
         options,
         created_by: 'client-manager-service'
@@ -109,7 +109,7 @@ export class ClientManagerService {
     await this.supabase
       .from('escalations')
       .update({
-        escalation_data: {
+        context: {
           trigger,
           options,
           recommendation,
@@ -150,8 +150,8 @@ export class ClientManagerService {
       throw new Error(`Escalation not found: ${escalationId}`)
     }
 
-    const escalationData = escalation.escalation_data as any
-    const recommendation = escalationData.recommendation
+    const escalationContext = escalation.context as any
+    const recommendation = escalationContext.recommendation
 
     if (!recommendation) {
       throw new Error(`No recommendation found for escalation: ${escalationId}`)
@@ -165,12 +165,16 @@ export class ClientManagerService {
    */
   async executeDecision(decision: EscalationDecision): Promise<EscalationResult> {
     const { escalation, recommendation } = await this.getEscalation(decision.escalation_id)
-    const escalationData = escalation.escalation_data as any
-    const options = escalationData.options as ResolutionOption[]
+    const escalationContext = escalation.context as any
+    const options = escalationContext.options as ResolutionOption[]
 
     const chosenOption = options.find(opt => opt.option_id === decision.chosen_option_id)
     if (!chosenOption) {
       throw new Error(`Invalid option: ${decision.chosen_option_id}`)
+    }
+
+    if (!escalation.work_order_id) {
+      throw new Error(`Escalation ${decision.escalation_id} has no associated work order`)
     }
 
     // Execute based on strategy
@@ -216,7 +220,7 @@ export class ClientManagerService {
       .eq('id', decision.escalation_id)
 
     // Store pattern in escalation_scripts (if table exists)
-    const patternForMemory = `${escalationData.trigger.trigger_type} → ${chosenOption.strategy} (success_rate: ${chosenOption.success_probability})`
+    const patternForMemory = `${escalationContext.trigger.trigger_type} → ${chosenOption.strategy} (success_rate: ${chosenOption.success_probability})`
 
     const result: EscalationResult = {
       escalation_id: decision.escalation_id,
@@ -246,11 +250,11 @@ export class ClientManagerService {
     // Get budget thresholds from system_config
     const { data: budgetConfigRow } = await this.supabase
       .from('system_config')
-      .select('config_value')
-      .eq('config_key', 'budget_thresholds')
+      .select('value')
+      .eq('key', 'budget_thresholds')
       .single()
 
-    const budgetConfig = budgetConfigRow?.config_value as any || {
+    const budgetConfig = budgetConfigRow?.value ? JSON.parse(budgetConfigRow.value) : {
       soft_cap: 20,
       hard_cap: 50,
       emergency_kill: 100
@@ -262,9 +266,9 @@ export class ClientManagerService {
       // Create budget escalation
       const escalationData: TablesInsert<'escalations'> = {
         work_order_id: '00000000-0000-0000-0000-000000000000', // System-level escalation
-        reason: 'budget_overrun',
+        trigger_type: 'budget_overrun',
         status: 'open',
-        escalation_data: {
+        context: {
           trigger_type: 'budget_overrun',
           daily_spend: dailySpend,
           threshold_exceeded: budgetCheck.reason
@@ -355,7 +359,7 @@ export class ClientManagerService {
     }
 
     escalations.forEach(esc => {
-      const data = esc.escalation_data as any
+      const data = esc.context as any
       if (data?.chosen_option?.strategy) {
         const strategy = data.chosen_option.strategy
         if (strategySuccesses[strategy]) {

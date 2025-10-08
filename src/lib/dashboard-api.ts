@@ -18,7 +18,7 @@ interface WorkOrder {
   escalations?: Array<{
     id: string;
     status: string;
-    reason: string;
+    trigger_type: string;
     created_at: string;
   }>;
 }
@@ -63,11 +63,11 @@ interface DashboardMetrics {
 interface Escalation {
   id: string;
   work_order_id: string;
-  reason: string;
+  trigger_type: string;
   status: 'open' | 'in_progress' | 'resolved' | 'dismissed';
-  escalation_data?: any;
+  context?: any;
   resolution_notes?: string;
-  assigned_to?: string;
+  resolution_type?: string;
   created_at: string;
   updated_at: string;
   resolved_at?: string;
