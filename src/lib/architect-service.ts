@@ -45,7 +45,7 @@ export class ArchitectService {
 
     const response = await this.anthropic.messages.create({
       model: 'claude-sonnet-4-5-20250929',
-      max_tokens: 4000,
+      max_tokens: 16000, // Claude Sonnet 4.5 supports up to 64K, using 16K for safety
       messages: [{ role: 'user', content: prompt }]
     });
 
@@ -54,7 +54,38 @@ export class ArchitectService {
     // Strip markdown using centralized function
     const cleanContent = stripMarkdownCodeBlocks(content);
 
-    const decomposition = JSON.parse(cleanContent);
+    // Attempt to parse JSON with better error handling
+    let decomposition;
+    try {
+      decomposition = JSON.parse(cleanContent);
+    } catch (parseError: any) {
+      // Log the malformed JSON for debugging
+      console.error('JSON Parse Error:', parseError.message);
+      console.error('Raw content length:', content.length);
+      console.error('Clean content (first 500 chars):', cleanContent.substring(0, 500));
+      console.error('Clean content (last 500 chars):', cleanContent.substring(cleanContent.length - 500));
+
+      // Try to extract JSON from the content more aggressively
+      const jsonMatch = cleanContent.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        try {
+          decomposition = JSON.parse(jsonMatch[0]);
+          console.warn('Successfully extracted JSON using fallback regex method');
+        } catch {
+          throw new Error(
+            `Failed to parse architect response as JSON. ` +
+            `Parse error: ${parseError.message}. ` +
+            `Content length: ${cleanContent.length} chars. ` +
+            `This likely means the response exceeded the 4000 token limit and was truncated.`
+          );
+        }
+      } else {
+        throw new Error(
+          `Failed to parse architect response as JSON and could not extract valid JSON. ` +
+          `Parse error: ${parseError.message}`
+        );
+      }
+    }
 
     // Validate using centralized rules
     validateWorkOrderCount(decomposition.work_orders.length);

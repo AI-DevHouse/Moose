@@ -1,0 +1,22 @@
+{
+  "spec": {
+    "feature_name": "Todo App",
+    "objectives": [
+      "Allow users to create todos",
+      "Allow users to mark todos as complete",
+      "Allow users to delete todos"
+    ],
+    "constraints": [
+      "Use React and TypeScript",
+      "Store data in localStorage",
+      "Mobile-responsive design"
+    ],
+    "acceptance_criteria": [
+      "Users can add new todos with text input",
+      "Users can toggle todo completion status",
+      "Users can delete individual todos",
+      "Todo list persists across page refreshes"
+    ]
+  },
+  "generateContracts": false
+}

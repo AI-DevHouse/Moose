@@ -29,6 +29,6 @@
     "budget_estimate": 50000,
     "time_estimate": "12 weeks"
   },
-  "generateWireframes": true,
+  "generateWireframes": false,
   "generateContracts": true
 }

@@ -39,12 +39,12 @@ export class ProposerRegistry {
 
   async initialize(): Promise<void> {
     if (this.initialized) return;
-    
+
     try {
       const { data: configs, error } = await supabase
         .from('proposer_configs')
-        .select('*')
-        .eq('is_active', true)
+        .select('id, name, model, provider, complexity_threshold, cost_profile, active')
+        .eq('active', true)
         .order('created_at');
 
       if (error) throw error;
@@ -54,14 +54,14 @@ export class ProposerRegistry {
           id: config.id,
           name: config.name,
           provider: config.provider as 'anthropic' | 'openai',
-          endpoint: config.endpoint,
-          context_limit: config.context_limit,
+          endpoint: config.provider === 'anthropic' ? 'https://api.anthropic.com/v1/messages' : 'https://api.openai.com/v1/chat/completions',
+          context_limit: config.provider === 'anthropic' ? 200000 : 128000,
           cost_profile: config.cost_profile as { input_cost_per_token: number; output_cost_per_token: number; currency?: string },
-          strengths: config.strengths as string[],
+          strengths: [],
           complexity_threshold: config.complexity_threshold,
-          success_patterns: (config.success_patterns ?? undefined) as Record<string, any> | undefined,
-          notes: (config.notes ?? undefined) as string | undefined,
-          is_active: config.is_active
+          success_patterns: undefined,
+          notes: undefined,
+          is_active: config.active
         });
       }
 

@@ -15,14 +15,11 @@ export interface RoutingConfig {
 }
 
 export interface SystemConfig {
-  id: string;
-  config_key: string;
-  config_value: any;
-  config_type: string;
+  key: string;
+  value: string;
   description: string | null;
-  updated_by: string | null;
-  updated_at: string;
   created_at: string;
+  updated_at: string;
 }
 
 // Cache with 5-minute TTL
@@ -73,15 +70,15 @@ class ConfigService {
 
     const { data, error } = await this.supabase
       .from('system_config')
-      .select('config_value')
-      .eq('config_key', 'budget_limits')
+      .select('value')
+      .eq('key', 'budget_limits')
       .single();
 
     if (error) {
       throw new Error(`Failed to fetch budget limits: ${error.message}`);
     }
 
-    const limits = data.config_value as BudgetLimits;
+    const limits = JSON.parse(data.value) as BudgetLimits;
     this.setCache('budget_limits', limits);
     return limits;
   }
@@ -107,11 +104,10 @@ class ConfigService {
     const { error } = await this.supabase
       .from('system_config')
       .update({
-        config_value: limits,
-        updated_by,
+        value: JSON.stringify(limits),
         updated_at: new Date().toISOString()
       })
-      .eq('config_key', 'budget_limits');
+      .eq('key', 'budget_limits');
 
     if (error) {
       throw new Error(`Failed to update budget limits: ${error.message}`);
@@ -126,15 +122,15 @@ class ConfigService {
 
     const { data, error } = await this.supabase
       .from('system_config')
-      .select('config_value')
-      .eq('config_key', 'routing_config')
+      .select('value')
+      .eq('key', 'routing_config')
       .single();
 
     if (error) {
       throw new Error(`Failed to fetch routing config: ${error.message}`);
     }
 
-    const config = data.config_value as RoutingConfig;
+    const config = JSON.parse(data.value) as RoutingConfig;
     this.setCache('routing_config', config);
     return config;
   }
@@ -146,11 +142,10 @@ class ConfigService {
     const { error } = await this.supabase
       .from('system_config')
       .update({
-        config_value: config,
-        updated_by,
+        value: JSON.stringify(config),
         updated_at: new Date().toISOString()
       })
-      .eq('config_key', 'routing_config');
+      .eq('key', 'routing_config');
 
     if (error) {
       throw new Error(`Failed to update routing config: ${error.message}`);
@@ -163,17 +158,17 @@ class ConfigService {
     const cached = this.isCacheValid<T>(config_key);
     if (cached) return cached;
 
-    const { data, error } = await this.supabase
+    const { data, error} = await this.supabase
       .from('system_config')
-      .select('config_value')
-      .eq('config_key', config_key)
+      .select('value')
+      .eq('key', config_key)
       .single();
 
     if (error) {
       throw new Error(`Failed to fetch config '${config_key}': ${error.message}`);
     }
 
-    const value = data.config_value as T;
+    const value = JSON.parse(data.value) as T;
     this.setCache(config_key, value);
     return value;
   }
