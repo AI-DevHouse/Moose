@@ -124,7 +124,10 @@ export async function pushBranchAndCreatePR(
       const project = await projectService.getProject(wo.project_id);
       if (project) {
         workingDirectory = project.local_path;
-        repoName = project.github_repo_name;
+        // Use org/repo format for GitHub CLI
+        if (project.github_org && project.github_repo_name) {
+          repoName = `${project.github_org}/${project.github_repo_name}`;
+        }
         console.log(`[GitHubIntegration] Using project directory: ${workingDirectory}`);
         if (repoName) {
           console.log(`[GitHubIntegration] Target repository: ${repoName}`);
