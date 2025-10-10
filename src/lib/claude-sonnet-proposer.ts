@@ -198,12 +198,12 @@ export class ClaudeSonnetProposer {
   }
 
   private async executeWithClaude(
-    request: ProposerRequest, 
+    request: ProposerRequest,
     proposer: ProposerConfig
   ): Promise<Omit<ProposerResponse, 'execution_time_ms' | 'complexity_analysis' | 'routing_decision'>> {
-    
+
     const prompt = this.buildClaudePrompt(request);
-    
+
     const anthropicResponse = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -212,7 +212,7 @@ export class ClaudeSonnetProposer {
         'Anthropic-Version': '2023-06-01'
       },
       body: JSON.stringify({
-        model: 'claude-3-5-sonnet-20241022',
+        model: proposer.model, // Use model from database (e.g., 'claude-sonnet-4-5-20250929')
         max_tokens: 4000,
         messages: [{
           role: 'user',
@@ -248,12 +248,12 @@ export class ClaudeSonnetProposer {
   }
 
   private async executeWithOpenAI(
-    request: ProposerRequest, 
+    request: ProposerRequest,
     proposer: ProposerConfig
   ): Promise<Omit<ProposerResponse, 'execution_time_ms' | 'complexity_analysis' | 'routing_decision'>> {
-    
+
     const prompt = this.buildOpenAIPrompt(request);
-    
+
     const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -261,7 +261,7 @@ export class ClaudeSonnetProposer {
         'Authorization': `Bearer ${process.env.OPENAI_API_KEY!}`
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
+        model: proposer.model, // Use model from database (e.g., 'gpt-4o-mini')
         messages: [{
           role: 'user',
           content: prompt

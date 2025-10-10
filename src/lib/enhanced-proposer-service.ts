@@ -584,7 +584,7 @@ export class EnhancedProposerService {
 
   private async executeWithClaude(request: ProposerRequest, proposer: ProposerConfig): Promise<any> {
     const prompt = this.buildClaudePrompt(request);
-    
+
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -593,7 +593,7 @@ export class EnhancedProposerService {
         'Anthropic-Version': '2023-06-01'
       },
       body: JSON.stringify({
-        model: 'claude-3-5-sonnet-20241022',
+        model: proposer.model, // Use model from database (e.g., 'claude-sonnet-4-5-20250929')
         max_tokens: 4000,
         messages: [{ role: 'user', content: prompt }]
       })
@@ -627,7 +627,7 @@ export class EnhancedProposerService {
 
   private async executeWithOpenAI(request: ProposerRequest, proposer: ProposerConfig): Promise<any> {
     const prompt = this.buildOpenAIPrompt(request);
-    
+
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -635,7 +635,7 @@ export class EnhancedProposerService {
         'Authorization': `Bearer ${process.env.OPENAI_API_KEY!}`
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
+        model: proposer.model, // Use model from database (e.g., 'gpt-4o-mini')
         messages: [{ role: 'user', content: prompt }],
         max_tokens: 2000
       })
