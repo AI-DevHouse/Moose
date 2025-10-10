@@ -1,0 +1,403 @@
+# Perpetual Claude Code System - Implementation Brief
+
+## Objective
+Build a PowerShell wrapper system that enables unlimited context for Claude Code through automatic handovers at logical completion points.
+
+---
+
+## System Requirements
+
+### Core Functionality
+1. **Wrapper script** (`perpetual-claude.ps1`) that monitors and manages Claude Code sessions
+2. **Token estimation** via file system monitoring and heuristics
+3. **Two-threshold system**: Warning (soft) and Hard (forced) limits
+4. **File-based communication** between monitor and Claude Code
+5. **Automatic handover** at logical task completion points
+6. **Session continuity** through comprehensive handover documents
+
+### Configurable Parameters
+- Warning threshold: 90k tokens OR 18 minutes (default)
+- Hard threshold: 120k tokens OR 25 minutes (default)
+- Project path
+- Initial task/prompt
+- Max iterations (safety limit)
+
+---
+
+## Architecture
+
+### Components
+
+**1. Main Wrapper Script** (`perpetual-claude.ps1`)
+- Launches Claude Code sessions
+- Monitors token usage and time
+- Detects handover triggers
+- Spawns new sessions automatically
+- Manages iteration loop
+
+**2. File System Monitor**
+- Watches project files for changes
+- Tracks which files Claude opens/modifies
+- Estimates tokens from file sizes (chars / 4)
+- Updates running token counter
+- Adds base overhead (~2000 tokens/minute)
+
+**3. Status Communication File** (`.claude-handover/status.txt`)
+- Updated every 30 seconds by monitor
+- Contains: current tokens, time elapsed, status (NORMAL/WARNING/CRITICAL)
+- Claude Code checks this periodically
+- Format:
+  ```
+  TOKENS: 87,432 / 120,000 (73%) - NORMAL
+  TIME: 12 / 20 minutes - NORMAL
+  STATUS: Continue working
+  ```
+
+**4. Handover Document** (`.claude-handover/handover.md`)
+- Comprehensive state transfer between sessions
+- Updated by Claude before triggering handover
+- Read by new Claude session on startup
+- Contains: progress, technical decisions, code context, next steps
+
+**5. Trigger Mechanism** (`.claude-handover/trigger.flag`)
+- Empty flag file created by Claude Code when ready
+- Monitor polls for this file (every 5 seconds)
+- Deleted immediately upon detection
+- Signals handover should begin
+
+**6. Session State** (`.claude-handover/state.json`)
+- Tracks iteration number, timestamps, project path
+- Metadata for monitoring/debugging
+
+---
+
+## Workflow
+
+### Session Lifecycle
+
+1. **Initialization**
+   - User runs: `./perpetual-claude.ps1 -Task "Build authentication system"`
+   - Script creates `.claude-handover/` directory structure
+   - Generates initial handover.md template
+   - Sets iteration counter to 1
+
+2. **Session Start**
+   - Launch Claude Code with prompt: "Read handover.md at [path] and continue work"
+   - Start file system watcher
+   - Start token counter (0)
+   - Start timer
+   - Initialize status.txt with NORMAL
+
+3. **Active Monitoring** (continuous loop every 30 seconds)
+   - Check files modified since last check
+   - Estimate tokens consumed (file size / 4 + overhead)
+   - Update running token total
+   - Calculate time elapsed
+   - Determine current status (NORMAL/WARNING/CRITICAL)
+   - Overwrite status.txt with current metrics
+
+4. **Warning Threshold Reached**
+   - Status.txt updated to: "WARNING - Complete current task and trigger handover"
+   - Claude Code checks status file (instructed in initial prompt)
+   - Claude finishes current logical unit of work
+   - Claude updates handover.md with comprehensive state
+   - Claude creates trigger.flag
+
+5. **Handover Triggered**
+   - Monitor detects trigger.flag (or hard limit reached)
+   - Delete trigger.flag immediately
+   - Terminate current Claude Code session gracefully (5 sec grace period)
+   - Generate new handover.md (overwrite with session summary)
+   - Increment iteration counter
+   - Wait 3 seconds for file system sync
+
+6. **New Session Start**
+   - Launch fresh Claude Code instance (iteration N+1)
+   - Reset token counter to 0
+   - Reset timer
+   - New Claude reads handover.md
+   - Continue work with full 200k token budget
+   - Repeat from step 3
+
+---
+
+## File Structure
+
+```
+project-root/
+├── perpetual-claude.ps1          # Main wrapper script
+├── .claude-handover/             # System directory
+│   ├── handover.md               # State transfer document
+│   ├── status.txt                # Real-time status (updated every 30s)
+│   ├── state.json                # Session metadata
+│   └── trigger.flag              # Created by Claude, deleted by monitor
+└── .claude-instructions.md       # Instructions for Claude Code
+```
+
+---
+
+## Implementation Specifications
+
+### Token Estimation Algorithm
+
+```
+Initial: tokens = 0
+
+Every 30 seconds:
+1. Get list of files modified since last check (FileSystemWatcher)
+2. For each modified file:
+   - Read file size in characters
+   - tokens += (chars / 4)
+3. Add base interaction overhead: tokens += (elapsed_minutes * 2000)
+4. Return estimated token count
+```
+
+**Conservative approach**: Overestimate to ensure safety margin
+
+### Threshold Logic
+
+```
+Check every 30 seconds:
+
+IF tokens >= 120k OR time >= 25 min:
+  status = CRITICAL
+  Create auto-trigger file
+  Force handover in 60 seconds
+  
+ELSE IF tokens >= 90k OR time >= 18 min:
+  status = WARNING
+  Instruct Claude to complete task
+  
+ELSE:
+  status = NORMAL
+  Continue working
+```
+
+### Handover Document Template
+
+```markdown
+# Claude Code Handover Document
+**Generated**: [timestamp]
+**Iteration**: [number]
+**Session Duration**: [hh:mm:ss]
+**Trigger Reason**: [reason]
+
+## Mission Objective
+[Overall project goal - persistent across sessions]
+
+## Previous Session Summary
+[What was accomplished - filled by Claude]
+
+## Files Modified This Session
+- file1.js - [description]
+- file2.py - [description]
+
+## Current State
+### Active Tasks
+- [ ] Task in progress
+- [ ] Next task
+
+### Completed This Session  
+- [x] Finished task
+
+### Blockers
+- [Any issues]
+
+## Technical Context
+### Architecture Decisions
+[Key decisions made]
+
+### Dependencies Added
+[New packages/tools]
+
+## Code Context
+```language
+// Relevant code snippets for next session
+```
+
+## Next Steps (Priority Order)
+1. [Immediate next task]
+2. [Following task]
+3. [Future work]
+
+## Handover Protocol
+You are in a perpetual session system.
+- Check status.txt periodically
+- At WARNING: Complete current task, update this doc, create trigger.flag
+- System will auto-spawn next session
+```
+
+### Claude Code Initial Prompt
+
+```
+SYSTEM: You are operating in a PERPETUAL SESSION SYSTEM with automatic handovers.
+
+SETUP:
+1. Read handover document: [path-to-handover.md]
+2. Check status file every 5-10 minutes: [path-to-status.txt]
+3. Your working token budget: 90k tokens (warning) / 120k tokens (hard limit)
+
+YOUR TASK: [user-specified-task]
+
+HANDOVER PROTOCOL:
+- When status.txt shows WARNING:
+  * Complete your current logical task (function/feature/file)
+  * Do NOT start new major work
+  * Update handover.md with comprehensive state:
+    - What you accomplished
+    - Current code context
+    - Technical decisions
+    - Exact next steps
+  * Create file: [path-to-trigger.flag]
+  * A new session will automatically continue your work
+
+- At logical stopping points, check status.txt
+- Work efficiently but thoroughly
+- Document key decisions as you go
+
+Begin by reading the handover document and continuing from where the previous session ended.
+```
+
+---
+
+## Testing & Validation
+
+### Test Cases
+
+**1. Normal Handover**
+- Start session with simple task
+- Let it run to warning threshold
+- Verify Claude completes task cleanly
+- Verify handover.md updated
+- Verify trigger.flag created
+- Verify new session continues correctly
+
+**2. Hard Limit Enforcement**
+- Simulate Claude ignoring warning
+- Verify hard limit forces handover
+- Verify session terminated
+- Verify new session spawns
+
+**3. Time-Based Handover**
+- Keep token usage low
+- Wait for time threshold
+- Verify time triggers handover correctly
+
+**4. Token-Based Handover**  
+- Simulate rapid file changes
+- Verify token estimate triggers warning
+- Verify handover at token threshold
+
+**5. Manual Interruption**
+- Start session
+- User creates trigger.flag manually
+- Verify immediate handover
+
+**6. Multi-Iteration Continuity**
+- Run 5+ iterations
+- Verify state maintained across all handovers
+- Verify progress continues logically
+
+---
+
+## Error Handling
+
+### Required Error Cases
+
+1. **Claude Code process crashes**
+   - Detect process exit
+   - Save emergency handover
+   - Restart with recovery prompt
+
+2. **Trigger file not created at warning**
+   - Hard timeout enforces handover
+   - Generate handover from available state
+
+3. **File system permission errors**
+   - Log error
+   - Alert user
+   - Attempt recovery
+
+4. **Handover document corrupted**
+   - Fall back to previous version
+   - Or start fresh with context from git history
+
+5. **Infinite loop detection**
+   - If same error occurs 3 times
+   - Stop iteration
+   - Alert user for intervention
+
+---
+
+## Deliverables
+
+### Required Files
+
+1. **perpetual-claude.ps1**
+   - Fully functional wrapper script
+   - All parameters configurable
+   - Comprehensive error handling
+   - Console output showing status
+   - Color-coded messages (Normal=Green, Warning=Yellow, Critical=Red)
+
+2. **.claude-instructions.md**
+   - Instructions for Claude Code
+   - Handover protocol explained
+   - Example handover document structure
+
+3. **README.md**
+   - How to use the system
+   - Configuration options
+   - Troubleshooting guide
+   - Examples
+
+4. **test-perpetual.ps1** (optional but recommended)
+   - Automated testing script
+   - Validates all components
+   - Simulates various scenarios
+
+---
+
+## Success Criteria
+
+- [ ] System runs for 10+ iterations without manual intervention
+- [ ] Handovers occur at logical completion points (not mid-code)
+- [ ] State maintained perfectly across sessions
+- [ ] Token estimates within 20% accuracy
+- [ ] Both time and token thresholds trigger correctly
+- [ ] Hard limit enforces when warning ignored
+- [ ] Status file updates every 30 seconds
+- [ ] New sessions continue seamlessly from handover.md
+- [ ] No file locks or race conditions
+- [ ] Clean console output showing progress
+- [ ] User can stop/resume at any time
+- [ ] Works with standard Claude Code installation
+
+---
+
+## Notes for Implementation
+
+- Use FileSystemWatcher for efficient file monitoring
+- Conservative token estimates (better to handover early)
+- Graceful session termination (give Claude 5 seconds to save)
+- Atomic file operations (prevent corruption)
+- Clear console logging for debugging
+- Comments explaining key logic
+- PowerShell 5.1+ compatible
+- Cross-platform considerations (though primarily Windows/PowerShell)
+
+---
+
+## Optional Enhancements (Future)
+
+- Session history/archive (keep old handover docs)
+- Git auto-commit between sessions
+- Real tokenizer integration (tiktoken)
+- Web dashboard for monitoring
+- Slack/email notifications
+- Resume from specific iteration
+- Parallel session support
+
+---
+
+**Target Delivery**: Fully functional MVP ready for testing

@@ -85,7 +85,7 @@ export async function createFeatureBranch(
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
-    .substring(0, 30);
+    .substring(0, 80);
 
   const branchName = `feature/wo-${wo.id.substring(0, 8)}-${slug}`;
 
@@ -174,7 +174,7 @@ export async function executeAider(
     throw new Error(`Proposer '${selectedProposer}' not found in registry`);
   }
 
-  const aiderModel = proposerConfig.name || 'claude-sonnet-4-20250514'; // Fallback to Claude Sonnet 4.5
+  const aiderModel = proposerConfig.model || 'claude-sonnet-4-20250514'; // Fallback to Claude Sonnet 4.5
   console.log(`[AiderExecutor] Using Aider model: ${aiderModel} (from proposer: ${selectedProposer})`);
 
   // 5. Build file list

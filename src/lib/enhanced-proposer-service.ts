@@ -11,6 +11,8 @@ import {
   type RefinementResult
 } from './proposer-refinement-rules';
 import { ContractValidator, type ValidationResult } from './contract-validator';
+import { classifyError, type FailureClass, type ErrorContext } from './failure-classifier';
+import { logRefinementCycle } from './decision-logger';
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from '@/types/supabase';
 
@@ -75,6 +77,8 @@ export interface EnhancedProposerResponse {
   fallback_monitoring?: FallbackMonitoring;
   refinement_metadata?: RefinementResult;  // Now uses centralized type
   contract_validation?: ValidationResult;  // Contract violation detection
+  failure_class?: FailureClass;            // NEW: Failure classification
+  error_context?: ErrorContext;            // NEW: Structured error details
   retry_history?: Array<{
     attempt: number;
     proposer: string;
@@ -281,6 +285,19 @@ export class EnhancedProposerService {
             contract_violations: refinementMetadata.contract_violations?.length || 0,
             success: refinementMetadata.refinement_success
           });
+
+          // Log each refinement cycle decision
+          for (const cycle of refinementMetadata.cycle_history) {
+            const cycleSuccess = cycle.errors_after < cycle.errors_before;
+            await logRefinementCycle({
+              work_order_id: request.metadata?.work_order_id || '',
+              cycle_number: cycle.cycle,
+              failure_class: cycle.errors_after > 0 ? 'compile_error' : undefined,
+              error_message: cycle.errors_after > 0 ? `${cycle.errors_after} TypeScript errors remain` : undefined,
+              retry_strategy: cycle.prompt_strategy,
+              success: cycleSuccess
+            }).catch(err => console.error('Failed to log refinement cycle:', err));
+          }
         }
 
         console.log('🔍 DIAGNOSTIC: API Response:', {
@@ -316,6 +333,39 @@ export class EnhancedProposerService {
 
         const totalExecutionTime = Date.now() - startTime;
 
+        // Classify failure if there are residual errors or contract violations
+        let failureClass: FailureClass | undefined = undefined;
+        let errorContext: ErrorContext | undefined = undefined;
+
+        if (refinementMetadata && (refinementMetadata.final_errors > 0 ||
+            (contractValidation && contractValidation.breaking_changes.length > 0))) {
+
+          // Determine failure class based on what failed
+          if (contractValidation && contractValidation.breaking_changes.length > 0) {
+            failureClass = 'contract_violation';
+            errorContext = {
+              error_message: `${contractValidation.breaking_changes.length} contract violations detected`,
+              error_type: 'ContractViolation',
+              contract_violations: contractValidation.breaking_changes.map((bc: any) => ({
+                type: bc.severity,
+                file: bc.file || 'unknown',
+                description: bc.impact_description || bc.type
+              }))
+            };
+          } else if (refinementMetadata.final_errors > 0) {
+            failureClass = 'compile_error';
+            errorContext = {
+              error_message: `${refinementMetadata.final_errors} TypeScript errors remain after ${refinementMetadata.refinement_count} refinement cycles`,
+              error_type: 'TypeScriptError',
+              failed_tests: refinementMetadata.error_details.slice(0, 5).map(e =>
+                `Line ${e.line}: ${e.code} - ${e.message}`
+              )
+            };
+          }
+
+          console.warn('⚠️ Proposer completed with residual errors:', { failureClass, errorContext });
+        }
+
         return {
           ...response,
           execution_time_ms: totalExecutionTime,
@@ -325,12 +375,20 @@ export class EnhancedProposerService {
           fallback_monitoring: fallbackMonitoring,
           refinement_metadata: refinementMetadata,
           contract_validation: contractValidation,
+          failure_class: failureClass,
+          error_context: errorContext,
           retry_history: retryHistory
         };
 
       } catch (error) {
         lastError = error as Error;
         const attemptExecutionTime = Date.now() - attemptStartTime;
+
+        // Classify the execution error
+        const classification = classifyError(lastError, {
+          component: 'EnhancedProposerService',
+          operation: 'executeWithMonitoring'
+        });
 
         retryHistory.push({
           attempt: attempt + 1,
@@ -343,11 +401,34 @@ export class EnhancedProposerService {
 
         this.updateFallbackMonitoring(false, false);
 
+        // Log the failed attempt as a decision (for learning)
+        await logRefinementCycle({
+          work_order_id: request.metadata?.work_order_id || '',
+          cycle_number: attempt + 1,
+          failure_class: classification.failure_class,
+          error_message: lastError.message,
+          retry_strategy: 'retry_with_fallback',
+          success: false
+        }).catch(err => console.error('Failed to log retry decision:', err));
+
         if (attempt === retryConfig.max_retries) break;
 
         await new Promise(resolve => setTimeout(resolve, retryConfig.retry_delay_ms));
       }
     }
+
+    // All retries failed - classify the final error and throw
+    const finalClassification = classifyError(lastError!, {
+      component: 'EnhancedProposerService',
+      operation: 'executeWithMonitoring',
+      metadata: { retry_count: retryConfig.max_retries }
+    });
+
+    console.error('❌ All retry attempts failed:', {
+      failure_class: finalClassification.failure_class,
+      error_context: finalClassification.error_context,
+      retry_count: retryConfig.max_retries
+    });
 
     throw new Error(`All retry attempts failed. Last error: ${lastError?.message}`);
   }

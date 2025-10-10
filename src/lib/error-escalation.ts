@@ -1,7 +1,11 @@
 /**
  * Centralized error escalation helper
  * Uses existing Client Manager API (v35-v37)
+ * Phase 2B.3: Enhanced with failure classification and decision logging
  */
+
+import { classifyError } from './failure-classifier';
+import { logEscalationDecision } from './decision-logger';
 
 export async function handleCriticalError(opts: {
   component: string;          // e.g., "ResultTracker", "Sentinel"
@@ -13,8 +17,15 @@ export async function handleCriticalError(opts: {
 }): Promise<void> {
   const { component, operation, error, workOrderId, severity, metadata } = opts;
 
-  // ALWAYS log for debugging
-  console.error(`[${component}] ${operation} failed:`, error, metadata);
+  // Classify the error using our failure classification system
+  const classification = classifyError(error, {
+    component,
+    operation,
+    metadata
+  });
+
+  // ALWAYS log for debugging (now with classification)
+  console.error(`[${component}] ${operation} failed (${classification.failure_class}):`, error, metadata);
 
   // If critical AND has work_order_id: escalate to Client Manager
   if (severity === 'critical' && workOrderId) {
@@ -25,9 +36,12 @@ export async function handleCriticalError(opts: {
         body: JSON.stringify({
           work_order_id: workOrderId,
           reason: `${component} failure: ${operation}`,
+          failure_class: classification.failure_class,  // NEW: Include classification
           metadata: {
             error: error.message,
             stack: error.stack,
+            failure_class: classification.failure_class,
+            error_context: classification.error_context,
             ...metadata
           }
         })
@@ -36,13 +50,43 @@ export async function handleCriticalError(opts: {
       if (!response.ok) {
         const errorText = await response.text();
         console.error('[ErrorEscalation] Failed to escalate:', errorText);
+
+        // Log failed escalation attempt
+        await logEscalationDecision({
+          work_order_id: workOrderId,
+          component,
+          operation,
+          failure_class: classification.failure_class,
+          severity,
+          success: false
+        }).catch(err => console.error('[ErrorEscalation] Failed to log decision:', err));
       } else {
         const result = await response.json();
-        console.log(`[ErrorEscalation] Escalation created: ${result.escalation.id}`);
+        console.log(`[ErrorEscalation] Escalation created: ${result.escalation.id} (${classification.failure_class})`);
+
+        // Log successful escalation decision
+        await logEscalationDecision({
+          work_order_id: workOrderId,
+          component,
+          operation,
+          failure_class: classification.failure_class,
+          severity,
+          success: true
+        }).catch(err => console.error('[ErrorEscalation] Failed to log decision:', err));
       }
     } catch (escalationError) {
       // Don't throw - escalation failure shouldn't crash the system
       console.error('[ErrorEscalation] Escalation itself failed:', escalationError);
+
+      // Log the escalation failure
+      await logEscalationDecision({
+        work_order_id: workOrderId,
+        component,
+        operation,
+        failure_class: classification.failure_class,
+        severity,
+        success: false
+      }).catch(err => console.error('[ErrorEscalation] Failed to log decision:', err));
     }
   }
 

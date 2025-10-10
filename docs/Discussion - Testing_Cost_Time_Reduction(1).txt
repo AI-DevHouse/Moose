@@ -1,0 +1,496 @@
+# Strategies to Reduce Iteration Time & Cost
+
+You're right - **12-15 hours × 10 iterations = 120-150 hours is completely impractical**. Here's how to get meaningful improvement data while cutting time by 80-95% and cost by 50-90%.
+
+---
+
+## Strategy 1: **Progressive Spec Sizing** 🎯 RECOMMENDED
+
+**Problem:** Testing on a 77K production app is overkill for early iterations.
+
+**Solution:** Build a test suite of progressively larger applications.
+
+### Test Application Ladder:
+
+| App | Spec Size | WOs | Time | Cost | Use Case |
+|-----|-----------|-----|------|------|----------|
+| **Nano** | 3-5K | 15-25 | 10-15 min | $1-2 | Smoke test, basic validation |
+| **Tiny** | 8-12K | 40-60 | 30-45 min | $3-5 | Dependency logic, risk assessment |
+| **Small** | 15-25K | 80-120 | 60-90 min | $6-10 | Multi-component apps, complexity |
+| **Medium** | 30-40K | 150-250 | 2-3 hrs | $12-18 | Real architecture, state management |
+| **Large** | 77K | 550-650 | 12-15 hrs | $35-45 | Final validation only |
+
+### Iteration Strategy:
+
+```
+Iterations 1-3: Nano app (validate basic improvements)
+  ├─ Test: Dependency graph accuracy
+  ├─ Test: Risk assessment
+  └─ Time: 30-45 min total
+  
+Iterations 4-6: Small app (validate scaling)
+  ├─ Test: Multi-component dependencies
+  ├─ Test: Cross-cutting concerns
+  └─ Time: 3-4 hours total
+  
+Iterations 7-8: Medium app (validate complexity)
+  ├─ Test: State management decomposition
+  ├─ Test: Architecture boundaries
+  └─ Time: 4-6 hours total
+  
+Iteration 9-10: Large app (final validation)
+  ├─ Full production test
+  └─ Time: 24-30 hours total
+
+Total time: 35-45 hours (vs 120-150 hours)
+Total cost: $80-120 (vs $350-450)
+```
+
+### Example Test Specs to Create:
+
+**Nano: Todo MVC App**
+```
+- Express REST API
+- React frontend
+- SQLite database
+- JWT auth
+- CRUD operations
+```
+**Expected:** 20-30 WOs, 15 min, validates basic decomposition
+
+**Small: Blog Platform**
+```
+- Next.js with API routes
+- PostgreSQL + Prisma
+- User auth + roles
+- Post CRUD + comments
+- Image uploads
+- RSS feed
+```
+**Expected:** 60-100 WOs, 45-60 min, validates multi-tier dependencies
+
+**Medium: Analytics Dashboard**
+```
+- React + Redux
+- Multiple chart types
+- Real-time WebSocket updates
+- User management
+- Report generation
+- Export to CSV/PDF
+```
+**Expected:** 150-200 WOs, 2-3 hrs, validates complex state management
+
+---
+
+## Strategy 2: **Partial Spec Testing** ⚡ FAST
+
+**Problem:** Full spec takes 12 hours, but most issues appear in first few sections.
+
+**Solution:** Test only first 40% of spec (Sections 1-6).
+
+### Truncated Testing:
+
+```typescript
+// Create abbreviated version of large spec
+function createPartialSpec(fullSpec: string, sections: number[]): string {
+  // Extract only specified sections
+  return extractSections(fullSpec, sections);
+}
+
+// Test spec = Sections 1-6 (skip 7-15)
+const testSpec = createPartialSpec(multiLLMSpec, [1, 2, 3, 4, 5, 6]);
+```
+
+**Sections 1-6 include:**
+- Executive Summary ✅
+- Architecture ✅
+- Tech Stack ✅
+- **Component Specs (the big one)** ✅
+- UI Components ✅
+- Error Handling ✅
+
+**Skipped (less critical for validation):**
+- Testing (can infer from component quality)
+- Performance, Security (smaller sections)
+- Build/Deploy (low WO count)
+- Documentation sections
+
+### Results:
+
+| Metric | Full Spec | Sections 1-6 | Savings |
+|--------|-----------|--------------|---------|
+| Work Orders | 600 | ~350 | 42% |
+| Time | 12 hrs | 6-7 hrs | 45% |
+| Cost | $40 | $22-25 | 40% |
+| Coverage | 100% | 85% | Acceptable |
+
+**When to use:** Iterations 4-8 (after basic validation, before final test)
+
+---
+
+## Strategy 3: **Switch to GPT-4o-mini for Iterations** 💰 CHEAP
+
+**Problem:** Claude Sonnet 4.5 costs $40 per run.
+
+**Solution:** Use 4o-mini for improvement iterations, Claude for baseline/final.
+
+### Hybrid Approach:
+
+```
+Iteration 1: Claude Sonnet 4.5 (BASELINE)
+  ├─ Purpose: Establish quality benchmark
+  ├─ Cost: $40
+  └─ Time: 12 hours
+  
+Iterations 2-9: GPT-4o-mini (IMPROVEMENTS)
+  ├─ Purpose: Test improvements rapidly
+  ├─ Cost per run: $2
+  ├─ Total cost: $16 (8 iterations)
+  └─ Time per run: 10-12 hours (similar)
+  
+Iteration 10: Claude Sonnet 4.5 (VALIDATION)
+  ├─ Purpose: Confirm improvements work with best model
+  ├─ Cost: $40
+  └─ Time: 12 hours
+
+Total: $96 (vs $400)
+```
+
+**Trade-off:** Accept lower quality from 4o-mini during iteration phase. You're testing *improvements to the system*, not final output quality.
+
+**Key insight:** If your improvements work with 4o-mini, they'll work even better with Claude.
+
+---
+
+## Strategy 4: **Validation-Only Testing** 🔍 NO EXECUTION
+
+**Problem:** Full test = decomposition ($40) + execution ($200-400) + review time.
+
+**Solution:** For iterations, skip execution entirely. Only validate decomposition quality.
+
+### Process:
+
+```
+1. Decompose spec → Generate work orders [$40, 12 hrs]
+2. Run validation suite → Catch errors [free, 5 min]
+3. Analyze metrics → Score quality [free, 30 min]
+4. Make improvements → Update Moose code
+5. SKIP execution → No Orchestrator run [save $200-400, save 3-6 hrs]
+6. Repeat
+```
+
+### Quality Metrics (No Execution Needed):
+
+**Decomposition Quality:**
+- ✅ Dependency graph validity (circular, missing, orphaned)
+- ✅ File path accuracy
+- ✅ Risk assessment consistency
+- ✅ Scope granularity (not too large/small)
+- ✅ Acceptance criteria specificity
+- ✅ Coverage completeness
+
+**You can measure all of these without executing a single work order.**
+
+### Sampling for Execution:
+
+When you DO need execution validation:
+
+```typescript
+// Select representative sample: 20-30 WOs out of 600
+const sample = selectRepresentativeSample(allWorkOrders, {
+  byRisk: { high: 5, medium: 10, low: 5 },
+  byType: { foundation: 5, feature: 10, ui: 5 },
+  byComplexity: { high: 8, medium: 10, low: 2 }
+});
+
+// Execute only these 20-30 WOs
+// Cost: $20-60 (vs $200-400)
+// Time: 30-60 min (vs 3-6 hours)
+```
+
+**When to use:** Every 3rd iteration (1, 4, 7, 10) to validate execution quality.
+
+---
+
+## Strategy 5: **Section-Specific Testing** 🎯 TARGETED
+
+**Problem:** Testing all 15 sections when only fixing dependency logic.
+
+**Solution:** Test only the sections that exercise the improvement.
+
+### Example: Improving Dependency Detection
+
+```typescript
+// Only decompose Section 4 (Component Specifications)
+// This section has the most complex dependencies
+
+const section4 = extractSection(fullSpec, 4);
+const workOrders = await architect.decompose(section4);
+
+// Validate dependency graph
+const validation = validateDependencyGraph(workOrders);
+
+// Time: 2-3 hours (vs 12 hours)
+// Cost: $8-12 (vs $40)
+// Focus: 100% relevant to improvement
+```
+
+### Section-to-Improvement Mapping:
+
+| Improvement Area | Test Section(s) | Time | Cost |
+|------------------|-----------------|------|------|
+| Dependency logic | Section 4 (Components) | 2-3 hrs | $8-12 |
+| Risk assessment | Sections 6, 9 (Error, Security) | 1-2 hrs | $4-8 |
+| Scope granularity | Section 5 (UI Components) | 1-2 hrs | $4-8 |
+| File path accuracy | Section 11 (Project Structure) | 15 min | $1-2 |
+| IPC pairing | Section 4.6 (IPC Communication) | 30 min | $2-3 |
+
+**When to use:** When making targeted improvements to specific validation rules.
+
+---
+
+## Strategy 6: **Synthetic Specs** 🧪 CONTROLLED
+
+**Problem:** Real specs have unknown complexity. Hard to isolate specific issues.
+
+**Solution:** Generate synthetic specs with known properties.
+
+### Example: Dependency Test Spec
+
+```typescript
+// Generate spec with known dependency graph
+const syntheticSpec = generateSpec({
+  components: 20,
+  dependencyDepth: 5,
+  circularDependencies: 2,  // Intentional - should be caught
+  missingDependencies: 3,   // Intentional - should be caught
+  orphanedComponents: 2     // Intentional - should be caught
+});
+
+// Decompose
+const workOrders = await architect.decompose(syntheticSpec);
+
+// Validate - know ground truth
+const validation = validateAgainstGroundTruth(workOrders, syntheticSpec.groundTruth);
+
+// Time: 5-10 min
+// Cost: $0.50-1
+// Precision: 100% - you know exactly what should happen
+```
+
+### Synthetic Spec Templates:
+
+**Template 1: Dependency Hell**
+- 30 components with complex dependencies
+- Tests dependency graph logic
+- 5 min, $0.50
+
+**Template 2: Risk Assessment**
+- Mix of high/medium/low risk tasks
+- Known risk keywords
+- Tests risk classification
+- 3 min, $0.30
+
+**Template 3: File Path Maze**
+- Similar file names (typo detection)
+- Deep directory structures
+- Tests path validation
+- 2 min, $0.20
+
+**When to use:** Unit testing specific validation rules. Not for end-to-end validation.
+
+---
+
+## Strategy 7: **Parallel Testing** ⚡ SAME TIME
+
+**Problem:** Testing variations sequentially takes 3× longer.
+
+**Solution:** Run multiple decompositions in parallel.
+
+```bash
+# Terminal 1: Baseline
+npm run decompose -- --spec multi-llm.txt --model claude-4.5 --label baseline
+
+# Terminal 2: Improvement A (new dependency rules)
+npm run decompose -- --spec multi-llm.txt --model claude-4.5 --label improved-deps
+
+# Terminal 3: Improvement B (GPT-4o-mini)
+npm run decompose -- --spec multi-llm.txt --model gpt-4o-mini --label mini-test
+
+# All finish in ~12 hours (same as sequential)
+# Cost: 3× but results come 3× faster
+```
+
+**Trade-off:** Higher cost for faster iteration cycles.
+
+**When to use:** When you have multiple hypotheses to test and time is more valuable than money.
+
+---
+
+## Strategy 8: **Checkpoint-Based Testing** 💾 RESUMABLE
+
+**Problem:** 12-hour runs can't be interrupted for improvements.
+
+**Solution:** Save state after each section, allow resuming.
+
+```typescript
+// After each section completes
+await saveCheckpoint({
+  sessionId,
+  completedSections: [1, 2, 3],
+  workOrders: allWorkOrdersSoFar,
+  metrics: validationMetrics
+});
+
+// If issues found after Section 3, stop and improve
+if (validationMetrics.criticalErrors > 10) {
+  console.log('⚠️  High error rate detected. Fix and resume.');
+  process.exit(0);
+}
+
+// Later: Resume from checkpoint
+await resumeDecomposition({
+  sessionId,
+  startFromSection: 4
+});
+```
+
+**Benefits:**
+- Don't waste 6 hours if Section 4 will fail
+- Can improve and resume
+- Iterates on remaining sections only
+
+---
+
+## Recommended Testing Strategy
+
+### **Phase 1: Rapid Iteration (Weeks 1-2)**
+
+**Goal:** Fix basic issues quickly
+
+```
+Day 1-2: Nano spec (3-5K) × 5 iterations
+  ├─ Model: GPT-4o-mini
+  ├─ Focus: Dependency graph, file paths
+  ├─ Time: 60-90 min total
+  └─ Cost: $5-8 total
+
+Day 3-5: Small spec (15K) × 3 iterations
+  ├─ Model: GPT-4o-mini
+  ├─ Focus: Risk assessment, scope
+  ├─ Time: 3-4 hours total
+  └─ Cost: $9-15 total
+
+Day 6-7: Section 4 only × 2 iterations
+  ├─ Model: GPT-4o-mini
+  ├─ Focus: Complex dependencies
+  ├─ Time: 4-6 hours total
+  └─ Cost: $6-10 total
+
+Total Phase 1: $20-35, 8-12 hours
+```
+
+### **Phase 2: Validation (Week 3)**
+
+**Goal:** Confirm improvements work at scale
+
+```
+Day 8: Medium spec (30K) × 1 iteration
+  ├─ Model: Claude Sonnet 4.5
+  ├─ Full validation suite
+  ├─ Time: 3-4 hours
+  └─ Cost: $15-20
+
+Day 9-10: Sections 1-6 (partial large spec)
+  ├─ Model: Claude Sonnet 4.5
+  ├─ Execution sampling (30 WOs)
+  ├─ Time: 6-8 hours
+  └─ Cost: $25-30
+
+Day 11: Full large spec (if needed)
+  ├─ Model: Claude Sonnet 4.5
+  ├─ Final validation
+  ├─ Time: 12-15 hours
+  └─ Cost: $35-45
+
+Total Phase 2: $75-95, 21-27 hours
+```
+
+### **Total: $95-130, 30-40 hours (vs $400, 120 hours)**
+
+**Savings: 70% cost, 65% time**
+
+---
+
+## Immediate Action Plan
+
+### For Current Run:
+
+1. ✅ **Let it finish** - Get baseline data
+2. 📊 **Document actual section sizes** - Update estimates
+3. 💾 **Save all work orders** - This is your ground truth
+
+### For Next Iterations:
+
+**Week 1: Build Test Suite**
+```bash
+# Create synthetic specs
+npm run create-test-specs
+
+# Creates:
+# - specs/test-nano-todo.txt (3K)
+# - specs/test-small-blog.txt (12K)
+# - specs/test-medium-dashboard.txt (30K)
+```
+
+**Week 2: Rapid Iteration**
+```bash
+# Test improvements on nano spec
+for i in {1..5}; do
+  npm run test-decomposition -- \
+    --spec specs/test-nano-todo.txt \
+    --model gpt-4o-mini \
+    --iteration $i
+done
+
+# Analyze results
+npm run analyze-iterations
+```
+
+**Week 3: Scale Testing**
+```bash
+# Test on progressively larger specs
+npm run test-decomposition --spec test-small --model claude-4.5
+npm run test-decomposition --spec partial-large --model claude-4.5
+npm run test-decomposition --spec full-large --model claude-4.5
+```
+
+---
+
+## Bottom Line
+
+### **Recommendations by Priority:**
+
+1. 🥇 **Progressive Spec Sizing** - Build small → medium → large test suite
+2. 🥈 **Validation-Only Testing** - Skip execution during iteration
+3. 🥉 **GPT-4o-mini for Iterations** - Use cheap model for rapid testing
+4. 🏅 **Section-Specific Testing** - Target improvements precisely
+5. 🏅 **Partial Spec Testing** - Test first 40% when appropriate
+
+### **Expected Results:**
+
+```
+Old approach:
+├─ 10 iterations × 12 hours = 120 hours
+├─ 10 iterations × $40 = $400
+└─ Timeline: 2-3 weeks of continuous running
+
+New approach:
+├─ 10 iterations × 2-4 hours avg = 20-40 hours
+├─ 10 iterations × $5-15 avg = $50-150
+└─ Timeline: 3-5 days of actual iteration work
+```
+
+**You can get 90% of the learning in 10% of the time and 25% of the cost.**
+
+Would you like me to create the test spec templates and testing scripts for you?

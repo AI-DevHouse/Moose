@@ -1,0 +1,397 @@
+# Requirement Summary: Architect Agent Validation System
+
+## Context
+
+Moose Mission Control's Architect Agent decomposes technical specifications into work orders. For the Multi-LLM Discussion App (77K characters), this generates **150-300 work orders** across 15 sections. Even Claude Sonnet 4.5 can make errors at this scale, and these errors cascade through the entire system.
+
+**Problem**: Bad work orders waste $1-2 each in execution costs. With potential 5-10% error rate, that's $15-60 wasted per project.
+
+**Solution**: Implement validation system to catch errors before work orders enter the execution pipeline.
+
+---
+
+## Requirements
+
+### Primary Goal
+Create a validation pipeline that runs after Architect decomposition to catch:
+1. **Dependency graph errors** (circular, missing, orphaned work orders)
+2. **Invalid file paths** (typos, path traversal, non-existent files)
+3. **Scope issues** (work orders too large/small)
+4. **Risk misassessment** (security-critical tasks marked low-risk)
+5. **Duplicate work** (multiple WOs modifying same files)
+6. **Poor acceptance criteria** (vague, untestable)
+7. **Coverage gaps** (spec files not covered by any WO)
+
+### Success Metrics
+- Block >90% of critical errors (circular dependencies, invalid paths)
+- Surface >80% of warnings (risk assessment, scope issues)
+- Add <5 seconds overhead to decomposition process
+- Provide actionable error messages for human review
+
+---
+
+## Implementation Scope
+
+### Phase 1: Immediate Validation (CRITICAL - Week 1)
+**Runs during decomposition, blocks on critical errors**
+
+**New Files:**
+- `src/lib/architect-validator.ts` - Main validator class
+- `src/lib/validation/dependency-graph.ts` - Dependency graph validation
+- `src/lib/validation/file-path-validator.ts` - Path validation
+- `src/lib/validation/scope-validator.ts` - Scope granularity checks
+- `src/lib/validation/risk-validator.ts` - Risk assessment validation
+
+**Integration Point:**
+- Modify `src/lib/batched-architect-service.ts` to call validator after each batch
+- Modify `src/app/api/architect/decompose/route.ts` to reject if critical errors found
+
+**Key Functions:**
+```typescript
+class ArchitectValidator {
+  validateDependencyGraph(workOrders: WorkOrder[]): ValidationResult;
+  validateFilePaths(workOrder: WorkOrder): ValidationResult;
+  validateScope(workOrder: WorkOrder): ValidationResult;
+  validateRiskAssessment(workOrder: WorkOrder): ValidationResult;
+}
+```
+
+**Validation Rules:**
+
+1. **Dependency Graph**
+   - ❌ ERROR: Circular dependencies detected
+   - ❌ ERROR: Work order depends on non-existent WO
+   - ⚠️ WARNING: Orphaned work orders (no dependency path from foundation)
+   - ⚠️ WARNING: Deep dependency chains (>5 levels)
+
+2. **File Paths**
+   - ❌ ERROR: Path traversal detected (`../` in path)
+   - ❌ ERROR: Path doesn't start with valid prefix (`src/`, `tests/`, `docs/`)
+   - ⚠️ WARNING: Possible typo (fuzzy match against common paths)
+
+3. **Scope Granularity**
+   - ⚠️ WARNING: >5 files in scope (probably too large)
+   - ⚠️ WARNING: >8 acceptance criteria (probably too large)
+   - ⚠️ WARNING: Description <50 chars (probably too small)
+
+4. **Risk Assessment**
+   - ⚠️ WARNING: Contains high-risk keywords but marked low/medium
+   - High-risk keywords: `clipboard`, `crypto`, `encryption`, `webview`, `security`, `ipc`, `native`
+   - ⚠️ WARNING: Platform-specific code marked as low risk
+
+### Phase 2: Batch Validation (HIGH - Week 2)
+**Runs after all work orders created, provides warnings for human review**
+
+**New Files:**
+- `src/lib/validation/batch-validator.ts` - Cross-WO analysis
+- `src/lib/validation/coverage-analyzer.ts` - Spec coverage checks
+- `src/lib/validation/duplication-detector.ts` - Find duplicate work
+
+**Key Functions:**
+```typescript
+class BatchValidator {
+  validateCoverage(workOrders: WorkOrder[], spec: string): ValidationResult;
+  detectDuplicates(workOrders: WorkOrder[]): ValidationResult;
+  validateAcceptanceCriteria(workOrders: WorkOrder[]): ValidationResult;
+}
+```
+
+**Validation Rules:**
+
+1. **Coverage Analysis**
+   - Extract all `File: src/...` references from spec
+   - Compare against `files_in_scope` from all work orders
+   - ⚠️ WARNING: List files mentioned in spec but not covered by any WO
+
+2. **Duplication Detection**
+   - Track which files are modified by which WOs
+   - ⚠️ WARNING: File modified by 3+ work orders (potential duplication)
+   - ⚠️ WARNING: Work orders with >80% title similarity
+
+3. **Acceptance Criteria Quality**
+   - ⚠️ WARNING: Contains vague words ("works", "correctly", "properly")
+   - ⚠️ WARNING: Not measurable/testable
+   - ⚠️ WARNING: Missing success criteria
+
+### Phase 3: Dashboard Integration (MEDIUM - Week 2-3)
+**Human review interface for validation results**
+
+**New Files:**
+- `src/app/dashboard/validation/page.tsx` - Validation dashboard
+- `src/app/api/validation/summary/route.ts` - API for validation results
+- `components/ValidationSummaryCard.tsx` - Summary component
+
+**UI Requirements:**
+- Show validation status after decomposition
+- Group errors vs warnings
+- Expandable details for each issue
+- "Approve and Continue" vs "Fix Issues" buttons
+- Export validation report as JSON/Markdown
+
+### Phase 4: Execution Monitoring (LOW - Week 3)
+**Continuous validation during work order execution**
+
+**New Files:**
+- `src/lib/validation/execution-validator.ts` - Runtime checks
+- `src/lib/validation/failure-analyzer.ts` - Pattern detection
+
+**Key Functions:**
+```typescript
+class ExecutionValidator {
+  checkDependencyViolations(wo: WorkOrder, completed: Set<string>): ValidationResult;
+  analyzeFailures(failed: WorkOrder[], outcomes: OutcomeVector[]): AnalysisResult;
+}
+```
+
+---
+
+## Database Schema Changes
+
+### New Table: `validation_results`
+
+```sql
+CREATE TABLE validation_results (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  project_id UUID REFERENCES projects(id),
+  session_id TEXT NOT NULL,  -- Decomposition session
+  validation_phase TEXT CHECK (validation_phase IN ('immediate', 'batch', 'execution')),
+  total_work_orders INTEGER,
+  critical_errors INTEGER,
+  warnings INTEGER,
+  validation_data JSONB,  -- Full validation report
+  approved BOOLEAN DEFAULT FALSE,
+  approved_by TEXT,
+  approved_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_validation_results_project ON validation_results(project_id);
+CREATE INDEX idx_validation_results_session ON validation_results(session_id);
+```
+
+---
+
+## Integration Points
+
+### 1. Batched Architect Service
+**File**: `src/lib/batched-architect-service.ts`
+
+**Changes**:
+```typescript
+// After each batch of work orders created
+const validator = new ArchitectValidator();
+const validationResult = validator.validateBatch(workOrders);
+
+if (validationResult.hasCriticalErrors()) {
+  throw new ValidationError('Critical errors in work order decomposition', validationResult);
+}
+
+// Store warnings for later review
+await storeValidationResult(projectId, sessionId, validationResult);
+```
+
+### 2. Architect API Route
+**File**: `src/app/api/architect/decompose/route.ts`
+
+**Changes**:
+```typescript
+// After decomposition completes
+const batchValidation = await batchValidator.validate(allWorkOrders, technicalSpec);
+
+if (batchValidation.hasCriticalErrors()) {
+  return NextResponse.json({
+    success: false,
+    error: 'Validation failed',
+    validation_errors: batchValidation.errors,
+    validation_warnings: batchValidation.warnings
+  }, { status: 400 });
+}
+
+// Return validation summary with success response
+return NextResponse.json({
+  success: true,
+  work_orders_created: workOrders.length,
+  validation_summary: {
+    errors: batchValidation.errors.length,
+    warnings: batchValidation.warnings.length,
+    requires_review: batchValidation.warnings.length > 0
+  }
+});
+```
+
+### 3. Orchestrator Service
+**File**: `src/lib/orchestrator/orchestrator-service.ts`
+
+**Changes**:
+```typescript
+// Before executing work order, check dependencies satisfied
+const executionValidator = new ExecutionValidator();
+const depCheck = await executionValidator.checkDependencyViolations(
+  workOrder,
+  this.completedWorkOrders
+);
+
+if (!depCheck.isValid) {
+  // Log error and escalate
+  await handleCriticalError({
+    component: 'Orchestrator',
+    error: new Error('Dependency violation detected'),
+    workOrderId: workOrder.id,
+    metadata: depCheck.errors
+  });
+}
+```
+
+---
+
+## Specific Validations for Multi-LLM Spec
+
+Given the Electron architecture, add these **domain-specific** checks:
+
+### 1. Electron Architecture Boundaries
+```typescript
+// Check: No renderer→main direct calls
+if (wo.files_in_scope.some(f => f.includes('src/renderer/')) && 
+    wo.description.toLowerCase().includes('main process') &&
+    !wo.description.toLowerCase().includes('ipc')) {
+  errors.push({
+    type: 'ARCHITECTURE_VIOLATION',
+    message: 'Renderer accessing main process without IPC'
+  });
+}
+```
+
+### 2. WebView Security
+```typescript
+// Check: WebView isolation maintained
+if (wo.files_in_scope.some(f => f.includes('WebView')) &&
+    wo.description.toLowerCase().includes('nodeintegration=true')) {
+  errors.push({
+    type: 'SECURITY_VIOLATION',
+    message: 'WebView must have nodeIntegration=false for security'
+  });
+}
+```
+
+### 3. IPC Channel Pairing
+```typescript
+// Check: Every IPC send has matching handler
+const ipcSends = extractIPCChannels(workOrders, 'send');
+const ipcHandlers = extractIPCChannels(workOrders, 'handle');
+const unpaired = ipcSends.filter(ch => !ipcHandlers.includes(ch));
+
+if (unpaired.length > 0) {
+  warnings.push({
+    type: 'UNPAIRED_IPC_CHANNELS',
+    message: `IPC channels without handlers: ${unpaired.join(', ')}`
+  });
+}
+```
+
+---
+
+## Testing Requirements
+
+### Unit Tests
+**Coverage Target**: ≥90%
+
+**Test Files**:
+- `src/lib/validation/__tests__/dependency-graph.test.ts`
+- `src/lib/validation/__tests__/file-path-validator.test.ts`
+- `src/lib/validation/__tests__/scope-validator.test.ts`
+- `src/lib/validation/__tests__/batch-validator.test.ts`
+
+**Key Test Cases**:
+1. Circular dependency detection
+2. Missing dependency detection
+3. Path traversal detection
+4. Risk keyword detection
+5. Duplication detection across 100+ WOs
+6. Performance with 300 work orders (<5s)
+
+### Integration Tests
+**Test**: Run validator on real 77K spec decomposition
+**Expected**: Catch known issues from manual review
+**Files**: `tests/integration/architect-validation.test.ts`
+
+---
+
+## Non-Functional Requirements
+
+### Performance
+- Phase 1 validation: <2s per batch (~20 WOs)
+- Phase 2 validation: <5s for 300 WOs
+- Memory: <100MB additional overhead
+
+### Scalability
+- Handle up to 500 work orders per project
+- Support parallel validation across batches
+- Streaming validation (don't wait for all WOs)
+
+### User Experience
+- Clear, actionable error messages
+- Link errors to specific work orders
+- Suggest fixes where possible
+- Export validation report for offline review
+
+---
+
+## Deliverables
+
+### Week 1
+- ✅ Phase 1 validation (immediate checks) implemented
+- ✅ Integration with batched-architect-service
+- ✅ Unit tests (≥90% coverage)
+- ✅ Block decomposition on critical errors
+
+### Week 2
+- ✅ Phase 2 validation (batch analysis) implemented
+- ✅ Dashboard UI for validation results
+- ✅ API endpoints for validation data
+- ✅ Integration tests with real spec
+
+### Week 3
+- ✅ Phase 4 execution monitoring
+- ✅ Failure pattern analysis
+- ✅ Documentation (usage guide, validation rules reference)
+- ✅ Performance benchmarks
+
+---
+
+## Success Criteria
+
+**Functional**:
+- ✅ Detects 100% of circular dependencies
+- ✅ Detects 100% of invalid file paths
+- ✅ Detects ≥80% of scope issues
+- ✅ Detects ≥70% of risk misassessments
+- ✅ Zero false positives for critical errors
+
+**Business Impact**:
+- ✅ Reduce downstream execution failures by 50%+
+- ✅ Catch issues before $15-60 wasted per project
+- ✅ Validation overhead <5s (negligible vs 30-60min decomposition)
+
+**User Experience**:
+- ✅ Clear error messages developers can act on
+- ✅ Dashboard shows validation status at a glance
+- ✅ Export validation report for documentation
+
+---
+
+## Out of Scope (Future Enhancements)
+
+- Auto-fixing validation errors (human review required for v1)
+- Machine learning for risk assessment
+- Historical validation data analysis
+- Validation of Proposer output (separate requirement)
+- Cross-project validation rules library
+
+---
+
+## Questions for Clarification
+
+1. Should validation **block** decomposition on warnings, or just errors?
+2. What's the threshold for "too many warnings" requiring human review?
+3. Should we validate against the project's existing codebase, or only internal consistency?
+4. Do you want validation integrated into the current session-v63 test, or as a separate branch?

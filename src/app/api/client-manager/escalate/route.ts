@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
     try {
       // Parse and validate input
       const body = await request.json();
-      const { work_order_id } = body;
+      const { work_order_id, failure_class, metadata, reason } = body;
 
       // Type check
       if (typeof work_order_id !== 'string') {
@@ -53,12 +53,18 @@ export async function POST(request: NextRequest) {
       // Audit logging
       console.log('[Escalation Created]', {
         work_order_id: cleanId,
+        failure_class,
         ip: getClientIP(request),
         timestamp: new Date().toISOString(),
       });
 
-      // Execute escalation
-      const result = await clientManagerService.createEscalation(cleanId);
+      // Execute escalation (with failure classification)
+      const result = await clientManagerService.createEscalation(
+        cleanId,
+        reason,
+        metadata,
+        failure_class  // NEW: Pass failure_class to service
+      );
 
       return NextResponse.json({
         success: true,

@@ -10,6 +10,7 @@ import { validateTechnicalSpec, securityCheck } from '@/lib/input-sanitizer';
 import { projectService } from '@/lib/project-service';
 import { createSupabaseServiceClient } from '@/lib/supabase';
 import { requirementAnalyzer } from '@/lib/requirement-analyzer';
+import { specPreprocessor } from '@/lib/spec-preprocessor';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -56,35 +57,191 @@ export async function POST(request: NextRequest) {
         }, { status: 404 });
       }
 
-      // Validate and sanitize input
-      const spec = validateTechnicalSpec(specData);
+      // Check if spec needs preprocessing (large unstructured document)
+      const isRawDocument = typeof specData === 'string';
+      const needsPreprocessing = isRawDocument && specPreprocessor.needsPreprocessing(specData);
 
-      // Security check on feature_name
-      const secCheck = securityCheck(spec.feature_name);
-      if (!secCheck.safe) {
-        return NextResponse.json({
-          success: false,
-          error: `Security threat detected: ${secCheck.threats.join(', ')}`,
-        }, { status: 400 });
+      let allWorkOrders: any[] = [];
+      let combinedDecompositionDoc = '';
+      let totalCost = 0;
+      let allRequirements: any[] = [];
+
+      // Initialize Supabase client for incremental saves
+      const supabase = createSupabaseServiceClient();
+
+      if (needsPreprocessing) {
+        console.log('\n🔄 Large document detected - using spec preprocessor...');
+        console.log(`   Document size: ${specData.length} characters\n`);
+
+        // Preprocess: Split document into sections
+        const sections = await specPreprocessor.preprocess(specData, {
+          document_title: project.name
+        });
+
+        console.log(`\n📦 Processing ${sections.length} sections through Architect...\n`);
+
+        // Track work orders per section for dependency mapping
+        const sectionWorkOrders: Map<string, any[]> = new Map();
+
+        // Process each section
+        for (let i = 0; i < sections.length; i++) {
+          const section = sections[i];
+          console.log(`\n--- Section ${i + 1}/${sections.length}: ${section.title} ---`);
+
+          // Validate this section's spec
+          const sectionSpec = validateTechnicalSpec(section.technical_spec);
+
+          // Security check
+          const secCheck = securityCheck(sectionSpec.feature_name);
+          if (!secCheck.safe) {
+            console.warn(`⚠️  Section ${section.section_number} flagged: ${secCheck.threats.join(', ')}`);
+            console.warn(`   Skipping section for security reasons\n`);
+            continue;
+          }
+
+          // Decompose this section
+          const decomposition = await batchedArchitectService.decompose(
+            sectionSpec as TechnicalSpec,
+            {
+              generateWireframes: wireframesFlag,
+              generateContracts: contractsFlag,
+              projectId: projectId
+            }
+          );
+
+          // Analyze requirements for this section
+          const requirements = await requirementAnalyzer.analyzeSpec(sectionSpec);
+
+          // Save work orders immediately (incremental save - Bug #4 fix)
+          const workOrdersToInsert = decomposition.work_orders.map((wo: any) => ({
+            title: wo.title,
+            description: wo.description,
+            risk_level: wo.risk_level || 'low',
+            status: 'pending',
+            proposer_id: wo.proposer_id || 'a40c5caf-b0fb-4a8b-a544-ca82bb2ab939',
+            estimated_cost: wo.estimated_cost || 0,
+            pattern_confidence: wo.pattern_confidence || 0.5,
+            acceptance_criteria: wo.acceptance_criteria || [],
+            files_in_scope: wo.files_in_scope || [],
+            context_budget_estimate: wo.context_budget_estimate || 2000,
+            decomposition_doc: `Section ${i + 1}: ${section.title}\n\n${decomposition.decomposition_doc || ''}`,
+            project_id: projectId,
+            metadata: {
+              auto_approved: true,
+              approved_at: new Date().toISOString(),
+              approved_by: 'architect',
+              section_number: section.section_number
+            }
+          }));
+
+          const { data: savedWOs, error: saveError } = await supabase
+            .from('work_orders')
+            .insert(workOrdersToInsert)
+            .select();
+
+          if (saveError) {
+            console.error(`Failed to save work orders for section ${section.section_number}:`, saveError);
+            throw new Error(`Failed to save work orders: ${saveError.message}`);
+          }
+
+          console.log(`💾 Saved ${savedWOs.length} work orders to database`);
+
+          // Store saved work orders for this section
+          sectionWorkOrders.set(section.section_number, savedWOs);
+
+          // Add to combined results
+          allWorkOrders.push(...savedWOs);
+          allRequirements.push(...requirements);
+          totalCost += decomposition.total_estimated_cost || 0;
+          combinedDecompositionDoc += `\n## Section ${i + 1}: ${section.title}\n\n${decomposition.decomposition_doc || ''}\n`;
+
+          console.log(`✅ Section ${i + 1} complete: ${savedWOs.length} work orders\n`);
+        }
+
+        // Add cross-section dependencies (using real work order IDs)
+        console.log('🔗 Adding cross-section dependencies...');
+        const dependencyUpdates = [];
+
+        for (let i = 0; i < sections.length; i++) {
+          const section = sections[i];
+          const workOrders = sectionWorkOrders.get(section.section_number) || [];
+
+          // For each work order in this section
+          for (const wo of workOrders) {
+            const existingDeps = wo.metadata?.dependencies || [];
+
+            // Add dependencies on previous section's work orders (using real IDs)
+            for (const depSectionNum of section.dependencies) {
+              const depWorkOrders = sectionWorkOrders.get(depSectionNum) || [];
+              existingDeps.push(...depWorkOrders.map(depWo => depWo.id));
+            }
+
+            const uniqueDeps = Array.from(new Set(existingDeps)); // Dedupe
+
+            // Update work order metadata with dependencies
+            if (uniqueDeps.length > 0) {
+              dependencyUpdates.push({
+                id: wo.id,
+                metadata: {
+                  ...wo.metadata,
+                  dependencies: uniqueDeps
+                }
+              });
+            }
+          }
+        }
+
+        // Apply dependency updates to database
+        if (dependencyUpdates.length > 0) {
+          for (const update of dependencyUpdates) {
+            await supabase
+              .from('work_orders')
+              .update({ metadata: update.metadata })
+              .eq('id', update.id);
+          }
+          console.log(`✅ Updated ${dependencyUpdates.length} work orders with cross-section dependencies\n`);
+        }
+
+        console.log(`📊 Total: ${allWorkOrders.length} work orders from ${sections.length} sections\n`);
+
+      } else {
+        // Standard flow: single spec
+        console.log('\n📄 Processing single technical specification...\n');
+
+        // Validate and sanitize input
+        const spec = validateTechnicalSpec(specData);
+
+        // Security check on feature_name
+        const secCheck = securityCheck(spec.feature_name);
+        if (!secCheck.safe) {
+          return NextResponse.json({
+            success: false,
+            error: `Security threat detected: ${secCheck.threats.join(', ')}`,
+          }, { status: 400 });
+        }
+
+        // Call batched architect service (automatically handles batching when needed)
+        const decomposition = await batchedArchitectService.decompose(
+          spec as TechnicalSpec,
+          {
+            generateWireframes: wireframesFlag,
+            generateContracts: contractsFlag,
+            projectId: projectId
+          }
+        );
+
+        // Analyze requirements (detect external dependencies)
+        console.log('🔍 Analyzing spec for external dependencies...');
+        allRequirements = await requirementAnalyzer.analyzeSpec(spec);
+        console.log(`✅ Detected ${allRequirements.length} external dependencies`);
+
+        allWorkOrders = decomposition.work_orders;
+        combinedDecompositionDoc = decomposition.decomposition_doc || '';
+        totalCost = decomposition.total_estimated_cost || 0;
       }
 
-      // Call batched architect service (automatically handles batching when needed)
-      const decomposition = await batchedArchitectService.decompose(
-        spec as TechnicalSpec,
-        {
-          generateWireframes: wireframesFlag,
-          generateContracts: contractsFlag,
-          projectId: projectId
-        }
-      );
-
-      // Analyze requirements (detect external dependencies)
-      console.log('🔍 Analyzing spec for external dependencies...');
-      const requirements = await requirementAnalyzer.analyzeSpec(spec);
-      console.log(`✅ Detected ${requirements.length} external dependencies`);
-
       // Update .env.local.template in project directory if requirements found
-      if (requirements.length > 0 && project.local_path && fs.existsSync(project.local_path)) {
+      if (allRequirements.length > 0 && project.local_path && fs.existsSync(project.local_path)) {
         const envTemplatePath = path.join(project.local_path, '.env.local.template');
 
         // Read existing template or create new one
@@ -96,7 +253,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Add new environment variables
-        for (const req of requirements) {
+        for (const req of allRequirements) {
           if (!envContent.includes(req.env_var)) {
             envContent += `\n# ${req.service} (${req.category})${req.required ? ' - REQUIRED' : ' - Optional'}\n`;
             envContent += `# ${req.instructions}\n`;
@@ -106,45 +263,54 @@ export async function POST(request: NextRequest) {
         }
 
         fs.writeFileSync(envTemplatePath, envContent);
-        console.log(`✅ Updated .env.local.template with ${requirements.length} dependencies`);
+        console.log(`✅ Updated .env.local.template with ${allRequirements.length} dependencies`);
       }
 
-      // Save work orders to database with project_id
-      const supabase = createSupabaseServiceClient();
-      const workOrdersToInsert = decomposition.work_orders.map((wo: any) => ({
-        title: wo.title,
-        description: wo.description,
-        risk_level: wo.risk_level || 'low',
-        status: 'pending',
-        proposer_id: wo.proposer_id || 'a40c5caf-b0fb-4a8b-a544-ca82bb2ab939',
-        estimated_cost: wo.estimated_cost || 0,
-        pattern_confidence: wo.pattern_confidence || 0.5,
-        acceptance_criteria: wo.acceptance_criteria || [],
-        files_in_scope: wo.files_in_scope || [],
-        context_budget_estimate: wo.context_budget_estimate || 2000,
-        decomposition_doc: decomposition.decomposition_doc || null,
-        project_id: projectId  // Link to project
-      }));
+      // For non-preprocessed specs, save work orders in single batch
+      if (!needsPreprocessing && allWorkOrders.length > 0) {
+        const workOrdersToInsert = allWorkOrders.map((wo: any) => ({
+          title: wo.title,
+          description: wo.description,
+          risk_level: wo.risk_level || 'low',
+          status: 'pending',
+          proposer_id: wo.proposer_id || 'a40c5caf-b0fb-4a8b-a544-ca82bb2ab939',
+          estimated_cost: wo.estimated_cost || 0,
+          pattern_confidence: wo.pattern_confidence || 0.5,
+          acceptance_criteria: wo.acceptance_criteria || [],
+          files_in_scope: wo.files_in_scope || [],
+          context_budget_estimate: wo.context_budget_estimate || 2000,
+          decomposition_doc: combinedDecompositionDoc || null,
+          project_id: projectId,
+          metadata: {
+            auto_approved: true,
+            approved_at: new Date().toISOString(),
+            approved_by: 'architect'
+          }
+        }));
 
-      const { data: savedWorkOrders, error: insertError } = await supabase
-        .from('work_orders')
-        .insert(workOrdersToInsert)
-        .select();
+        const { data: savedWOs, error: insertError } = await supabase
+          .from('work_orders')
+          .insert(workOrdersToInsert)
+          .select();
 
-      if (insertError) {
-        console.error('Failed to save work orders:', insertError);
-        throw new Error(`Failed to save work orders: ${insertError.message}`);
+        if (insertError) {
+          console.error('Failed to save work orders:', insertError);
+          throw new Error(`Failed to save work orders: ${insertError.message}`);
+        }
+
+        allWorkOrders = savedWOs; // Replace with saved work orders (includes IDs)
       }
 
       return NextResponse.json({
         success: true,
         project_id: projectId,
         project_name: project.name,
-        work_orders_created: savedWorkOrders?.length || 0,
-        work_orders: savedWorkOrders,
-        detected_requirements: requirements,
-        decomposition_doc: decomposition.decomposition_doc,
-        total_estimated_cost: decomposition.total_estimated_cost
+        work_orders_created: allWorkOrders.length,
+        work_orders: allWorkOrders,
+        detected_requirements: allRequirements,
+        decomposition_doc: combinedDecompositionDoc,
+        total_estimated_cost: totalCost,
+        preprocessing_used: needsPreprocessing
       });
 
     } catch (error: any) {

@@ -1,0 +1,650 @@
+# Failure Management Strategy for Moose Mission Control
+
+**Document Type:** Design Discussion Starter  
+**Audience:** Claude Code Lead Engineer  
+**Date:** 2025-10-09  
+**Context:** Multi-agent orchestration system with 5-step pipeline (Routing → Code Gen → Aider → GitHub → Tracking)
+
+---
+
+## Executive Summary
+
+Moose Mission Control is a production LLM orchestration system that executes a complex multi-step pipeline: it routes work orders to LLMs, generates code, applies changes via Aider, creates PRs, and tracks results. **The current error handling is incomplete and inconsistent**, creating risks of silent failures, partial completions, and difficult debugging.
+
+**Your Mission:** Design a comprehensive failure management strategy that embodies "fail-fast" and "fail-loud" principles while maintaining system reliability and providing actionable debugging information.
+
+---
+
+## Current State Analysis
+
+### What Exists Today
+
+Based on the source of truth document, here's what we have:
+
+#### ✅ Partial Error Handling
+
+**Location:** `src/lib/error-escalation.ts` (Lines 6-51)
+
+```typescript
+await handleCriticalError({
+  component: 'AiderExecutor',
+  operation: 'executeAider',
+  error: error,
+  workOrderId: wo.id,
+  severity: 'critical',
+  metadata: { branchName, workingDirectory }
+});
+```
+
+**What it does:**
+- Logs errors to console
+- If critical + has work order ID → POST to `/api/client-manager/escalate`
+- Creates record in `escalations` table
+- **Does NOT throw** - system continues even if escalation fails
+
+#### ✅ Rollback Operations
+
+**Aider Rollback** (`aider-executor.ts:280-314`):
+- Checkout main/master branch
+- Delete feature branch
+- **Best-effort** - doesn't throw if fails
+
+**GitHub Rollback** (`github-integration.ts:180-215`):
+- Calls Aider rollback
+- **Cannot delete PRs** - already created on GitHub
+
+#### ✅ Database Tracking
+
+Work orders get updated to `status='completed'` or `status='failed'`, but:
+- No intermediate state tracking during execution
+- No partial completion tracking
+- Metadata is updated but inconsistent
+
+### 🚨 Critical Gaps
+
+1. **Silent Failures Possible**
+   - Aider can fail but work order might not reflect it
+   - PR creation can fail after Aider succeeds
+   - Cost tracking happens in finally block - what if it throws?
+
+2. **Inconsistent Error Propagation**
+   - Some components throw, some return error objects
+   - Some log and continue, some halt execution
+   - No clear contract for how errors should flow
+
+3. **Limited Observability**
+   - Can't tell WHERE in the 5-step pipeline a failure occurred without reading logs
+   - No structured error classification
+   - No error context preservation across pipeline steps
+
+4. **Partial State Problems**
+   - Git branch created but Aider fails → orphaned branch
+   - PR created but database update fails → tracking inconsistency
+   - Code generated but Aider fails → wasted LLM cost
+
+5. **Recovery Strategy Unclear**
+   - What should happen if Step 3 fails? Retry? Rollback? Manual intervention?
+   - Who decides: System? Director Agent? Human?
+   - How do we preserve context for retry attempts?
+
+---
+
+## The Five-Step Pipeline & Failure Points
+
+```
+[Step 1: Manager Routing]
+    ↓ Failure Point: Manager API unreachable, timeout
+    ↓ Question: Should we retry? Use fallback? Fail immediately?
+    
+[Step 2: Proposer Execution] 
+    ↓ Failure Point: LLM timeout, rate limit, invalid response, compilation error
+    ↓ Question: Max retries? Switch models? Escalate?
+    ↓ Current: 3 attempts with model fallback (enhanced-proposer-service.ts:189)
+    
+[Step 3: Aider Execution]
+    ↓ Failure Point: Git operations fail, Aider crashes, 5-min timeout
+    ↓ Question: Rollback strategy? Preserve generated code?
+    
+[Step 4: GitHub PR Creation]
+    ↓ Failure Point: Push fails, gh CLI error, network issue
+    ↓ Question: Already have commits - can we recover? Rollback?
+    
+[Step 5: Result Tracking]
+    ↓ Failure Point: Database write fails, transaction rollback
+    ↓ Question: Work is done but not tracked - how to reconcile?
+```
+
+**Critical Insight:** Each failure point has different implications:
+- Early failures (Steps 1-2) are cheap to retry
+- Late failures (Steps 3-5) have committed changes to git
+- Post-PR failures mean GitHub state diverges from database state
+
+---
+
+## Failure Management Principles
+
+### 1. Fail-Fast Philosophy
+
+**Principle:** Detect errors as early as possible and stop execution immediately rather than propagating corrupt state.
+
+**Questions:**
+- At what points should we fail-fast vs. attempt recovery?
+- Should budget violations fail-fast or degrade gracefully?
+- How do we balance fail-fast with retry logic?
+
+**Example Tension:**
+```
+Scenario: Aider fails to apply code changes.
+- Fail-fast: Throw immediately, mark work order failed
+- Recovery: Retry with simpler instructions, try different model
+Which is correct? Depends on error type.
+```
+
+### 2. Fail-Loud Philosophy
+
+**Principle:** Errors should be immediately visible, logged with full context, and never silently swallowed.
+
+**Questions:**
+- What's our logging strategy? (Console? Database? External service?)
+- How do we alert on critical failures?
+- How do we make errors debuggable 24 hours later?
+
+**Current Problem:**
+```typescript
+// error-escalation.ts:39-44
+if (escalationResponse.ok) {
+  console.log(`Escalated ${workOrderId} to Client Manager`);
+} else {
+  console.error('Escalation failed:', await escalationResponse.text());
+}
+// No throw! System continues silently.
+```
+
+### 3. Observable Failures
+
+**Principle:** Every failure should be traceable, categorized, and analyzable.
+
+**Questions:**
+- What failure categories do we need? (Transient, Permanent, Configuration, etc.)
+- How do we track failure rates per component?
+- Can we detect patterns (e.g., "GPT-4o-mini always fails on auth tasks")?
+
+### 4. Recoverable vs. Fatal
+
+**Principle:** Clearly distinguish between errors we can retry/recover from vs. errors requiring human intervention.
+
+**Questions:**
+- Which errors are transient? (Rate limits, network timeouts)
+- Which errors are permanent? (Invalid project path, missing API key)
+- How do we avoid infinite retry loops?
+
+**Example Classification:**
+```
+Transient (Retry):
+- LLM rate limit 429
+- Network timeout
+- Temporary GitHub API issue
+
+Permanent (Fail + Escalate):
+- Project directory doesn't exist
+- API key invalid
+- Git repository not found
+- Aider binary missing
+```
+
+### 5. State Consistency
+
+**Principle:** The system state (database, git, GitHub) should always be consistent or explicitly marked as inconsistent.
+
+**Questions:**
+- What's our transaction boundary? Per-step? Per-work-order?
+- How do we handle distributed state (Supabase + Git + GitHub)?
+- Can we implement compensation logic for partial failures?
+
+---
+
+## Key Design Questions
+
+### Question 1: Error Hierarchy
+
+Should we define an error type hierarchy?
+
+```typescript
+// Possible structure:
+class MooseError extends Error {
+  component: string;
+  operation: string;
+  workOrderId?: string;
+  isRetryable: boolean;
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  metadata: Record<string, any>;
+}
+
+class TransientError extends MooseError { isRetryable = true; }
+class PermanentError extends MooseError { isRetryable = false; }
+class ConfigurationError extends PermanentError { }
+class ExternalServiceError extends TransientError { }
+```
+
+**Trade-offs:**
+- Pro: Type-safe, clear semantics, easy to handle uniformly
+- Con: Requires refactoring all error handling, migration effort
+
+### Question 2: Retry Strategy
+
+What's our retry policy?
+
+```typescript
+interface RetryConfig {
+  maxAttempts: number;        // 3?
+  backoffMs: number;          // 1000?
+  backoffMultiplier: number;  // 2? (exponential backoff)
+  retryableErrors: string[];  // Which error types?
+  timeoutMs: number;          // Overall timeout across retries?
+}
+```
+
+**Per-Component Variation:**
+- Manager API: Fast retries (1s, 2s, 4s)?
+- Proposer API: Slow retries (10s, 30s, 60s)? Costs money!
+- Aider: No retries? Git state is complex?
+- GitHub: Aggressive retries? PR creation is idempotent?
+
+**Current State:**
+- Proposer has 3 hardcoded attempts (Line 189-350 in `enhanced-proposer-service.ts`)
+- No other components have retry logic
+
+### Question 3: State Transitions
+
+Should we track work order state more granularly?
+
+**Current:**
+```
+pending → in_progress → completed/failed
+```
+
+**Proposed:**
+```
+pending 
+  → routing (Step 1)
+  → generating (Step 2) 
+  → applying (Step 3)
+  → creating_pr (Step 4)
+  → tracking (Step 5)
+  → completed
+
+With failure sub-states:
+  → routing_failed
+  → generation_failed (retrying)
+  → generation_failed (exhausted)
+  → aider_failed (rollback_pending)
+  → pr_failed (manual_intervention_required)
+```
+
+**Trade-offs:**
+- Pro: Clear visibility into pipeline progress, easier debugging
+- Con: More database writes, state machine complexity
+
+### Question 4: Rollback Strategy
+
+What's our rollback philosophy?
+
+**Options:**
+
+**A) Aggressive Rollback**
+- Any failure → immediate rollback
+- Delete branches, discard code, reset state
+- Pro: Clean state, no orphans
+- Con: Lose work, expensive LLM calls wasted
+
+**B) Preserve & Escalate**
+- Keep artifacts (code, branches, logs) for debugging
+- Mark work order as "needs_review"
+- Human or Client Manager decides next step
+- Pro: Debuggable, recoverable
+- Con: Accumulates cruft (branches, etc.)
+
+**C) Hybrid**
+- Early failures (Steps 1-2) → Aggressive rollback
+- Late failures (Steps 3-5) → Preserve & escalate
+- Pro: Balanced approach
+- Con: Complex logic
+
+### Question 5: Observability Infrastructure
+
+How do we make failures visible?
+
+**Current:**
+- Console logs (lost after process restart)
+- `escalations` table (only for critical errors with work order ID)
+- Work order metadata (inconsistent structure)
+
+**Possible Improvements:**
+
+**A) Structured Logging**
+```typescript
+logger.error('aider_execution_failed', {
+  work_order_id: wo.id,
+  component: 'AiderExecutor',
+  operation: 'executeAider',
+  error_type: 'AiderCrashError',
+  exit_code: 1,
+  stderr: stderr.slice(0, 500),
+  branch_name: branchName,
+  working_directory: workingDirectory,
+  timestamp: new Date().toISOString()
+});
+```
+
+**B) Error Event Stream**
+- New table: `error_events`
+- Every error gets recorded (not just critical)
+- Queryable for analytics: "Show all Aider failures in last 7 days"
+
+**C) Real-time Monitoring**
+- WebSocket updates to dashboard?
+- Slack/Discord notifications for critical failures?
+- Daily summary reports?
+
+**D) Error Metrics**
+- Track failure rate per component
+- Track retry success rate
+- Track time-to-recovery
+- Feed into Sentinel Agent (when implemented)
+
+---
+
+## Specific Code Areas Needing Attention
+
+### 1. Orchestrator Service (`orchestrator-service.ts:169-365`)
+
+**Current Issues:**
+- Main `executeWorkOrder()` has try-catch but error handling is incomplete
+- Capacity manager cleanup in finally block - what if it throws?
+- No distinction between transient and permanent failures
+- Status updates to database can fail silently
+
+**Questions:**
+- Should we wrap each step in its own try-catch?
+- How do we ensure cleanup happens even on catastrophic failure?
+- Should we add checkpoints between steps?
+
+### 2. Aider Executor (`aider-executor.ts:143-279`)
+
+**Current Issues:**
+- 5-minute timeout is hardcoded
+- Rollback is best-effort (line 280-314)
+- Instruction file cleanup happens in finally - what if that fails?
+- No distinction between "Aider crashed" vs "Aider correctly rejected changes"
+
+**Questions:**
+- Should timeout be configurable per work order?
+- What if rollback fails? Escalate?
+- How do we detect Aider's reason for failure from stdout/stderr?
+
+### 3. GitHub Integration (`github-integration.ts:25-177`)
+
+**Current Issues:**
+- PR creation is one-shot, no retry
+- `gh pr create` can fail for many reasons (auth, branch exists, etc.)
+- If push succeeds but PR creation fails, we have orphaned branch on GitHub
+- PR URL parsing from gh output is fragile (line 148-159)
+
+**Questions:**
+- Should we verify PR was actually created?
+- Retry strategy for transient GitHub API failures?
+- How to handle "PR already exists" error?
+
+### 4. Result Tracker (`result-tracker.ts`)
+
+**Current Issues:**
+- No verification that database writes succeeded
+- Multiple tables updated (work_orders, cost_tracking, outcome_vectors) - not transactional
+- If one update fails, partial state inconsistency
+
+**Questions:**
+- Should we use database transactions?
+- Rollback strategy if cost_tracking insert fails?
+- Reconciliation process for inconsistent state?
+
+### 5. Error Escalation (`error-escalation.ts:6-51`)
+
+**Current Issues:**
+- Only escalates if `workOrderId` provided (line 17-18)
+- Escalation failure is logged but not re-thrown
+- No retry logic for escalation API call
+- No batch escalation for related failures
+
+**Questions:**
+- Should all errors be escalated, not just work-order-related?
+- What's the SLA for escalation delivery?
+- Should we queue escalations for batch delivery?
+
+---
+
+## Design Constraints & Considerations
+
+### Constraints
+
+1. **No Distributed Transaction Manager**
+   - We touch 3 systems: Supabase, Git, GitHub
+   - No 2-phase commit available
+   - Must design for eventual consistency or compensation
+
+2. **External Service Unreliability**
+   - Anthropic API rate limits
+   - OpenAI API timeouts
+   - GitHub API rate limits
+   - Git operations can fail for many reasons
+
+3. **Long-Running Operations**
+   - Aider execution: 30s - 5 minutes
+   - LLM calls: 10s - 2 minutes
+   - Cannot assume synchronous, must handle async failures
+
+4. **Cost Sensitivity**
+   - Every LLM retry costs money
+   - Failed work orders still cost money (generated code)
+   - Need to track "wasted spend" on failures
+
+5. **Multi-tenancy (Future)**
+   - Multiple projects in database
+   - Failure in one project shouldn't affect others
+   - Resource isolation for error handling?
+
+### Considerations
+
+1. **Backward Compatibility**
+   - System is operational today
+   - Can't break existing work orders in flight
+   - Migration strategy for new error handling
+
+2. **Performance Impact**
+   - More logging = slower execution?
+   - More database writes = higher latency?
+   - Balance observability vs. performance
+
+3. **Developer Experience**
+   - Error messages should be actionable
+   - Easy to test error handling
+   - Clear documentation on how to handle errors in new components
+
+4. **Operational Burden**
+   - Who monitors the error dashboard?
+   - Who responds to escalations?
+   - Automated responses vs. human judgment?
+
+---
+
+## Success Criteria
+
+A successful failure management design should achieve:
+
+### 1. Zero Silent Failures
+- Every error is logged with full context
+- No errors are swallowed without acknowledgment
+- Failures are visible in dashboard within 5 seconds
+
+### 2. Debuggable Failures
+- From error message, can identify:
+  - Which work order failed
+  - Which pipeline step failed
+  - Why it failed (error type, message, stack trace)
+  - What the system state was at failure time
+- Can reproduce failure locally from captured context
+
+### 3. Consistent State
+- Database always reflects reality
+- If git/GitHub state diverges, it's explicitly marked
+- No orphaned resources (branches, PRs, cost records)
+
+### 4. Intelligent Recovery
+- Transient failures → Automatic retry with backoff
+- Permanent failures → Immediate escalation
+- Ambiguous failures → Escalate with context for human decision
+
+### 5. Cost Efficiency
+- Minimize wasted LLM spend on doomed retries
+- Track failure costs separately for analysis
+- Budget protection even in error scenarios
+
+### 6. Minimal Manual Intervention
+- 90%+ of transient failures auto-recover
+- Remaining 10% escalate with enough context for quick resolution
+- No "mysterious failures" requiring deep log diving
+
+---
+
+## Proposed Discussion Flow
+
+### Phase 1: Error Taxonomy
+1. List all possible failure modes (Anthropic timeout, Git failure, etc.)
+2. Categorize each: Transient, Permanent, Configuration, External
+3. Define handling strategy per category
+
+### Phase 2: State Machine Design
+1. Define granular work order states
+2. Define valid transitions
+3. Define error sub-states
+4. Define recovery transitions
+
+### Phase 3: Retry Strategy
+1. Per-component retry config
+2. Backoff algorithms
+3. Timeout policies
+4. Circuit breaker pattern?
+
+### Phase 4: Observability
+1. Logging structure and format
+2. Error event storage schema
+3. Metrics to track
+4. Dashboard requirements
+
+### Phase 5: Implementation Plan
+1. Prioritize components by risk
+2. Define migration strategy
+3. Testing approach (chaos engineering?)
+4. Rollout plan
+
+---
+
+## Open Questions for Design
+
+**High Priority:**
+
+1. **Error Classification**: Should we build a comprehensive error taxonomy or start simple?
+
+2. **Database Transactions**: How do we handle multi-table updates atomically?
+
+3. **Rollback Granularity**: Per-step rollback or all-or-nothing?
+
+4. **Escalation Threshold**: What makes an error "critical" enough to escalate?
+
+5. **Retry Budget**: Should we limit total retries across all steps to prevent runaway costs?
+
+**Medium Priority:**
+
+6. **Async Error Handling**: Current system is synchronous - what about async failures?
+
+7. **Error Recovery UI**: Should humans be able to manually retry failed work orders from dashboard?
+
+8. **Testing Strategy**: How do we test error scenarios without breaking production?
+
+9. **Metrics & Alerting**: What failure rate is acceptable? When to alert?
+
+10. **Documentation**: How do we document error handling contracts for future developers?
+
+**Lower Priority:**
+
+11. **Error Trends**: Should we analyze failure patterns over time?
+
+12. **Predictive Failures**: Can we detect likely failures before they happen?
+
+13. **Self-Healing**: Can some failures auto-resolve without intervention?
+
+---
+
+## References
+
+### Current Codebase Locations
+
+- **Error Escalation**: `src/lib/error-escalation.ts` (52 lines)
+- **Orchestrator Pipeline**: `src/lib/orchestrator/orchestrator-service.ts` (402 lines)
+- **Aider Executor**: `src/lib/orchestrator/aider-executor.ts` (300+ lines)
+- **GitHub Integration**: `src/lib/orchestrator/github-integration.ts` (215+ lines)
+- **Result Tracker**: `src/lib/orchestrator/result-tracker.ts`
+- **Proposer Retry Logic**: `src/lib/enhanced-proposer-service.ts` (Lines 189-350)
+
+### Database Tables for Error Tracking
+
+- `escalations` table (existing, line 18-28 in error-escalation.ts)
+- `cost_tracking` table (existing, stores all LLM costs)
+- `outcome_vectors` table (existing, stores execution metrics)
+- `decision_logs` table (existing but underutilized)
+
+### External Resources
+
+**Failure Management Patterns:**
+- Circuit Breaker Pattern
+- Bulkhead Pattern (isolation)
+- Retry with Exponential Backoff
+- Saga Pattern (for distributed transactions)
+- Compensation Pattern (rollback via compensating actions)
+
+**Observability Best Practices:**
+- Structured logging (JSON logs)
+- Distributed tracing
+- Error budgets (SLO/SLI)
+- Chaos engineering
+
+---
+
+## Next Steps
+
+1. **Review this document** and identify any missing failure scenarios
+2. **Prioritize** which failures are most critical to handle first
+3. **Design** the error taxonomy and state machine
+4. **Prototype** error handling for one component (suggest: Aider Executor)
+5. **Validate** with a test work order that exercises all failure paths
+6. **Iterate** based on findings
+7. **Expand** to all components
+8. **Document** the final failure management strategy
+
+---
+
+## Closing Thoughts
+
+**The Goal:** Build a system that's robust enough for production use, observable enough for confident operations, and recoverable enough that failures are learning opportunities, not disasters.
+
+**The Challenge:** Balancing fail-fast with intelligent recovery, balancing observability with performance, balancing automation with human judgment.
+
+**The Reality:** We're orchestrating LLMs, Git, and GitHub - three unreliable systems. Perfect reliability is impossible. Our job is to fail gracefully and recover intelligently.
+
+**Start with:** "What would make debugging a failure at 2am actually manageable?" and work backward from there.
+
+---
+
+**Document Status:** Discussion Starter  
+**Action Required:** Design review and initial error taxonomy  
+**Owner:** Claude Code Lead Engineer  
+**Stakeholders:** System reliability, Cost management, Developer experience

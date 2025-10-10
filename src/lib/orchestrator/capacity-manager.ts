@@ -152,10 +152,10 @@ export class CapacityManager {
    * Blocks until model has capacity, or timeout reached
    *
    * @param modelName - LLM model name
-   * @param timeoutMs - Max wait time in milliseconds (default 60000 = 1 min)
+   * @param timeoutMs - Max wait time in milliseconds (default 600000 = 10 min)
    * @returns True if capacity available, false if timeout
    */
-  public async waitForCapacity(modelName: string, timeoutMs: number = 60000): Promise<boolean> {
+  public async waitForCapacity(modelName: string, timeoutMs: number = 600000): Promise<boolean> {
     const startTime = Date.now();
 
     while (!this.hasCapacity(modelName)) {

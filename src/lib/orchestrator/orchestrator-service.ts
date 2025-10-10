@@ -209,8 +209,8 @@ export class OrchestratorService {
           progress: 20
         });
 
-        // Reserve capacity for this model
-        const capacityAvailable = await capacityManager.waitForCapacity(modelName, 60000);
+        // Reserve capacity for this model (uses 10min default timeout from capacity-manager)
+        const capacityAvailable = await capacityManager.waitForCapacity(modelName);
         if (!capacityAvailable) {
           throw new Error(`Timeout waiting for ${modelName} capacity`);
         }

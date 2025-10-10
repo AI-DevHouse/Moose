@@ -1,7 +1,9 @@
 // Result Tracker - Updates database with execution results
+// Phase 2B.2: Enhanced with failure classification and error context
 
 import { createSupabaseServiceClient } from '@/lib/supabase';
 import { handleCriticalError } from '@/lib/error-escalation';
+import { classifyError } from '@/lib/failure-classifier';
 import type { WorkOrder, AiderResult, GitHubPRResult } from './types';
 import type { EnhancedProposerResponse } from '@/lib/enhanced-proposer-service';
 import type { RoutingDecision } from '@/lib/manager-routing-rules';
@@ -40,6 +42,7 @@ export async function trackSuccessfulExecution(
         github_pr_url: prResult.pr_url,
         github_pr_number: prResult.pr_number,
         github_branch: prResult.branch_name,
+        complexity_score: routingDecision.routing_metadata.complexity_score, // NEW: Direct column
         metadata: {
           ...wo.metadata,
           routing_decision: {
@@ -92,6 +95,7 @@ export async function trackSuccessfulExecution(
     }
 
     // 3. Write to outcome_vectors (tracks LLM model performance)
+    // Include failure classification if proposer had residual errors (even though PR succeeded)
     const { error: ovError } = await supabase
       .from('outcome_vectors')
       .insert({
@@ -103,11 +107,13 @@ export async function trackSuccessfulExecution(
         success: true,
         diff_size_lines: 0, // TODO: Parse from Aider output
         test_duration_ms: null, // TODO: Get from Sentinel
-        failure_classes: null,
+        failure_class: proposerResponse.failure_class || null, // NEW: Classification if residual errors
+        error_context: proposerResponse.error_context || null, // NEW: Structured error details
         metadata: {
           complexity_score: routingDecision.routing_metadata.complexity_score,
           hard_stop_required: routingDecision.routing_metadata.hard_stop_required,
-          refinement_cycles: proposerResponse.refinement_metadata?.refinement_count || 0
+          refinement_cycles: proposerResponse.refinement_metadata?.refinement_count || 0,
+          contract_violations: proposerResponse.contract_validation?.breaking_changes.length || 0
         }
       } as any);
 
@@ -153,17 +159,40 @@ export async function trackFailedExecution(
 
   console.error(`[ResultTracker] Tracking failed execution for WO ${wo.id} at stage ${stage}:`, error.message);
 
+  // Classify the error using our failure classification system
+  const componentMap = {
+    routing: 'ManagerService',
+    proposer: 'ProposerService',
+    aider: 'AiderExecutor',
+    github: 'GitHubIntegration'
+  };
+
+  const classification = classifyError(error, {
+    component: componentMap[stage],
+    operation: 'execute',
+    metadata: {
+      work_order_id: wo.id,
+      stage
+    }
+  });
+
+  console.log(`[ResultTracker] Error classified as: ${classification.failure_class}`);
+
   try {
     // 1. Update work_orders
+    const routingDecision = wo.metadata?.routing_decision;
     const { error: woError } = await supabase
       .from('work_orders')
       .update({
         status: 'failed',
+        complexity_score: routingDecision?.routing_metadata?.complexity_score || null, // NEW: Direct column
         metadata: {
           ...wo.metadata,
           orchestrator_error: {
             stage,
             message: error.message,
+            failure_class: classification.failure_class, // NEW: Add classification
+            error_context: classification.error_context, // NEW: Add structured error context
             timestamp: new Date().toISOString()
           }
         }
@@ -175,47 +204,47 @@ export async function trackFailedExecution(
       // Continue to try outcome_vectors
     }
 
-    // 2. Write to outcome_vectors ONLY if failure was at proposer stage
-    // (outcome_vectors tracks LLM model performance, not infrastructure failures)
-    if (stage === 'proposer' && wo.metadata?.routing_decision && wo.metadata?.proposer_response) {
-      const routingDecision = wo.metadata.routing_decision;
-      const proposerResponse = wo.metadata.proposer_response;
+    // 2. Write to outcome_vectors for ALL stages (not just proposer)
+    // Phase 2B.2: Track all failures for pattern analysis
+    const proposerResponse = wo.metadata?.proposer_response;
 
-      const { error: ovError } = await supabase
-        .from('outcome_vectors')
-        .insert({
-          work_order_id: wo.id,
-          model_used: proposerResponse.proposer_used,
-          route_reason: routingDecision.reason,
-          cost: proposerResponse.cost || 0,
-          execution_time_ms: proposerResponse.execution_time_ms || 0,
-          success: false,
-          diff_size_lines: 0,
-          test_duration_ms: null,
-          failure_classes: ['generation_failed'],
-          metadata: {
-            error_message: error.message,
-            complexity_score: routingDecision.routing_metadata?.complexity_score,
-            refinement_cycles: proposerResponse.refinement_cycles || 0
-          }
-        } as any);
+    const { error: ovError } = await supabase
+      .from('outcome_vectors')
+      .insert({
+        work_order_id: wo.id,
+        model_used: proposerResponse?.proposer_used || routingDecision?.selected_proposer || 'unknown',
+        route_reason: routingDecision?.reason || `Failed at ${stage}`,
+        cost: proposerResponse?.cost || 0,
+        execution_time_ms: proposerResponse?.execution_time_ms || 0,
+        success: false,
+        diff_size_lines: 0,
+        test_duration_ms: null,
+        failure_class: classification.failure_class, // NEW: Use classified failure type
+        error_context: classification.error_context, // NEW: Structured error details
+        metadata: {
+          error_message: error.message,
+          failure_stage: stage,
+          complexity_score: routingDecision?.routing_metadata?.complexity_score,
+          refinement_cycles: proposerResponse?.refinement_cycles || 0
+        }
+      } as any);
 
-      if (ovError) {
-        await handleCriticalError({
-          component: 'ResultTracker',
-          operation: 'writeOutcomeVectorsFailure',
-          error: ovError as Error,
-          workOrderId: wo.id,
-          severity: 'critical',
-          metadata: {
-            stage,
-            proposer_used: proposerResponse.proposer_used
-          }
-        });
-      }
+    if (ovError) {
+      await handleCriticalError({
+        component: 'ResultTracker',
+        operation: 'writeOutcomeVectorsFailure',
+        error: ovError as Error,
+        workOrderId: wo.id,
+        severity: 'critical',
+        metadata: {
+          stage,
+          failure_class: classification.failure_class,
+          proposer_used: proposerResponse?.proposer_used
+        }
+      });
     }
 
-    console.log(`[ResultTracker] Tracked failure for WO ${wo.id}`);
+    console.log(`[ResultTracker] Tracked failure for WO ${wo.id} (${classification.failure_class})`);
   } catch (err) {
     console.error('[ResultTracker] Unexpected error tracking failure:', err);
     // Don't throw - we want to report the original error

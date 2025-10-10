@@ -23,8 +23,14 @@ export class ClientManagerService {
 
   /**
    * Create escalation for a Work Order
+   * Phase 2B.3: Enhanced with failure classification support
    */
-  async createEscalation(workOrderId: string): Promise<{
+  async createEscalation(
+    workOrderId: string,
+    reason?: string,
+    metadata?: Record<string, unknown>,
+    failure_class?: string
+  ): Promise<{
     escalation: Tables<'escalations'>
     recommendation: ClientManagerRecommendation
   }> {
@@ -80,7 +86,7 @@ export class ClientManagerService {
     // 6. Generate resolution options
     const options = generateResolutionOptions(trigger, workOrder, historicalData)
 
-    // 7. Create escalation record
+    // 7. Create escalation record (with failure classification)
     const escalationData: TablesInsert<'escalations'> = {
       work_order_id: workOrderId,
       trigger_type: trigger.trigger_type,
@@ -88,6 +94,9 @@ export class ClientManagerService {
       context: {
         trigger,
         options,
+        reason,             // NEW: Store reason from error-escalation
+        failure_class,      // NEW: Store failure classification
+        metadata,           // NEW: Store metadata (error context)
         created_by: 'client-manager-service'
       } as any
     }
@@ -254,11 +263,13 @@ export class ClientManagerService {
       .eq('key', 'budget_thresholds')
       .single()
 
-    const budgetConfig = budgetConfigRow?.value ? JSON.parse(budgetConfigRow.value) : {
-      soft_cap: 20,
-      hard_cap: 50,
-      emergency_kill: 100
+    // Budget thresholds must exist in database - fail if missing
+    if (!budgetConfigRow?.value) {
+      console.error('[ClientManager] budget_thresholds not found in system_config - skipping budget check');
+      return [];
     }
+
+    const budgetConfig = JSON.parse(budgetConfigRow.value)
 
     const budgetCheck = checkBudgetEscalation(dailySpend, budgetConfig)
 
