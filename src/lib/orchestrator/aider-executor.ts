@@ -174,7 +174,7 @@ export async function executeAider(
     throw new Error(`Proposer '${selectedProposer}' not found in registry`);
   }
 
-  const aiderModel = proposerConfig.model || 'claude-sonnet-4-20250514'; // Fallback to Claude Sonnet 4.5
+  const aiderModel = proposerConfig.model; // Use model identifier from database (e.g., 'claude-sonnet-4-5-20250929')
   console.log(`[AiderExecutor] Using Aider model: ${aiderModel} (from proposer: ${selectedProposer})`);
 
   // 5. Build file list

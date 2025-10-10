@@ -58,6 +58,7 @@ export async function POST(request: NextRequest) {
     const proposerConfig: ProposerConfig = {
       id: body.id || crypto.randomUUID(),
       name: body.name,
+      model: body.model || body.name, // Use model if provided, otherwise default to name
       provider: body.provider,
       endpoint: body.endpoint,
       context_limit: body.context_limit || 8000,
@@ -103,6 +104,7 @@ export async function PUT(request: NextRequest) {
       const correctedConfig: ProposerConfig = {
         id: "f4b60e1b-e375-4796-aaa6-cdcc445a05b7", // Use existing ID
         name: "gpt-4o-mini",
+        model: "gpt-4o-mini", // OpenAI model identifier
         provider: "openai",
         endpoint: "https://api.openai.com/v1/chat/completions",
         context_limit: 128000,

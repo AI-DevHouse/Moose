@@ -10,6 +10,7 @@ const supabase = createClient<Database>(
 export interface ProposerConfig {
   id: string;
   name: string;
+  model: string; // Actual model identifier (e.g., 'claude-sonnet-4-5-20250929', 'gpt-4o-mini')
   provider: 'anthropic' | 'openai';
   endpoint: string;
   context_limit: number;
@@ -45,7 +46,7 @@ export class ProposerRegistry {
     try {
       const { data: configs, error } = await supabase
         .from('proposer_configs')
-        .select('id, name, provider, complexity_threshold, cost_profile, active, created_at, updated_at')
+        .select('id, name, model, provider, complexity_threshold, cost_profile, active, created_at, updated_at')
         .eq('active', true)
         .order('created_at');
 
@@ -65,6 +66,7 @@ export class ProposerRegistry {
         this.proposers.set(config.name, {
           id: config.id,
           name: config.name,
+          model: config.model,
           provider: config.provider as 'anthropic' | 'openai',
           endpoint: config.provider === 'anthropic' ? 'https://api.anthropic.com/v1/messages' : 'https://api.openai.com/v1/chat/completions',
           context_limit: config.provider === 'anthropic' ? 200000 : 128000,
