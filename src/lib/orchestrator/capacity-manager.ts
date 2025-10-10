@@ -3,19 +3,21 @@
 /**
  * Capacity limits per LLM model (prevents rate limit hits)
  *
- * Based on API tier limits:
- * - Claude Sonnet 4.5: 50 RPM, but complex tasks take time = limit 2 concurrent
- * - GPT-4o-mini: 500 RPM, faster responses = limit 4 concurrent
+ * Based on ACTUAL API tier limits:
+ * - Claude Sonnet 4.5: 1,000 RPM, 450,000 TPM = safe limit 10 concurrent
+ * - GPT-4o-mini: 500 RPM, faster responses = limit 10 concurrent
  *
  * These limits prevent:
  * - Rate limit 429 errors
  * - Token-per-minute (TPM) exhaustion
  * - Poor load balancing
+ *
+ * At 10 concurrent with 2-4 min/task: ~150-300 req/hour = well under 1000 RPM limit
  */
 export const MODEL_CAPACITY_LIMITS = {
-  'claude-sonnet-4-5': 2,    // Max 2 concurrent Claude executions
-  'gpt-4o-mini': 4,           // Max 4 concurrent GPT executions
-  'default': 3                 // Fallback for unknown models
+  'claude-sonnet-4-5': 10,    // Max 10 concurrent Claude executions (was 2)
+  'gpt-4o-mini': 10,          // Max 10 concurrent GPT executions (was 4)
+  'default': 5                // Fallback for unknown models (was 3)
 } as const;
 
 /**

@@ -101,7 +101,8 @@ export class OrchestratorService {
       console.log(`[Orchestrator] Found ${workOrders.length} pending Work Orders`);
 
       // Execute Work Orders (with concurrency limit)
-      const maxConcurrent = parseInt(process.env.ORCHESTRATOR_MAX_CONCURRENT_EXECUTIONS || '3', 10);
+      // Default 15 to allow 10 Claude + 5 GPT concurrent (model limits handle actual throttling)
+      const maxConcurrent = parseInt(process.env.ORCHESTRATOR_MAX_CONCURRENT_EXECUTIONS || '15', 10);
 
       for (const wo of workOrders) {
         // Skip if already executing
