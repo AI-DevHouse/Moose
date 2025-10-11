@@ -213,7 +213,18 @@ export async function executeAider(
 
   console.log(`[AiderExecutor] Executing Aider with model ${aiderModel} on ${files.length} files`);
 
-  // 6. Spawn Aider process in project directory
+  // 6. Prime Git detection (workaround for Aider Git detection race condition)
+  // Issue: When multiple Aider processes spawn concurrently, Git detection can fail
+  // Solution: Run git status before spawning Aider to ensure Git is properly detected
+  try {
+    execSync('git status', { cwd: workingDirectory, stdio: 'pipe' });
+    console.log(`[AiderExecutor] Git detection primed successfully`);
+  } catch (error: any) {
+    console.warn(`[AiderExecutor] ⚠️  Git status check failed:`, error.message);
+    console.warn(`[AiderExecutor] Aider may not detect Git repository properly`);
+  }
+
+  // 7. Spawn Aider process in project directory
   return new Promise((resolve, reject) => {
     const aiderArgs = [
       '--message-file', instructionPath,
