@@ -76,13 +76,15 @@ export async function trackSuccessfulExecution(
     const { error: geError } = await supabase
       .from('github_events')
       .insert({
-        event_type: 'pull_request',
-        action: 'opened',
-        pr_number: prResult.pr_number,
-        branch_name: prResult.branch_name,
-        metadata: {
-          work_order_id: wo.id,
+        event_type: 'pull_request.opened',
+        workflow_name: null,
+        status: 'opened',
+        work_order_id: wo.id,
+        payload: {
+          action: 'opened',
+          pr_number: prResult.pr_number,
           pr_url: prResult.pr_url,
+          branch_name: prResult.branch_name,
           risk_level: wo.risk_level,
           proposer_used: proposerResponse.proposer_used,
           cost: proposerResponse.cost
