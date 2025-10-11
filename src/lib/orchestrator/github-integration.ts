@@ -238,8 +238,8 @@ async function getPRNumber(
       ? '"C:\\Program Files\\GitHub CLI\\gh.exe"'
       : 'gh';
 
-    // Build command
-    let prListCommand = `${ghCommand} pr list --head ${branchName} --json number --jq '.[0].number'`;
+    // Build command - use --json without --jq, parse JSON in code instead (fixes Windows quote escaping issues)
+    let prListCommand = `${ghCommand} pr list --head ${branchName} --json number`;
 
     // Add --repo flag if repo name provided
     if (repoName) {
@@ -252,9 +252,16 @@ async function getPRNumber(
       stdio: 'pipe'
     });
 
-    const prNumber = parseInt(output.trim(), 10);
+    // Parse JSON output
+    const prList = JSON.parse(output.trim());
 
-    if (isNaN(prNumber)) {
+    if (!Array.isArray(prList) || prList.length === 0) {
+      throw new Error('No PRs found for branch');
+    }
+
+    const prNumber = prList[0].number;
+
+    if (typeof prNumber !== 'number' || isNaN(prNumber)) {
       throw new Error('Could not parse PR number');
     }
 

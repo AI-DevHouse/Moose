@@ -100,6 +100,34 @@ export async function createFeatureBranch(
     }).trim();
 
     console.log(`[AiderExecutor] Current branch: ${currentBranch}`);
+
+    // Check if branch already exists and delete it if needed
+    try {
+      const branchList = execSync('git branch --list', {
+        cwd: workingDirectory,
+        encoding: 'utf-8'
+      });
+
+      if (branchList.includes(branchName)) {
+        console.log(`[AiderExecutor] Branch ${branchName} already exists, deleting it first`);
+
+        // Switch to main/master if we're on the branch we want to delete
+        if (currentBranch === branchName) {
+          try {
+            execSync('git checkout main', { cwd: workingDirectory, stdio: 'pipe' });
+          } catch {
+            execSync('git checkout master', { cwd: workingDirectory, stdio: 'pipe' });
+          }
+        }
+
+        // Delete the existing branch
+        execSync(`git branch -D ${branchName}`, { cwd: workingDirectory, stdio: 'pipe' });
+        console.log(`[AiderExecutor] Deleted existing branch ${branchName}`);
+      }
+    } catch (error) {
+      console.log(`[AiderExecutor] No existing branch to delete or error checking branches`);
+    }
+
     console.log(`[AiderExecutor] Creating feature branch from current branch`);
 
     // Create feature branch from current branch
