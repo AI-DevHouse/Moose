@@ -135,10 +135,30 @@ export async function trackSuccessfulExecution(
     }
 
     console.log(`[ResultTracker] Successfully tracked execution for WO ${wo.id}`);
+
+    // NEW: Create learning sample (async, don't block)
+    // Wait for GitHub events to be recorded (give Sentinel time to process)
+    createLearningSample(wo.id).catch(err => {
+      console.error('[ResultTracker] Failed to create learning sample:', err);
+      // Non-fatal - don't throw
+    });
   } catch (error) {
     console.error('[ResultTracker] Unexpected error:', error);
     throw error;
   }
+}
+
+/**
+ * Create a learning sample for a completed work order
+ * Waits 60 seconds to allow GitHub events to be recorded
+ */
+async function createLearningSample(workOrderId: string): Promise<void> {
+  // Wait for GitHub events to be recorded (give Sentinel time to process)
+  await new Promise(resolve => setTimeout(resolve, 60000)); // 1 minute delay
+
+  const { LearningSampleCreator } = await import('@/lib/learning/learning-sample-creator');
+  const sampleCreator = new LearningSampleCreator();
+  await sampleCreator.createSample(workOrderId);
 }
 
 /**

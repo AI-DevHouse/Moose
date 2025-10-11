@@ -28,7 +28,9 @@ CREATE TABLE IF NOT EXISTS work_orders (
   files_in_scope JSONB DEFAULT '[]'::jsonb,
   context_budget_estimate INTEGER DEFAULT 2000,
   decomposition_doc TEXT,
-  architect_version TEXT DEFAULT 'v1'
+  architect_version TEXT DEFAULT 'v1',
+  complexity_score DECIMAL(5, 2),
+  project_id UUID
 );
 
 -- ============================================================================
@@ -190,17 +192,118 @@ CREATE TABLE IF NOT EXISTS system_config (
 );
 
 -- ============================================================================
+-- TABLE: complexity_learning_samples
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS complexity_learning_samples (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  work_order_id UUID NOT NULL REFERENCES work_orders(id) ON DELETE CASCADE,
+
+  -- Inputs (what was predicted)
+  predicted_complexity DECIMAL(5, 2) NOT NULL,
+  complexity_factors JSONB NOT NULL,
+  complexity_weights JSONB NOT NULL,
+  selected_model TEXT NOT NULL,
+
+  -- Outcomes (what actually happened) - Multi-dimensional
+  code_writing_success BOOLEAN,
+  code_writing_errors INTEGER,
+  code_writing_failure_class TEXT,
+
+  tests_success BOOLEAN,
+  tests_passed INTEGER,
+  tests_failed INTEGER,
+  tests_execution_time_ms INTEGER,
+
+  build_success BOOLEAN,
+  build_time_ms INTEGER,
+  build_error_count INTEGER,
+
+  pr_merged BOOLEAN,
+  pr_review_comments INTEGER,
+  pr_merge_time_hours DECIMAL(10, 2),
+  ci_checks_passed INTEGER,
+  ci_checks_failed INTEGER,
+
+  production_errors_24h INTEGER,
+
+  -- Derived metrics
+  overall_success BOOLEAN,
+  success_dimensions JSONB,
+
+  -- Learning metadata
+  model_performance_score DECIMAL(5, 2),
+  was_correctly_routed BOOLEAN,
+  routing_error_magnitude DECIMAL(5, 2),
+
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ============================================================================
+-- TABLE: complexity_weight_history
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS complexity_weight_history (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+
+  -- Weights snapshot
+  weights JSONB NOT NULL,
+
+  -- Adjustment metadata
+  adjustment_reason TEXT NOT NULL,
+  triggered_by TEXT,
+
+  -- Performance before adjustment
+  performance_before JSONB,
+
+  -- Expected impact
+  expected_improvement TEXT,
+
+  -- Actual impact (filled after next calibration)
+  performance_after JSONB,
+  actual_improvement DECIMAL(5, 2),
+
+  approved_by TEXT,
+  applied_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ============================================================================
+-- TABLE: proposer_threshold_history
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS proposer_threshold_history (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  proposer_id UUID NOT NULL REFERENCES proposer_configs(id) ON DELETE CASCADE,
+
+  old_threshold DECIMAL(5, 2) NOT NULL,
+  new_threshold DECIMAL(5, 2) NOT NULL,
+
+  adjustment_reason TEXT NOT NULL,
+  performance_metrics JSONB,
+
+  approved_by TEXT,
+  applied_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ============================================================================
 -- INDEXES for Performance
 -- ============================================================================
 CREATE INDEX IF NOT EXISTS idx_work_orders_status ON work_orders(status);
 CREATE INDEX IF NOT EXISTS idx_work_orders_created_at ON work_orders(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_work_orders_proposer_id ON work_orders(proposer_id);
+CREATE INDEX IF NOT EXISTS idx_work_orders_complexity_score ON work_orders(complexity_score) WHERE complexity_score IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_work_orders_project_id ON work_orders(project_id);
 CREATE INDEX IF NOT EXISTS idx_outcome_vectors_work_order_id ON outcome_vectors(work_order_id);
 CREATE INDEX IF NOT EXISTS idx_outcome_vectors_created_at ON outcome_vectors(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_escalations_status ON escalations(status);
 CREATE INDEX IF NOT EXISTS idx_escalations_work_order_id ON escalations(work_order_id);
 CREATE INDEX IF NOT EXISTS idx_cost_tracking_created_at ON cost_tracking(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_github_events_work_order_id ON github_events(work_order_id);
+CREATE INDEX IF NOT EXISTS idx_learning_samples_wo ON complexity_learning_samples(work_order_id);
+CREATE INDEX IF NOT EXISTS idx_learning_samples_complexity ON complexity_learning_samples(predicted_complexity);
+CREATE INDEX IF NOT EXISTS idx_learning_samples_model ON complexity_learning_samples(selected_model);
+CREATE INDEX IF NOT EXISTS idx_learning_samples_routing ON complexity_learning_samples(was_correctly_routed);
+CREATE INDEX IF NOT EXISTS idx_learning_samples_created_at ON complexity_learning_samples(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_weight_history_applied ON complexity_weight_history(applied_at DESC);
+CREATE INDEX IF NOT EXISTS idx_threshold_history_proposer ON proposer_threshold_history(proposer_id);
+CREATE INDEX IF NOT EXISTS idx_threshold_history_applied ON proposer_threshold_history(applied_at DESC);
 
 -- ============================================================================
 -- COMMENTS
@@ -217,6 +320,9 @@ COMMENT ON TABLE pattern_confidence_scores IS 'Pattern success tracking for rout
 COMMENT ON TABLE playbook_memory IS 'Automated solution playbooks learned from escalations';
 COMMENT ON TABLE escalation_scripts IS 'Client Manager resolution templates';
 COMMENT ON TABLE system_config IS 'System-wide configuration (budget limits, thresholds)';
+COMMENT ON TABLE complexity_learning_samples IS 'Multi-dimensional outcome tracking for complexity scoring calibration';
+COMMENT ON TABLE complexity_weight_history IS 'History of complexity weight adjustments and their impacts';
+COMMENT ON TABLE proposer_threshold_history IS 'History of proposer complexity threshold adjustments';
 
 -- ============================================================================
 -- SUCCESS MESSAGE

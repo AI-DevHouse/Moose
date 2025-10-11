@@ -53,7 +53,7 @@ export interface AnalyzerRequest {
 
 export class ComplexityAnalyzer {
   private static instance: ComplexityAnalyzer;
-  
+
   // Default weights - Phase 2.2.3 baseline
   private weights: ComplexityWeights = {
     codeComplexity: 0.20,
@@ -64,6 +64,10 @@ export class ComplexityAnalyzer {
     memoryPressure: 0.10,        // NEW
     coordinationComplexity: 0.10  // NEW
   };
+
+  // Track if weights have been loaded from database
+  private weightsLoadedFromDB: boolean = false;
+  private weightsLoadPromise: Promise<void> | null = null;
 
   // Context window limits for memory pressure calculation
   private readonly CONTEXT_LIMITS = {
@@ -106,6 +110,62 @@ export class ComplexityAnalyzer {
     }
     return ComplexityAnalyzer.instance;
   }
+
+  /**
+   * Load weights from database (system_config table)
+   * This allows weights to be updated dynamically without restart
+   */
+  private async loadWeightsFromDB(): Promise<void> {
+    // Only load once per instance unless explicitly reloaded
+    if (this.weightsLoadedFromDB) {
+      return;
+    }
+
+    // Prevent multiple simultaneous loads
+    if (this.weightsLoadPromise) {
+      return this.weightsLoadPromise;
+    }
+
+    this.weightsLoadPromise = (async () => {
+      try {
+        const { data, error } = await supabase
+          .from('system_config')
+          .select('value')
+          .eq('key', 'complexity_weights')
+          .single();
+
+        if (error || !data) {
+          // No weights in DB, use defaults
+          console.log('[ComplexityAnalyzer] No weights found in DB, using defaults');
+          this.weightsLoadedFromDB = true;
+          return;
+        }
+
+        const loadedWeights = JSON.parse(data.value) as ComplexityWeights;
+
+        // Validate loaded weights
+        const sum = Object.values(loadedWeights).reduce((a, b) => a + b, 0);
+        if (Math.abs(sum - 1.0) > 0.01) {
+          console.warn('[ComplexityAnalyzer] Loaded weights do not sum to 1.0, using defaults');
+          this.weightsLoadedFromDB = true;
+          return;
+        }
+
+        // Apply loaded weights
+        this.weights = loadedWeights;
+        this.weightsLoadedFromDB = true;
+        console.log('[ComplexityAnalyzer] Loaded weights from database');
+      } catch (error) {
+        console.error('[ComplexityAnalyzer] Error loading weights from DB:', error);
+        // Continue with defaults
+        this.weightsLoadedFromDB = true;
+      } finally {
+        this.weightsLoadPromise = null;
+      }
+    })();
+
+    return this.weightsLoadPromise;
+  }
   private detectHardStop(
     task_description: string,
     context: string[],
@@ -137,6 +197,9 @@ export class ComplexityAnalyzer {
   }
 
   async analyze(request: AnalyzerRequest): Promise<ComplexityAnalysis> {
+    // Load weights from database if not already loaded
+    await this.loadWeightsFromDB();
+
     const factors = await this.calculateFactors(request);
     const score = this.calculateWeightedScore(factors);
     const reasoning = this.generateReasoning(factors, score);
@@ -474,12 +537,25 @@ export class ComplexityAnalyzer {
 
   updateWeights(newWeights: Partial<ComplexityWeights>): void {
     this.weights = { ...this.weights, ...newWeights };
-    
+
     // Validate weights sum to 1.0
     const sum = Object.values(this.weights).reduce((a, b) => a + b, 0);
     if (Math.abs(sum - 1.0) > 0.01) {
       throw new Error(`Weights must sum to 1.0, got ${sum.toFixed(3)}`);
     }
+
+    // Mark as loaded to prevent overwriting from DB
+    this.weightsLoadedFromDB = true;
+  }
+
+  /**
+   * Force reload weights from database
+   * Useful after weight adjustments are applied
+   */
+  async reloadWeights(): Promise<void> {
+    this.weightsLoadedFromDB = false;
+    this.weightsLoadPromise = null;
+    await this.loadWeightsFromDB();
   }
 
   getWeights(): ComplexityWeights {
