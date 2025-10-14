@@ -31,7 +31,8 @@ export async function POST(request: NextRequest) {
         retry_delay_ms: 1000,
         escalation_threshold: 2,
         fallback_on_failure: true
-      }
+      },
+      metadata: body.metadata || {}  // Pass metadata (including work_order_id) for logging
     };
 
     // Execute with enhanced monitoring

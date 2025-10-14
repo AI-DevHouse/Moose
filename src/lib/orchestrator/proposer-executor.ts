@@ -16,7 +16,10 @@ export function transformWorkOrderToProposerRequest(wo: WorkOrder) {
     context: wo.files_in_scope || [],
     security_context: mapRiskToSecurityContext(wo.risk_level),
     expected_output_type: 'code' as const,
-    priority: 'medium' as const
+    priority: 'medium' as const,
+    metadata: {
+      work_order_id: wo.id
+    }
   };
 }
 
@@ -84,13 +87,20 @@ export async function generateCode(wo: WorkOrder): Promise<EnhancedProposerRespo
   });
 
   try {
-    const response = await fetch('http://localhost:3000/api/proposer-enhanced', {
+    // 15-minute timeout to accommodate self-refinement cycles
+    const abortController = new AbortController();
+    const timeoutId = setTimeout(() => abortController.abort(), 15 * 60 * 1000); // 15 minutes
+
+    const response = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3001'}/api/proposer-enhanced`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify(request)
+      body: JSON.stringify(request),
+      signal: abortController.signal
     });
+
+    clearTimeout(timeoutId);
 
     if (!response.ok) {
       const errorText = await response.text();

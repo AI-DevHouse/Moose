@@ -38,6 +38,14 @@ export interface RefinementResult {
     violations: any[];
   }>;
   final_contract_validation?: any;  // Final contract validation result
+  sanitizer_metadata?: {            // NEW: Sanitizer telemetry (Phase 1)
+    initial_changes: string[];      // Changes made before initial TS check
+    cycle_changes: Array<{          // Changes made after each cycle
+      cycle: number;
+      changes: string[];
+    }>;
+    total_functions_triggered: number; // Total sanitizer corrections applied
+  };
   cycle_history: Array<{            // Track each cycle
     cycle: number;
     errors_before: number;
@@ -211,11 +219,18 @@ export async function attemptSelfRefinement(
   const cycleHistory: RefinementResult['cycle_history'] = [];
   const contractViolationHistory: RefinementResult['contract_violations'] = [];
 
+  // Track sanitizer changes for telemetry
+  const sanitizerInitialChanges: string[] = [];
+  const sanitizerCycleChanges: Array<{ cycle: number; changes: string[] }> = [];
+  let totalSanitizerFunctions = 0;
+
   // Pre-process original content to fix mechanical issues
   const sanitizerResult = sanitizeTypeScript(currentContent);
   if (sanitizerResult.changes_made.length > 0) {
     console.log(`🧹 SANITIZER: Auto-fixed ${sanitizerResult.changes_made.length} issue(s): ${sanitizerResult.changes_made.join(', ')}`);
     currentContent = sanitizerResult.sanitized;
+    sanitizerInitialChanges.push(...sanitizerResult.changes_made);
+    totalSanitizerFunctions += sanitizerResult.telemetry.functions_triggered;
   }
 
   // Initial error check (on sanitized code)
@@ -256,6 +271,11 @@ export async function attemptSelfRefinement(
       error_details: [],
       contract_violations: contractViolationHistory,
       final_contract_validation: currentContractValidation,
+      sanitizer_metadata: totalSanitizerFunctions > 0 ? {
+        initial_changes: sanitizerInitialChanges,
+        cycle_changes: sanitizerCycleChanges,
+        total_functions_triggered: totalSanitizerFunctions
+      } : undefined,
       cycle_history: []
     };
   }
@@ -296,6 +316,11 @@ export async function attemptSelfRefinement(
     if (cycleSanitizerResult.changes_made.length > 0) {
       console.log(`   🧹 Sanitizer auto-fixed ${cycleSanitizerResult.changes_made.length} issue(s): ${cycleSanitizerResult.changes_made.join(', ')}`);
       currentContent = cycleSanitizerResult.sanitized;
+      sanitizerCycleChanges.push({
+        cycle: refinementCount,
+        changes: cycleSanitizerResult.changes_made
+      });
+      totalSanitizerFunctions += cycleSanitizerResult.telemetry.functions_triggered;
     }
 
     // Check new errors (on sanitized code)
@@ -385,6 +410,11 @@ export async function attemptSelfRefinement(
     error_details: currentErrors,
     contract_violations: contractViolationHistory,
     final_contract_validation: currentContractValidation,
+    sanitizer_metadata: totalSanitizerFunctions > 0 ? {
+      initial_changes: sanitizerInitialChanges,
+      cycle_changes: sanitizerCycleChanges,
+      total_functions_triggered: totalSanitizerFunctions
+    } : undefined,
     cycle_history: cycleHistory
   };
 }

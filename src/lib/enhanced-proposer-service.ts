@@ -374,8 +374,14 @@ export class EnhancedProposerService {
             proposer_name: proposerName,
             complexity_score: complexityAnalysis.score,
             refinement_metadata: refinementMetadata,
-            contract_validation: contractValidation
-            // Note: sanitizer_metadata tracking can be added in Phase 4 enhancement
+            contract_validation: contractValidation,
+            sanitizer_metadata: refinementMetadata.sanitizer_metadata ? {
+              changes_made: [
+                ...refinementMetadata.sanitizer_metadata.initial_changes,
+                ...refinementMetadata.sanitizer_metadata.cycle_changes.flatMap(c => c.changes)
+              ],
+              functions_triggered: refinementMetadata.sanitizer_metadata.total_functions_triggered
+            } : undefined
           }).catch(err => console.error('Failed to log proposer outcome:', err));
         }
 
