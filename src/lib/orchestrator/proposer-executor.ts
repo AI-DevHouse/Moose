@@ -116,7 +116,7 @@ export async function generateCode(wo: WorkOrder): Promise<EnhancedProposerRespo
     console.log(`[ProposerExecutor] Code generated for WO ${wo.id}:`, {
       proposer_used: data.data.proposer_used,
       cost: data.data.cost,
-      refinement_cycles: data.data.refinement_metadata?.cycle_count || 0
+      refinement_cycles: data.data.refinement_metadata?.refinement_count || 0
     });
 
     return data.data;
