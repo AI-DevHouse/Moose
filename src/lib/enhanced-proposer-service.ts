@@ -13,6 +13,7 @@ import {
 import { ContractValidator, type ValidationResult } from './contract-validator';
 import { classifyError, type FailureClass, type ErrorContext } from './failure-classifier';
 import { logRefinementCycle } from './decision-logger';
+import { logProposerFailure } from './proposer-failure-logger';
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from '@/types/supabase';
 
@@ -366,6 +367,18 @@ export class EnhancedProposerService {
           console.warn('⚠️ Proposer completed with residual errors:', { failureClass, errorContext });
         }
 
+        // Log proposer outcome (failures 100%, successes 10% sampled) for learning loop
+        if (refinementMetadata) {
+          await logProposerFailure({
+            work_order_id: request.metadata?.work_order_id,
+            proposer_name: proposerName,
+            complexity_score: complexityAnalysis.score,
+            refinement_metadata: refinementMetadata,
+            contract_validation: contractValidation
+            // Note: sanitizer_metadata tracking can be added in Phase 4 enhancement
+          }).catch(err => console.error('Failed to log proposer outcome:', err));
+        }
+
         return {
           ...response,
           execution_time_ms: totalExecutionTime,
@@ -594,7 +607,7 @@ export class EnhancedProposerService {
       },
       body: JSON.stringify({
         model: proposer.model, // Use model from database (e.g., 'claude-sonnet-4-5-20250929')
-        max_tokens: 4000,
+        max_tokens: 8192,
         messages: [{ role: 'user', content: prompt }]
       })
     });
@@ -637,7 +650,7 @@ export class EnhancedProposerService {
       body: JSON.stringify({
         model: proposer.model, // Use model from database (e.g., 'gpt-4o-mini')
         messages: [{ role: 'user', content: prompt }],
-        max_tokens: 2000
+        max_tokens: 8192
       })
     });
 

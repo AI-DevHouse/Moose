@@ -4,6 +4,7 @@
 
 import { parseTypeScriptErrors, type TypeScriptError } from './complexity-analyzer';
 import type { ProposerRequest } from './enhanced-proposer-service';
+import { sanitizeTypeScript } from './code-sanitizer';
 
 // Refinement thresholds (easily modifiable)
 export const REFINEMENT_THRESHOLDS = {
@@ -210,7 +211,14 @@ export async function attemptSelfRefinement(
   const cycleHistory: RefinementResult['cycle_history'] = [];
   const contractViolationHistory: RefinementResult['contract_violations'] = [];
 
-  // Initial error check
+  // Pre-process original content to fix mechanical issues
+  const sanitizerResult = sanitizeTypeScript(currentContent);
+  if (sanitizerResult.changes_made.length > 0) {
+    console.log(`🧹 SANITIZER: Auto-fixed ${sanitizerResult.changes_made.length} issue(s): ${sanitizerResult.changes_made.join(', ')}`);
+    currentContent = sanitizerResult.sanitized;
+  }
+
+  // Initial error check (on sanitized code)
   const initialErrors = await checkTypeScriptErrors(currentContent);
   const initialErrorCount = initialErrors.length;
   let currentErrors = initialErrors;
@@ -283,7 +291,14 @@ export async function attemptSelfRefinement(
 
     currentContent = refinedResponse.content;
 
-    // Check new errors
+    // Sanitize refined code before checking errors
+    const cycleSanitizerResult = sanitizeTypeScript(currentContent);
+    if (cycleSanitizerResult.changes_made.length > 0) {
+      console.log(`   🧹 Sanitizer auto-fixed ${cycleSanitizerResult.changes_made.length} issue(s): ${cycleSanitizerResult.changes_made.join(', ')}`);
+      currentContent = cycleSanitizerResult.sanitized;
+    }
+
+    // Check new errors (on sanitized code)
     const newErrors = await checkTypeScriptErrors(currentContent);
     const errorsAfter = newErrors.length;
     const errorsFixed = errorsBefore - errorsAfter;
