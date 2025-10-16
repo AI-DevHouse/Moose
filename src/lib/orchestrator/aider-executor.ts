@@ -93,13 +93,13 @@ export async function createFeatureBranch(
   console.log(`[AiderExecutor] Working directory: ${workingDirectory}`);
 
   try {
-    // Get current branch (don't switch - create feature branch from wherever we are)
+    // Get current branch for logging/debugging
     const currentBranch = execSync('git branch --show-current', {
       cwd: workingDirectory,
       encoding: 'utf-8'
     }).trim();
 
-    console.log(`[AiderExecutor] Current branch: ${currentBranch}`);
+    console.log(`[AiderExecutor] Current branch before branching: ${currentBranch}`);
 
     // Check if branch already exists and delete it if needed
     try {
@@ -128,9 +128,19 @@ export async function createFeatureBranch(
       console.log(`[AiderExecutor] No existing branch to delete or error checking branches`);
     }
 
-    console.log(`[AiderExecutor] Creating feature branch from current branch`);
+    // CRITICAL FIX: Always checkout main before creating feature branch
+    // This prevents cascading branch contamination when multiple WOs execute sequentially
+    console.log(`[AiderExecutor] Checking out main branch before creating feature branch`);
+    try {
+      execSync('git checkout main', { cwd: workingDirectory, stdio: 'pipe' });
+    } catch {
+      // Try master if main doesn't exist
+      execSync('git checkout master', { cwd: workingDirectory, stdio: 'pipe' });
+    }
 
-    // Create feature branch from current branch
+    console.log(`[AiderExecutor] Creating feature branch from main`);
+
+    // Create feature branch from main
     execSync(`git checkout -b ${branchName}`, { cwd: workingDirectory, stdio: 'pipe' });
 
     console.log(`[AiderExecutor] Feature branch created successfully`);
@@ -213,19 +223,19 @@ export async function executeAider(
 
   console.log(`[AiderExecutor] Executing Aider with model ${aiderModel} on ${files.length} files`);
 
-  // 6. Prime Git detection (workaround for Aider Git detection race condition)
-  // Issue: When multiple Aider processes spawn concurrently, Git detection can fail
-  // Solution: Run git status before spawning Aider to ensure Git is properly detected
-  try {
-    execSync('git status', { cwd: workingDirectory, stdio: 'pipe' });
-    console.log(`[AiderExecutor] Git detection primed successfully`);
-  } catch (error: any) {
-    console.warn(`[AiderExecutor] ⚠️  Git status check failed:`, error.message);
-    console.warn(`[AiderExecutor] Aider may not detect Git repository properly`);
-  }
+  // 6. Set explicit Git environment variables for Aider (fix for Git detection race condition)
+  // Issue: When multiple Aider processes spawn concurrently, Aider's Git detection fails intermittently
+  // Solution: Explicitly set GIT_DIR and GIT_WORK_TREE environment variables
+  // These are standard Git environment variables that all Git tools respect
+  // Important: Normalize paths to use forward slashes for Python/GitPython compatibility
+  const gitDir = path.join(workingDirectory, '.git').replace(/\\/g, '/');
+  const normalizedWorkingDir = workingDirectory.replace(/\\/g, '/');
+  console.log(`[AiderExecutor] Setting GIT_DIR=${gitDir}, GIT_WORK_TREE=${normalizedWorkingDir}`);
 
-  // 7. Spawn Aider process in project directory
-  return new Promise((resolve, reject) => {
+  // 7. Spawn Aider process in project directory with Git detection retry logic
+  // Issue: First Aider execution may fail Git detection ("Git repo: none") due to race condition
+  // Solution: Retry once after 2 seconds if Git detection fails
+  return new Promise(async (resolve, reject) => {
     const aiderArgs = [
       '--message-file', instructionPath,
       '--model', aiderModel,
@@ -236,68 +246,110 @@ export async function executeAider(
 
     console.log(`[AiderExecutor] Command: py -3.11 -m aider ${aiderArgs.join(' ')}`);
 
-    // Use Python 3.11 to run Aider (installed via: py -3.11 -m pip install aider-chat)
-    const aiderProcess = spawn('py', ['-3.11', '-m', 'aider', ...aiderArgs], {
-      cwd: workingDirectory,  // Execute in project directory
-      env: {
-        ...process.env,
-        ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
-        OPENAI_API_KEY: process.env.OPENAI_API_KEY
-      },
-      timeout: 300000 // 5 minutes
-    });
+    let retryCount = 0;
+    const maxRetries = 1; // Retry once if Git detection fails
+    let gitDetectionFailed = false;
 
-    let stdout = '';
-    let stderr = '';
+    const spawnAider = (): void => {
+      // Use Python 3.11 to run Aider (installed via: py -3.11 -m pip install aider-chat)
+      const aiderProcess = spawn('py', ['-3.11', '-m', 'aider', ...aiderArgs], {
+        cwd: workingDirectory,  // Execute in project directory
+        env: {
+          ...process.env,
+          ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
+          OPENAI_API_KEY: process.env.OPENAI_API_KEY,
+          GIT_DIR: gitDir,
+          GIT_WORK_TREE: normalizedWorkingDir
+        },
+        timeout: 300000 // 5 minutes
+      });
 
-    aiderProcess.stdout.on('data', (data) => {
-      const output = data.toString();
-      stdout += output;
-      console.log('[Aider]', output);
-    });
+      let stdout = '';
+      let stderr = '';
 
-    aiderProcess.stderr.on('data', (data) => {
-      const output = data.toString();
-      stderr += output;
-      console.error('[Aider Error]', output);
-    });
+      aiderProcess.stdout.on('data', (data) => {
+        const output = data.toString();
+        stdout += output;
+        console.log('[Aider]', output);
 
-    aiderProcess.on('close', (code) => {
-      // Clean up instruction file
-      try {
-        fs.unlinkSync(instructionPath);
-      } catch (e) {
-        console.warn('[AiderExecutor] Could not delete instruction file:', e);
-      }
+        // Detect Git repo detection failure
+        if (output.includes('Git repo: none')) {
+          gitDetectionFailed = true;
+          console.warn('[AiderExecutor] ⚠️  Git detection failed: "Git repo: none"');
 
-      if (code === 0) {
-        console.log(`[AiderExecutor] Aider completed successfully for WO ${wo.id}`);
-        resolve({
-          success: true,
-          branch_name: branchName,
-          stdout,
-          stderr
-        });
-      } else {
-        console.error(`[AiderExecutor] Aider exited with code ${code}`);
-        reject(new Error(`Aider exited with code ${code}: ${stderr}`));
-      }
-    });
+          // Retry logic: Kill process and retry once after 5 seconds
+          if (retryCount < maxRetries) {
+            retryCount++; // Increment immediately when we decide to retry
+            console.log(`[AiderExecutor] Retrying Aider execution (attempt ${retryCount + 1}/${maxRetries + 1}) after 5s delay...`);
 
-    aiderProcess.on('error', (error) => {
-      // Clean up instruction file
-      try {
-        fs.unlinkSync(instructionPath);
-      } catch (e) {
-        console.warn('[AiderExecutor] Could not delete instruction file:', e);
-      }
+            // Kill the current process
+            aiderProcess.kill();
 
-      if (error.message.includes('ENOENT')) {
-        reject(new Error('Aider not found. Please install: py -3.11 -m pip install aider-chat'));
-      } else {
-        reject(error);
-      }
-    });
+            // Wait 5 seconds and retry (allows git process to fully initialize)
+            setTimeout(() => {
+              gitDetectionFailed = false; // Reset flag
+              spawnAider(); // Recursive retry
+            }, 5000);
+          }
+        }
+      });
+
+      aiderProcess.stderr.on('data', (data) => {
+        const output = data.toString();
+        stderr += output;
+        console.error('[Aider Error]', output);
+      });
+
+      aiderProcess.on('close', (code) => {
+        // If we're retrying due to Git detection failure, don't clean up or resolve yet
+        if (gitDetectionFailed && retryCount <= maxRetries) {
+          return; // Let the retry logic handle it
+        }
+
+        // Clean up instruction file
+        try {
+          fs.unlinkSync(instructionPath);
+        } catch (e) {
+          console.warn('[AiderExecutor] Could not delete instruction file:', e);
+        }
+
+        if (code === 0) {
+          console.log(`[AiderExecutor] Aider completed successfully for WO ${wo.id}`);
+          resolve({
+            success: true,
+            branch_name: branchName,
+            stdout,
+            stderr
+          });
+        } else {
+          console.error(`[AiderExecutor] Aider exited with code ${code}`);
+          reject(new Error(`Aider exited with code ${code}: ${stderr}`));
+        }
+      });
+
+      aiderProcess.on('error', (error) => {
+        // If we're retrying due to Git detection failure, don't clean up or reject yet
+        if (gitDetectionFailed && retryCount <= maxRetries) {
+          return; // Let the retry logic handle it
+        }
+
+        // Clean up instruction file
+        try {
+          fs.unlinkSync(instructionPath);
+        } catch (e) {
+          console.warn('[AiderExecutor] Could not delete instruction file:', e);
+        }
+
+        if (error.message.includes('ENOENT')) {
+          reject(new Error('Aider not found. Please install: py -3.11 -m pip install aider-chat'));
+        } else {
+          reject(error);
+        }
+      });
+    };
+
+    // Start the first attempt
+    spawnAider();
   });
 }
 

@@ -282,13 +282,23 @@ export class OrchestratorService {
         message: `Creating pull request...`,
         progress: 85
       });
+
+      // Get working directory for potential rollback
+      let workingDirectory = process.cwd();
+      if (wo.project_id) {
+        const project = await projectService.getProject(wo.project_id);
+        if (project) {
+          workingDirectory = project.local_path;
+        }
+      }
+
       let prResult;
       try {
         prResult = await pushBranchAndCreatePR(wo, aiderResult.branch_name, routingDecision, proposerResponse);
       } catch (error: any) {
         await trackFailedExecution(wo, error, 'github');
         // Rollback PR (will also rollback Aider branch)
-        rollbackPR(aiderResult.branch_name);
+        rollbackPR(aiderResult.branch_name, workingDirectory);
         throw error;
       }
 

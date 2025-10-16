@@ -279,15 +279,17 @@ async function getPRNumber(
  * Deletes remote branch and local branch
  *
  * @param branchName - Feature branch to delete
+ * @param workingDirectory - Directory to execute git commands in (defaults to current directory)
  */
-export function rollbackPR(branchName: string): void {
+export function rollbackPR(branchName: string, workingDirectory: string = process.cwd()): void {
   console.log(`[GitHubIntegration] Rolling back PR for branch: ${branchName}`);
+  console.log(`[GitHubIntegration] Working directory: ${workingDirectory}`);
 
   try {
     // Delete remote branch
     try {
       execSync(`git push origin --delete ${branchName}`, {
-        cwd: process.cwd(),
+        cwd: workingDirectory,
         stdio: 'pipe'
       });
     } catch (e) {
@@ -296,14 +298,14 @@ export function rollbackPR(branchName: string): void {
 
     // Return to main
     try {
-      execSync('git checkout main', { cwd: process.cwd(), stdio: 'pipe' });
+      execSync('git checkout main', { cwd: workingDirectory, stdio: 'pipe' });
     } catch {
-      execSync('git checkout master', { cwd: process.cwd(), stdio: 'pipe' });
+      execSync('git checkout master', { cwd: workingDirectory, stdio: 'pipe' });
     }
 
     // Delete local branch
     execSync(`git branch -D ${branchName}`, {
-      cwd: process.cwd(),
+      cwd: workingDirectory,
       stdio: 'pipe'
     });
 
