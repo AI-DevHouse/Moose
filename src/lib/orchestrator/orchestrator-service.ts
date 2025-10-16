@@ -10,6 +10,9 @@ import { pushBranchAndCreatePR, rollbackPR } from './github-integration';
 import { trackSuccessfulExecution, trackFailedExecution } from './result-tracker';
 import { CapacityManager } from './capacity-manager';
 import { executionEvents } from '@/lib/event-emitter';
+import { validateWorkOrderAcceptance } from '@/lib/acceptance-validator';
+import { projectService } from '@/lib/project-service';
+import { createSupabaseServiceClient } from '@/lib/supabase';
 
 /**
  * Orchestrator Service (Singleton)
@@ -20,7 +23,8 @@ import { executionEvents } from '@/lib/event-emitter';
  * 3. Generate code via Proposer
  * 4. Apply code via Aider
  * 5. Create PR on GitHub
- * 6. Track results in database
+ * 6. Validate acceptance (Phase 4) - 5-dimension quality scoring
+ * 7. Track results in database
  */
 export class OrchestratorService {
   private static instance: OrchestratorService;
@@ -272,11 +276,11 @@ export class OrchestratorService {
       }
 
       // 5. Create PR on GitHub
-      console.log(`[Orchestrator] Step 4/5: Creating PR for WO ${workOrderId}`);
+      console.log(`[Orchestrator] Step 4/6: Creating PR for WO ${workOrderId}`);
       executionEvents.emit(workOrderId, {
         type: 'progress',
         message: `Creating pull request...`,
-        progress: 90
+        progress: 85
       });
       let prResult;
       try {
@@ -288,8 +292,54 @@ export class OrchestratorService {
         throw error;
       }
 
-      // 6. Track successful execution
-      console.log(`[Orchestrator] Step 5/5: Tracking results for WO ${workOrderId}`);
+      // 6. Run acceptance validation (Phase 4)
+      console.log(`[Orchestrator] Step 5/6: Running acceptance validation for WO ${workOrderId}`);
+      executionEvents.emit(workOrderId, {
+        type: 'progress',
+        message: `Validating work order quality...`,
+        progress: 92
+      });
+
+      try {
+        // Get project path
+        const project = await projectService.getProject(wo.project_id);
+        if (!project) {
+          throw new Error(`Project ${wo.project_id} not found for acceptance validation`);
+        }
+
+        // Run acceptance validation
+        const acceptance = await validateWorkOrderAcceptance(
+          workOrderId,
+          prResult.pr_url,
+          project.local_path
+        );
+
+        // Store acceptance result and update status
+        const supabase = createSupabaseServiceClient();
+        const newStatus = acceptance.acceptance_score >= 7 ? 'completed' : 'needs_review';
+
+        await supabase.from('work_orders').update({
+          acceptance_result: acceptance,
+          status: newStatus
+        }).eq('id', workOrderId);
+
+        console.log(
+          `[Orchestrator] Acceptance validation complete: ${acceptance.acceptance_score.toFixed(1)}/10 ` +
+          `(status: ${newStatus})`
+        );
+
+        executionEvents.emit(workOrderId, {
+          type: 'progress',
+          message: `Acceptance score: ${acceptance.acceptance_score.toFixed(1)}/10`,
+          progress: 95
+        });
+      } catch (error: any) {
+        console.warn(`[Orchestrator] Acceptance validation failed (non-fatal): ${error.message}`);
+        // Continue - acceptance validation failure is not fatal
+      }
+
+      // 7. Track successful execution
+      console.log(`[Orchestrator] Step 6/6: Tracking results for WO ${workOrderId}`);
       await trackSuccessfulExecution(wo, routingDecision, proposerResponse, aiderResult, prResult);
 
       const executionTime = Date.now() - startTime;

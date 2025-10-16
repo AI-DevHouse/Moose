@@ -15,7 +15,7 @@
 ## 1. ORIENTATION
 Project: **Moose Mission Control**
 Background rules → [SESSION_HANDOVER_MASTER.md](C:\dev\moose-mission-control\docs\session_updates\SESSION_HANDOVER_MASTER.md)
-Current state → [session-v79-20251014-1545-handover.md](C:\dev\moose-mission-control\docs\session_updates\session-v79-20251014-1545-handover.md)
+Current state → [session-v82-20251015-1030-handover.md](C:\dev\moose-mission-control\docs\session_updates\session-v82-20251015-1030-handover.md)
 
 ---
 
@@ -28,16 +28,16 @@ Current state → [session-v79-20251014-1545-handover.md](C:\dev\moose-mission-c
 ---
 
 ## 3. TODAY'S WORKFLOW
-1️⃣ Continue from v79 Next Actions.
-2️⃣ Document progress in a new `session-v80-…-handover.md`.
-3️⃣ Keep updates short (≤5 bullets); store logs under `/evidence/v80/`.
+1️⃣ Continue from v82 Next Actions.
+2️⃣ Document progress in a new `session-v83-…-handover.md`.
+3️⃣ Keep updates short (≤5 bullets); store logs under `/evidence/v83/`.
 4️⃣ If unexpected behaviour → pause and verify code/schema before changes.
 
 ---
 
 ## 4. WRAP-UP
-📝 Create v80 handover using MASTER §9 template.
-📂 Archive handovers older than v77 → `archive\`.
+📝 Create v83 handover using MASTER §9 template.
+📂 Archive handovers older than v80 → `archive\`.
 
 ---
 
@@ -45,7 +45,7 @@ Current state → [session-v79-20251014-1545-handover.md](C:\dev\moose-mission-c
 | Purpose | File | Path |
 |----------|------|------|
 | Rules | MASTER | docs\session_updates\ |
-| Last Session | v79 | docs\session_updates\ |
+| Last Session | v82 | docs\session_updates\ |
 | Evidence | evidence\ | docs\session_updates\evidence\ |
 | Archive | archive\ | docs\session_updates\archive\ |
 
