@@ -1,0 +1,47 @@
+
+📊 Proposer Execution Metrics (Last 9 WOs)
+
+================================================================================
+
+📈 Summary Statistics:
+   Total WOs analyzed: 9
+   Success rate: 100.0% (9/9 succeeded)
+   Failed: 0
+   Avg refinement cycles: 1.89
+   Avg execution time: 85.4s
+   Avg tokens: 1121
+
+📊 Refinement Cycle Distribution:
+   0        cycles: █ 1 WOs (11.1%)
+   2        cycles: ████ 7 WOs (77.8%)
+   3        cycles: █ 1 WOs (11.1%)
+
+🔍 Recent WOs (showing top 20):
+   WO ID    | Status      | Cycles | Time(s) | Tokens | Proposer       | PR
+   -------------------------------------------------------------------------------------
+   fecb2578 | in_progress |      0 |      27 |    698 | gpt-4o-mini    | ✓
+   69e79c2c | in_progress |      2 |      89 |   1537 | gpt-4o-mini    | ✓
+   b3b3a718 | in_progress |      2 |      89 |   1298 | gpt-4o-mini    | ✓
+   7940eac5 | in_progress |      2 |      90 |    967 | gpt-4o-mini    | ✓
+   daa554b8 | in_progress |      3 |     115 |   1151 | gpt-4o-mini    | ✓
+   4887b8d2 | in_progress |      2 |      89 |   1092 | gpt-4o-mini    | ✓
+   eb88e4fb | in_progress |      2 |      89 |    998 | gpt-4o-mini    | ✓
+   5c9be44d | in_progress |      2 |      89 |   1251 | gpt-4o-mini    | ✓
+   a2909860 | in_progress |      2 |      89 |   1096 | gpt-4o-mini    | ✓
+
+💡 Observations:
+   ℹ️  ERROR TRACKING NOT YET IMPLEMENTED
+   ℹ️  Current metrics: refinement cycles, execution time, token usage
+   ℹ️  Future metrics: initial errors, final errors, sanitizer fixes
+
+   ✅ Success rate 100.0% meets target (≥90%)
+   ✅ Good refinement efficiency (≤2 avg cycles)
+
+📝 Next Steps:
+   1. Implement error tracking in enhanced-proposer-service.ts
+   2. Capture TypeScript compilation errors before/after sanitization
+   3. Track sanitizer fixes per refinement cycle
+   4. Store in proposer_response metadata or separate table
+   5. Run this script again after 20+ WOs with error tracking enabled
+
+================================================================================
