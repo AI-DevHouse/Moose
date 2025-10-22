@@ -85,6 +85,20 @@ Controls automatic WO-0 generation for greenfield projects.
     - Established-projects-only mode
     - Temporary disable during system maintenance
 
+### Aider Execution Configuration
+
+Controls Aider code generation process behavior.
+
+- **AIDER_TIMEOUT_MS**
+  - Default: `300000` (5 minutes)
+  - Maximum time in milliseconds for Aider to complete code generation
+  - Increase for complex WOs that require more time
+  - Recommendation:
+    - Simple WOs: 300000 (5 min)
+    - Complex UI/multi-file WOs: 600000 (10 min)
+    - Large refactoring: 900000 (15 min)
+  - If timeout occurs, exit code will be `null` and error indicates timeout
+
 ---
 
 ## Example .env.local
@@ -113,6 +127,9 @@ WORKTREE_CLEANUP_ON_STARTUP=false
 
 # Bootstrap System
 DISABLE_BOOTSTRAP_INJECTION=false
+
+# Aider Execution
+AIDER_TIMEOUT_MS=300000
 ```
 
 ---

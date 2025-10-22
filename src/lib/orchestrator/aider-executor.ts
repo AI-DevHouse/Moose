@@ -259,6 +259,11 @@ export async function executeAider(
     const maxRetries = 1; // Retry once if Git detection fails
     let gitDetectionFailed = false;
 
+    // Configurable timeout (default: 5 minutes)
+    // Can be increased for complex WOs via AIDER_TIMEOUT_MS env var
+    const aiderTimeoutMs = parseInt(process.env.AIDER_TIMEOUT_MS || '300000', 10);
+    console.log(`[AiderExecutor] Aider timeout set to ${aiderTimeoutMs}ms (${aiderTimeoutMs / 1000}s)`);
+
     const spawnAider = (): void => {
       // Use Python 3.11 to run Aider (installed via: py -3.11 -m pip install aider-chat)
       const aiderProcess = spawn('py', ['-3.11', '-m', 'aider', ...aiderArgs], {
@@ -270,7 +275,7 @@ export async function executeAider(
           GIT_DIR: gitDir,
           GIT_WORK_TREE: normalizedWorkingDir
         },
-        timeout: 300000 // 5 minutes
+        timeout: aiderTimeoutMs
       });
 
       let stdout = '';
@@ -330,6 +335,11 @@ export async function executeAider(
             stdout,
             stderr
           });
+        } else if (code === null) {
+          // Exit code null = process killed by signal (timeout, OOM, external termination)
+          console.error(`[AiderExecutor] Aider process terminated (exit code null) - likely timeout after ${aiderTimeoutMs / 1000}s`);
+          const errorMsg = stderr.trim() || stdout.slice(-500).trim() || 'No output captured';
+          reject(new Error(`Aider process terminated (likely timeout after ${aiderTimeoutMs / 1000}s). Last output: ${errorMsg}`));
         } else {
           console.error(`[AiderExecutor] Aider exited with code ${code}`);
           reject(new Error(`Aider exited with code ${code}: ${stderr}`));
