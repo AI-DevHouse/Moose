@@ -105,22 +105,37 @@ export function buildPRBody(
  * @param branchName - Feature branch name
  * @param routingDecision - Manager routing decision
  * @param proposerResponse - Proposer response
+ * @param worktreePath - Optional worktree path (overrides project.local_path for concurrent execution)
  * @returns PR result with URL and number
  */
 export async function pushBranchAndCreatePR(
   wo: WorkOrder,
   branchName: string,
   routingDecision: RoutingDecision,
-  proposerResponse: EnhancedProposerResponse
+  proposerResponse: EnhancedProposerResponse,
+  worktreePath?: string
 ): Promise<GitHubPRResult> {
   console.log(`[GitHubIntegration] Pushing branch and creating PR for WO ${wo.id}`);
 
   try {
     // Get working directory and repo name (if project_id exists)
-    let workingDirectory = process.cwd();
+    let workingDirectory: string;
     let repoName: string | null = null;
 
-    if (wo.project_id) {
+    if (worktreePath) {
+      // Use worktree path if provided (from worktree pool)
+      workingDirectory = worktreePath;
+      console.log(`[GitHubIntegration] Using worktree directory: ${workingDirectory}`);
+
+      // Still get repo name from project
+      if (wo.project_id) {
+        const project = await projectService.getProject(wo.project_id);
+        if (project && project.github_org && project.github_repo_name) {
+          repoName = `${project.github_org}/${project.github_repo_name}`;
+          console.log(`[GitHubIntegration] Target repository: ${repoName}`);
+        }
+      }
+    } else if (wo.project_id) {
       const project = await projectService.getProject(wo.project_id);
       if (project) {
         workingDirectory = project.local_path;
@@ -132,7 +147,11 @@ export async function pushBranchAndCreatePR(
         if (repoName) {
           console.log(`[GitHubIntegration] Target repository: ${repoName}`);
         }
+      } else {
+        workingDirectory = process.cwd();
       }
+    } else {
+      workingDirectory = process.cwd();
     }
 
     // 1. Push branch to remote

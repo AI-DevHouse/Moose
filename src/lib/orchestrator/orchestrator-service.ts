@@ -1,7 +1,7 @@
 // Orchestrator Service - Main coordinator for Work Order execution
 
 import { handleCriticalError } from '@/lib/error-escalation';
-import type { OrchestratorStatus, ExecutionResult, WorkOrder } from './types';
+import type { OrchestratorStatus, ExecutionResult, WorkOrder, WorktreeHandle } from './types';
 import { pollPendingWorkOrders, getWorkOrder } from './work-order-poller';
 import { getRoutingDecision } from './manager-coordinator';
 import { generateCode } from './proposer-executor';
@@ -13,6 +13,7 @@ import { executionEvents } from '@/lib/event-emitter';
 import { validateWorkOrderAcceptance } from '@/lib/acceptance-validator';
 import { projectService } from '@/lib/project-service';
 import { createSupabaseServiceClient } from '@/lib/supabase';
+import { WorktreePoolManager } from './worktree-pool';
 
 /**
  * Orchestrator Service (Singleton)
@@ -56,7 +57,7 @@ export class OrchestratorService {
    *
    * @param intervalMs - Polling interval in milliseconds (default 10000)
    */
-  public startPolling(intervalMs: number = 10000): void {
+  public async startPolling(intervalMs: number = 10000): Promise<void> {
     if (this.pollingInterval) {
       console.log('[Orchestrator] Polling already started');
       return;
@@ -65,6 +66,30 @@ export class OrchestratorService {
     this.pollingIntervalMs = intervalMs;
 
     console.log(`[Orchestrator] Starting polling with interval ${intervalMs}ms`);
+
+    // Initialize worktree pool if enabled
+    const worktreePool = WorktreePoolManager.getInstance();
+    if (worktreePool.isEnabled()) {
+      try {
+        // Get the target project (assume first active project for now)
+        const projects = await projectService.listProjects('active');
+        const targetProject = projects.find(p => p.name === 'multi-llm-discussion-v1');
+
+        if (targetProject) {
+          const poolSize = parseInt(process.env.WORKTREE_POOL_SIZE || '15', 10);
+          console.log(`[Orchestrator] Initializing worktree pool with ${poolSize} worktrees...`);
+          await worktreePool.initialize(targetProject, poolSize);
+          console.log('[Orchestrator] Worktree pool initialized successfully');
+        } else {
+          console.warn('[Orchestrator] Target project not found, worktree pool disabled');
+        }
+      } catch (error: any) {
+        console.error('[Orchestrator] Failed to initialize worktree pool:', error.message);
+        console.warn('[Orchestrator] Continuing without worktree pool (shared directory mode)');
+      }
+    } else {
+      console.log('[Orchestrator] Worktree pool disabled (WORKTREE_POOL_ENABLED=false)');
+    }
 
     // Start polling immediately
     this.poll();
@@ -78,11 +103,23 @@ export class OrchestratorService {
   /**
    * Stop polling
    */
-  public stopPolling(): void {
+  public async stopPolling(): Promise<void> {
     if (this.pollingInterval) {
       clearInterval(this.pollingInterval);
       this.pollingInterval = null;
       console.log('[Orchestrator] Polling stopped');
+
+      // Cleanup worktree pool
+      const worktreePool = WorktreePoolManager.getInstance();
+      if (worktreePool.isEnabled()) {
+        try {
+          console.log('[Orchestrator] Cleaning up worktree pool...');
+          await worktreePool.cleanup();
+          console.log('[Orchestrator] Worktree pool cleanup complete');
+        } catch (error: any) {
+          console.error('[Orchestrator] Failed to cleanup worktree pool:', error.message);
+        }
+      }
     } else {
       console.log('[Orchestrator] Polling not active');
     }
@@ -174,7 +211,9 @@ export class OrchestratorService {
   public async executeWorkOrder(workOrderId: string): Promise<ExecutionResult> {
     const startTime = Date.now();
     const capacityManager = CapacityManager.getInstance();
+    const worktreePool = WorktreePoolManager.getInstance();
     let modelName: string | null = null;
+    let worktreeHandle: WorktreeHandle | null = null;
 
     // Mark as executing
     this.executingWorkOrders.add(workOrderId);
@@ -194,6 +233,13 @@ export class OrchestratorService {
       if (!wo) {
         throw new Error(`Work Order ${workOrderId} not found`);
       }
+
+      // Update status to 'in_progress' in database
+      const supabase = createSupabaseServiceClient();
+      await supabase
+        .from('work_orders')
+        .update({ status: 'in_progress' })
+        .eq('id', workOrderId);
 
       executionEvents.emit(workOrderId, {
         type: 'progress',
@@ -250,7 +296,19 @@ export class OrchestratorService {
         throw error;
       }
 
-      // 4. Apply code via Aider
+      // 4. Lease worktree (if pool enabled)
+      if (worktreePool.isEnabled()) {
+        console.log(`[Orchestrator] Leasing worktree for WO ${workOrderId}`);
+        try {
+          worktreeHandle = await worktreePool.leaseWorktree(workOrderId);
+          console.log(`[Orchestrator] Leased ${worktreeHandle.id} for WO ${workOrderId}`);
+        } catch (error: any) {
+          console.error(`[Orchestrator] Failed to lease worktree: ${error.message}`);
+          throw error;
+        }
+      }
+
+      // 5. Apply code via Aider
       console.log(`[Orchestrator] Step 3/5: Applying code via Aider for WO ${workOrderId}`);
       executionEvents.emit(workOrderId, {
         type: 'progress',
@@ -259,7 +317,12 @@ export class OrchestratorService {
       });
       let aiderResult;
       try {
-        aiderResult = await executeAider(wo, proposerResponse, routingDecision.selected_proposer);
+        aiderResult = await executeAider(
+          wo,
+          proposerResponse,
+          routingDecision.selected_proposer,
+          worktreeHandle?.path  // Pass worktree path if available
+        );
 
         executionEvents.emit(workOrderId, {
           type: 'progress',
@@ -275,7 +338,7 @@ export class OrchestratorService {
         throw error;
       }
 
-      // 5. Create PR on GitHub
+      // 6. Create PR on GitHub
       console.log(`[Orchestrator] Step 4/6: Creating PR for WO ${workOrderId}`);
       executionEvents.emit(workOrderId, {
         type: 'progress',
@@ -284,8 +347,8 @@ export class OrchestratorService {
       });
 
       // Get working directory for potential rollback
-      let workingDirectory = process.cwd();
-      if (wo.project_id) {
+      let workingDirectory = worktreeHandle?.path || process.cwd();
+      if (!worktreeHandle && wo.project_id) {
         const project = await projectService.getProject(wo.project_id);
         if (project) {
           workingDirectory = project.local_path;
@@ -294,7 +357,13 @@ export class OrchestratorService {
 
       let prResult;
       try {
-        prResult = await pushBranchAndCreatePR(wo, aiderResult.branch_name, routingDecision, proposerResponse);
+        prResult = await pushBranchAndCreatePR(
+          wo,
+          aiderResult.branch_name,
+          routingDecision,
+          proposerResponse,
+          worktreeHandle?.path  // Pass worktree path if available
+        );
       } catch (error: any) {
         await trackFailedExecution(wo, error, 'github');
         // Rollback PR (will also rollback Aider branch)
@@ -302,7 +371,7 @@ export class OrchestratorService {
         throw error;
       }
 
-      // 6. Run acceptance validation (Phase 4)
+      // 7. Run acceptance validation (Phase 4)
       console.log(`[Orchestrator] Step 5/6: Running acceptance validation for WO ${workOrderId}`);
       executionEvents.emit(workOrderId, {
         type: 'progress',
@@ -311,17 +380,26 @@ export class OrchestratorService {
       });
 
       try {
-        // Get project path
-        const project = await projectService.getProject(wo.project_id);
-        if (!project) {
-          throw new Error(`Project ${wo.project_id} not found for acceptance validation`);
+        // Get project path (use worktree path if available, otherwise project.local_path)
+        let projectPath: string;
+        if (worktreeHandle?.path) {
+          projectPath = worktreeHandle.path;
+        } else {
+          if (!wo.project_id) {
+            throw new Error('Work order has no project_id and no worktree path for acceptance validation');
+          }
+          const project = await projectService.getProject(wo.project_id);
+          if (!project) {
+            throw new Error(`Project ${wo.project_id} not found for acceptance validation`);
+          }
+          projectPath = project.local_path;
         }
 
         // Run acceptance validation
         const acceptance = await validateWorkOrderAcceptance(
           workOrderId,
           prResult.pr_url,
-          project.local_path
+          projectPath
         );
 
         // Store acceptance result and update status
@@ -348,7 +426,7 @@ export class OrchestratorService {
         // Continue - acceptance validation failure is not fatal
       }
 
-      // 7. Track successful execution
+      // 8. Track successful execution
       console.log(`[Orchestrator] Step 6/6: Tracking results for WO ${workOrderId}`);
       await trackSuccessfulExecution(wo, routingDecision, proposerResponse, aiderResult, prResult);
 
@@ -421,6 +499,17 @@ export class OrchestratorService {
       // Release capacity
       if (modelName) {
         capacityManager.releaseCapacity(modelName, workOrderId);
+      }
+
+      // Release worktree
+      if (worktreeHandle) {
+        try {
+          console.log(`[Orchestrator] Releasing ${worktreeHandle.id} from WO ${workOrderId}`);
+          await worktreePool.releaseWorktree(worktreeHandle);
+        } catch (error: any) {
+          console.error(`[Orchestrator] Failed to release worktree: ${error.message}`);
+          // Non-fatal - continue
+        }
       }
     }
   }

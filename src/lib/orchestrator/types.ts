@@ -71,3 +71,20 @@ export interface WorkOrder {
   created_at: string;
   updated_at: string;
 }
+
+// Worktree Pool types
+export interface WorktreeHandle {
+  id: string;                    // e.g., "wt-1"
+  path: string;                  // e.g., "C:\dev\multi-llm-discussion-v1-wt-1"
+  project_id: string;
+  leased_to: string | null;      // work_order_id (null if available)
+  leased_at: Date | null;
+}
+
+export interface WorktreePoolStatus {
+  total: number;
+  available: number;
+  leased: number;
+  waiters: number;
+  leasedWorktrees: Map<string, WorktreeHandle>;  // workOrderId → handle
+}

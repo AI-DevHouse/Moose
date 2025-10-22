@@ -109,18 +109,8 @@ export async function createFeatureBranch(
       });
 
       if (branchList.includes(branchName)) {
-        console.log(`[AiderExecutor] Branch ${branchName} already exists, deleting it first`);
-
-        // Switch to main/master if we're on the branch we want to delete
-        if (currentBranch === branchName) {
-          try {
-            execSync('git checkout main', { cwd: workingDirectory, stdio: 'pipe' });
-          } catch {
-            execSync('git checkout master', { cwd: workingDirectory, stdio: 'pipe' });
-          }
-        }
-
-        // Delete the existing branch
+        console.log(`[AiderExecutor] Branch ${branchName} already exists, deleting it`);
+        // Force delete the existing branch (no need to switch away first since we're in detached HEAD)
         execSync(`git branch -D ${branchName}`, { cwd: workingDirectory, stdio: 'pipe' });
         console.log(`[AiderExecutor] Deleted existing branch ${branchName}`);
       }
@@ -128,19 +118,10 @@ export async function createFeatureBranch(
       console.log(`[AiderExecutor] No existing branch to delete or error checking branches`);
     }
 
-    // CRITICAL FIX: Always checkout main before creating feature branch
-    // This prevents cascading branch contamination when multiple WOs execute sequentially
-    console.log(`[AiderExecutor] Checking out main branch before creating feature branch`);
-    try {
-      execSync('git checkout main', { cwd: workingDirectory, stdio: 'pipe' });
-    } catch {
-      // Try master if main doesn't exist
-      execSync('git checkout master', { cwd: workingDirectory, stdio: 'pipe' });
-    }
-
-    console.log(`[AiderExecutor] Creating feature branch from main`);
-
-    // Create feature branch from main
+    // Create feature branch directly from current HEAD (which is at main's commit)
+    // Worktrees are created with --detach flag, so HEAD is already at the correct commit
+    // No need to checkout main (which would fail since main is locked by parent worktree)
+    console.log(`[AiderExecutor] Creating feature branch from current HEAD (detached at main)`);
     execSync(`git checkout -b ${branchName}`, { cwd: workingDirectory, stdio: 'pipe' });
 
     console.log(`[AiderExecutor] Feature branch created successfully`);
@@ -168,12 +149,14 @@ export async function createFeatureBranch(
  * @param wo - Work Order
  * @param proposerResponse - Proposer response
  * @param selectedProposer - Model selected by Manager
+ * @param worktreePath - Optional worktree path (overrides project.local_path for concurrent execution)
  * @returns Aider execution result
  */
 export async function executeAider(
   wo: WorkOrder,
   proposerResponse: EnhancedProposerResponse,
-  selectedProposer: string
+  selectedProposer: string,
+  worktreePath?: string
 ): Promise<AiderResult> {
   console.log(`[AiderExecutor] Starting Aider execution for WO ${wo.id}`);
 
@@ -181,9 +164,13 @@ export async function executeAider(
   validateWorkOrderSafety(wo.id, wo.project_id);
 
   // 1. Get and validate project (if project_id exists)
-  let workingDirectory = process.cwd(); // Default: current directory (for backward compatibility)
+  let workingDirectory: string;
 
-  if (wo.project_id) {
+  if (worktreePath) {
+    // Use worktree path if provided (from worktree pool)
+    workingDirectory = worktreePath;
+    console.log(`[AiderExecutor] Using worktree directory: ${workingDirectory}`);
+  } else if (wo.project_id) {
     console.log(`[AiderExecutor] Work order linked to project: ${wo.project_id}`);
 
     // Validate project and get working directory
@@ -192,6 +179,8 @@ export async function executeAider(
 
     console.log(`[AiderExecutor] Using project directory: ${workingDirectory}`);
   } else {
+    // Default: current directory (for backward compatibility)
+    workingDirectory = process.cwd();
     console.warn(
       `[AiderExecutor] ⚠️  Work order ${wo.id} has no project_id. ` +
       `Executing in current directory: ${workingDirectory}`
@@ -223,18 +212,38 @@ export async function executeAider(
 
   console.log(`[AiderExecutor] Executing Aider with model ${aiderModel} on ${files.length} files`);
 
-  // 6. Set explicit Git environment variables for Aider (fix for Git detection race condition)
-  // Issue: When multiple Aider processes spawn concurrently, Aider's Git detection fails intermittently
-  // Solution: Explicitly set GIT_DIR and GIT_WORK_TREE environment variables
+  // 6. Set explicit Git environment variables for Aider (fix for Git detection in worktrees)
+  // Issue: Worktrees have .git as a file (not directory) containing "gitdir: <path>"
+  // Solution: Read .git file in worktrees to extract actual git directory path
   // These are standard Git environment variables that all Git tools respect
   // Important: Normalize paths to use forward slashes for Python/GitPython compatibility
-  const gitDir = path.join(workingDirectory, '.git').replace(/\\/g, '/');
+  const gitFilePath = path.join(workingDirectory, '.git');
+  let gitDir: string;
+
+  if (fs.existsSync(gitFilePath) && fs.statSync(gitFilePath).isFile()) {
+    // Worktree: .git is a file with "gitdir: <path>"
+    const gitFileContent = fs.readFileSync(gitFilePath, 'utf-8').trim();
+    const match = gitFileContent.match(/^gitdir:\s*(.+)$/);
+    if (match) {
+      gitDir = path.resolve(workingDirectory, match[1]).replace(/\\/g, '/');
+      console.log(`[AiderExecutor] Detected worktree, resolved GIT_DIR from .git file`);
+    } else {
+      // Fallback if .git file format is unexpected
+      gitDir = gitFilePath.replace(/\\/g, '/');
+      console.warn(`[AiderExecutor] Unexpected .git file format, using as-is`);
+    }
+  } else {
+    // Main repo: .git is a directory
+    gitDir = gitFilePath.replace(/\\/g, '/');
+    console.log(`[AiderExecutor] Detected main repository`);
+  }
+
   const normalizedWorkingDir = workingDirectory.replace(/\\/g, '/');
   console.log(`[AiderExecutor] Setting GIT_DIR=${gitDir}, GIT_WORK_TREE=${normalizedWorkingDir}`);
 
   // 7. Spawn Aider process in project directory with Git detection retry logic
-  // Issue: First Aider execution may fail Git detection ("Git repo: none") due to race condition
-  // Solution: Retry once after 2 seconds if Git detection fails
+  // Note: With proper GIT_DIR resolution above, Git detection should now work reliably
+  // Retry logic remains as a backup for edge cases
   return new Promise(async (resolve, reject) => {
     const aiderArgs = [
       '--message-file', instructionPath,
