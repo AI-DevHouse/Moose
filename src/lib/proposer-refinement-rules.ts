@@ -5,6 +5,7 @@
 import { parseTypeScriptErrors, type TypeScriptError } from './complexity-analyzer';
 import type { ProposerRequest } from './enhanced-proposer-service';
 import { sanitizeTypeScript } from './code-sanitizer';
+import { validateAndLogExtraction, autoCleanExtraction, extractFromMarkdownFence } from './extraction-validator';
 
 // Refinement thresholds (easily modifiable)
 export const REFINEMENT_THRESHOLDS = {
@@ -199,6 +200,13 @@ Requirements:
 4. Function signatures must have proper type annotations
 5. No syntax errors
 
+OUTPUT FORMAT - CRITICAL:
+- Provide ONLY raw TypeScript code
+- Do NOT wrap in markdown code fences (\`\`\`)
+- Do NOT include explanatory text
+- Start immediately with import statements or code
+- Template literals with backticks are fine - just don't use markdown formatting
+
 Provide ONLY the corrected code without explanation.`;
 }
 
@@ -224,7 +232,28 @@ export async function attemptSelfRefinement(
   const sanitizerCycleChanges: Array<{ cycle: number; changes: string[] }> = [];
   let totalSanitizerFunctions = 0;
 
-  // Pre-process original content to fix mechanical issues
+  // STEP 0: Pre-extraction - unwrap markdown fences if present
+  const preExtracted = extractFromMarkdownFence(currentContent);
+  if (preExtracted !== currentContent) {
+    console.log('📦 EXTRACTION: Unwrapped content from markdown code fence');
+    currentContent = preExtracted;
+  }
+
+  // STEP 1: Validate extraction BEFORE sanitization
+  const initialValidation = validateAndLogExtraction(currentContent, 'Initial generation');
+  if (!initialValidation.valid) {
+    console.warn('⚠️ EXTRACTION ISSUES DETECTED - Attempting auto-clean...');
+    const cleaned = autoCleanExtraction(currentContent);
+    const revalidation = validateAndLogExtraction(cleaned, 'After auto-clean');
+    if (revalidation.severity === 'clean' || revalidation.severity === 'warning') {
+      currentContent = cleaned;
+      console.log('✅ Auto-clean successful');
+    } else {
+      console.error('❌ Auto-clean failed to resolve critical issues - proceeding with caution');
+    }
+  }
+
+  // STEP 2: Pre-process original content to fix mechanical issues
   const sanitizerResult = sanitizeTypeScript(currentContent);
   if (sanitizerResult.changes_made.length > 0) {
     console.log(`🧹 SANITIZER: Auto-fixed ${sanitizerResult.changes_made.length} issue(s): ${sanitizerResult.changes_made.join(', ')}`);
@@ -310,6 +339,23 @@ export async function attemptSelfRefinement(
     });
 
     currentContent = refinedResponse.content;
+
+    // Pre-extraction for this cycle - unwrap markdown fences if present
+    const cyclePreExtracted = extractFromMarkdownFence(currentContent);
+    if (cyclePreExtracted !== currentContent) {
+      console.log(`   📦 Extraction: Unwrapped content from markdown fence in cycle ${refinementCount}`);
+      currentContent = cyclePreExtracted;
+    }
+
+    // Validate extraction for this cycle
+    const cycleValidation = validateAndLogExtraction(currentContent, `Refinement Cycle ${refinementCount}`);
+    if (!cycleValidation.valid) {
+      console.warn(`   ⚠️ Extraction issues in cycle ${refinementCount} - attempting auto-clean...`);
+      const cycleRevalidation = validateAndLogExtraction(autoCleanExtraction(currentContent), `Cycle ${refinementCount} after clean`);
+      if (cycleRevalidation.severity !== 'critical') {
+        currentContent = autoCleanExtraction(currentContent);
+      }
+    }
 
     // Sanitize refined code before checking errors
     const cycleSanitizerResult = sanitizeTypeScript(currentContent);

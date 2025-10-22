@@ -103,153 +103,6 @@ export class EnhancedProposerService {
   };
   private dependencyContextCache: Map<string, string> = new Map();
 
-  /**
-   * Concise code quality rules for GPT-4o-mini (position-optimized, 5 core rules)
-   * Used in sandwich structure: top constraints + bottom reminder
-   */
-  private readonly CONCISE_CODE_RULES = `CRITICAL RULES (MANDATORY):
-1. NO PLACEHOLDERS - Complete functional code only (no TODOs, no hardcoded returns)
-2. ERROR HANDLING - try-catch for: fs, fetch, IPC, DB operations
-3. INPUT VALIDATION - Check type/range/format on all public methods
-4. CONTEXT AWARENESS - Main=Node.js (Vitest), Renderer=Browser (React)
-5. CLEANUP - Remove listeners, clear timers, close handles`;
-
-  /**
-   * Detailed code quality rules for Claude (handles context better, full 80-line version)
-   * Provides comprehensive guidance with examples
-   */
-  private readonly DETAILED_CODE_RULES = `
-CRITICAL IMPLEMENTATION RULES:
-
-1. NO PLACEHOLDER CODE (MANDATORY)
-   ❌ NEVER write TODO comments in production code
-   ❌ NEVER return hardcoded success values (true, 0, empty string, null)
-   ❌ NEVER create empty method bodies with comments like "// Placeholder for..."
-   ❌ NEVER write stub implementations
-   ✅ ALWAYS implement complete, functional code
-   ✅ If you cannot implement something, state why explicitly and provide minimal viable implementation
-
-2. ERROR HANDLING (REQUIRED FOR ALL EXTERNAL OPERATIONS)
-   ALL external operations MUST be wrapped in try-catch:
-   - File system operations (fs.readFile, fs.writeFile, etc.)
-   - Network requests (fetch, axios, etc.)
-   - Database queries (Supabase, SQL, etc.)
-   - IPC calls (ipcMain, ipcRenderer, etc.)
-   - System APIs (clipboard, focus, window management, etc.)
-
-   Required pattern:
-   \`\`\`typescript
-   try {
-     const result = await externalOperation()
-     if (!result) {
-       throw new Error('Operation failed: specific reason')
-     }
-     return result
-   } catch (error) {
-     logger.error('Context about what failed', error)
-     throw new CustomError('User-friendly message', { cause: error })
-   }
-   \`\`\`
-
-   NEVER:
-   ❌ Catch and ignore errors silently
-   ❌ Return success when operation actually failed
-   ❌ Use generic error messages ("Something went wrong")
-
-3. INPUT VALIDATION (REQUIRED FOR ALL PUBLIC METHODS)
-   EVERY public method MUST validate inputs:
-   - Type checking (typeof, instanceof)
-   - Range checking (min/max bounds, array length)
-   - Format checking (regex for patterns)
-   - State checking (valid in current state?)
-   - Precondition checking (dependencies met?)
-
-   Example:
-   \`\`\`typescript
-   public startWorkflow(content: string): void {
-     if (typeof content !== 'string') {
-       throw new TypeError('content must be string')
-     }
-     if (content.trim().length === 0) {
-       throw new Error('content cannot be empty')
-     }
-     if (this.state !== 'idle') {
-       throw new Error(\`Cannot start in state: \${this.state}\`)
-     }
-     // Now safe to proceed
-   }
-   \`\`\`
-
-4. TECHNOLOGY CONTEXT AWARENESS
-   Before choosing libraries/frameworks, verify execution context:
-
-   Electron Main Process (Node.js):
-   - Use: fs, path, child_process, native modules
-   - Testing: Vitest, Jest (Node mode)
-   - ❌ NO React, @testing-library/react, DOM APIs
-
-   Electron Renderer Process (Chromium):
-   - Use: DOM, window, React/Vue
-   - Testing: @testing-library/react, Vitest (jsdom)
-   - ❌ NO direct Node.js APIs (fs, child_process)
-
-   IPC Communication:
-   - Main→Renderer: webContents.send(), NOT EventEmitter
-   - Renderer→Main: ipcRenderer.invoke()
-   - Main↔Main: EventEmitter (stays in main process)
-
-5. RESOURCE MANAGEMENT
-   Every resource acquisition MUST have cleanup:
-   - Event listeners: Store and remove when done
-   - Timers: Store timeout/interval IDs and clear them
-   - File handles: Close in finally blocks
-   - Implement destroy/cleanup methods for classes`;
-
-  /**
-   * Extract numbered requirements from task description
-   * Converts bullet points to numbered list for better model compliance
-   */
-  private extractNumberedRequirements(request: ProposerRequest): string {
-    const lines = request.task_description.split('\n');
-    const requirements: string[] = [];
-
-    lines.forEach(line => {
-      const trimmed = line.trim();
-      if (trimmed.startsWith('-') || trimmed.startsWith('•') || trimmed.startsWith('*')) {
-        requirements.push(trimmed.replace(/^[-•*]\s*/, ''));
-      }
-    });
-
-    if (requirements.length === 0) {
-      return `1. ${request.task_description}`;
-    }
-
-    return requirements.map((req, i) => `${i + 1}. ${req}`).join('\n');
-  }
-
-  /**
-   * Estimate token count for text (rough approximation)
-   * Uses 1 token ≈ 4 characters heuristic
-   */
-  private estimateTokens(text: string): number {
-    return Math.ceil(text.length / 4);
-  }
-
-  /**
-   * Get critical reminders for sandwich structure (placed at end of prompt)
-   * Repeats top 3 most important rules to leverage recency effect
-   */
-  private getCriticalReminders(request: ProposerRequest, provider: 'anthropic' | 'openai'): string {
-    if (request.expected_output_type !== 'code') {
-      return `- Provide ${request.expected_output_type} focused on the requirements above`;
-    }
-
-    // Top 3 rules only - concise for both providers at the end
-    return `1. NO PLACEHOLDERS - Implement all functionality completely
-2. ERROR HANDLING - try-catch all external operations (fs, fetch, IPC, DB)
-3. OUTPUT FORMAT - Raw TypeScript code only, no \`\`\` markdown fences`;
-  }
-
   static getInstance(): EnhancedProposerService {
     if (!EnhancedProposerService.instance) {
       EnhancedProposerService.instance = new EnhancedProposerService();
@@ -263,18 +116,14 @@ CRITICAL IMPLEMENTATION RULES:
    * Cached per project to avoid repeated filesystem reads
    *
    * @param projectPath - Absolute path to target project (defaults to orchestrator's cwd)
-   * @param maxTokens - Maximum tokens to allocate for dependency context (undefined = no limit)
    */
-  private buildDependencyContext(projectPath?: string, maxTokens?: number): string {
+  private buildDependencyContext(projectPath?: string): string {
     // Default to orchestrator's directory if no project path provided
     const targetPath = projectPath || process.cwd();
 
-    // Build cache key including maxTokens to handle different truncation levels
-    const cacheKey = maxTokens ? `${targetPath}:${maxTokens}` : targetPath;
-
     // Return cached version if available
-    if (this.dependencyContextCache.has(cacheKey)) {
-      return this.dependencyContextCache.get(cacheKey)!;
+    if (this.dependencyContextCache.has(targetPath)) {
+      return this.dependencyContextCache.get(targetPath)!;
     }
 
     try {
@@ -314,44 +163,18 @@ CRITICAL IMPLEMENTATION RULES:
       }
 
       // Deduplicate and sort
-      const uniqueModules = Array.from(new Set(projectModules)).sort();
-
-      // Build full context first
-      let depCount = dependencies.length;
-      let devDepCount = devDependencies.length;
-      let moduleCount = uniqueModules.length;
-
-      // Apply token budget if specified
-      if (maxTokens) {
-        // Reserve ~200 tokens for labels and import rules
-        const availableTokens = maxTokens - 200;
-
-        // Allocate 50% to dependencies, 20% to devDeps, 30% to modules
-        const depTokens = Math.floor(availableTokens * 0.5);
-        const devTokens = Math.floor(availableTokens * 0.2);
-        const moduleTokens = Math.floor(availableTokens * 0.3);
-
-        // Estimate how many items fit (avg ~8 chars per package name = 2 tokens)
-        depCount = Math.min(depCount, Math.floor(depTokens / 2));
-        devDepCount = Math.min(devDepCount, Math.floor(devTokens / 2));
-        moduleCount = Math.min(moduleCount, Math.floor(moduleTokens / 3)); // Modules are longer paths
-      } else {
-        // Default limits when no budget specified
-        depCount = Math.min(depCount, 30);
-        devDepCount = Math.min(devDepCount, 15);
-        moduleCount = Math.min(moduleCount, 50);
-      }
+      const uniqueModules = Array.from(new Set(projectModules)).sort().slice(0, 50); // Limit to 50 to avoid huge prompts
 
       const context = `
 
 AVAILABLE DEPENDENCIES (installed in package.json):
-${dependencies.slice(0, depCount).join(', ')}${dependencies.length > depCount ? `, and ${dependencies.length - depCount} more` : ''}
+${dependencies.slice(0, 30).join(', ')}${dependencies.length > 30 ? `, and ${dependencies.length - 30} more` : ''}
 
 DEV DEPENDENCIES (available but prefer production deps):
-${devDependencies.slice(0, devDepCount).join(', ')}${devDependencies.length > devDepCount ? `, and ${devDependencies.length - devDepCount} more` : ''}
+${devDependencies.slice(0, 15).join(', ')}${devDependencies.length > 15 ? `, and ${devDependencies.length - 15} more` : ''}
 
 PROJECT MODULES (use these for internal imports with @/ alias):
-${uniqueModules.slice(0, moduleCount).length > 0 ? uniqueModules.slice(0, moduleCount).join('\n') : '(No project modules discovered - check directory structure)'}${uniqueModules.length > moduleCount ? `\n... and ${uniqueModules.length - moduleCount} more modules` : ''}
+${uniqueModules.length > 0 ? uniqueModules.join('\n') : '(No project modules discovered - check directory structure)'}
 
 IMPORT RULES:
 1. ONLY import packages listed above - do not invent or assume packages exist
@@ -360,8 +183,8 @@ IMPORT RULES:
 4. If a package you need is not listed, use a workaround with available packages
 5. DO NOT use: axios, lodash, moment, express, or other common packages unless listed above`;
 
-      // Cache for future calls (per-project and token budget)
-      this.dependencyContextCache.set(cacheKey, context);
+      // Cache for future calls (per-project)
+      this.dependencyContextCache.set(targetPath, context);
       return context;
 
     } catch (error) {
@@ -886,7 +709,7 @@ DEPENDENCY CONTEXT: (Failed to load package.json - use common Node.js built-ins 
   }
 
   private async executeWithClaude(request: ProposerRequest, proposer: ProposerConfig, projectPath?: string): Promise<any> {
-    const prompt = this.buildPromptForProvider(request, 'anthropic', projectPath);
+    const prompt = this.buildClaudePrompt(request, projectPath);
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -929,7 +752,7 @@ DEPENDENCY CONTEXT: (Failed to load package.json - use common Node.js built-ins 
   }
 
   private async executeWithOpenAI(request: ProposerRequest, proposer: ProposerConfig, projectPath?: string): Promise<any> {
-    const prompt = this.buildPromptForProvider(request, 'openai', projectPath);
+    const prompt = this.buildOpenAIPrompt(request, projectPath);
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -970,117 +793,50 @@ DEPENDENCY CONTEXT: (Failed to load package.json - use common Node.js built-ins 
     };
   }
 
-  /**
-   * Build unified prompt for any provider with sandwich structure
-   * Implements best practices: numbered requirements, position-optimized rules,
-   * token budget management, and primacy/recency effects
-   *
-   * @param request - Proposer request with task and context
-   * @param provider - 'anthropic' or 'openai' for provider-specific optimization
-   * @param projectPath - Path to project for dependency context
-   */
-  private buildPromptForProvider(
-    request: ProposerRequest,
-    provider: 'anthropic' | 'openai',
-    projectPath?: string
-  ): string {
-    // Provider-specific settings
-    const isVerbose = provider === 'anthropic'; // Claude handles more detail
-    const maxPromptTokens = provider === 'openai' ? 6000 : 12000; // Stay under sweet spot
-
-    // Section 1: OBJECTIVE (top of sandwich - high attention)
-    const objective = `## OBJECTIVE
-${request.task_description}`;
-
-    // Section 2: REQUIREMENTS (numbered for clarity)
-    const requirements = `## REQUIREMENTS
-${this.extractNumberedRequirements(request)}`;
-
-    // Section 3: CONSTRAINTS (critical rules at top)
-    const outputFormatConstraint = request.expected_output_type === 'code'
-      ? '- Format: Raw TypeScript code ONLY (no markdown, no explanations)'
-      : '';
-
-    const codeRulesInConstraints = request.expected_output_type === 'code'
-      ? `\n\n${this.CONCISE_CODE_RULES}`
-      : '';
-
-    const constraints = `## CONSTRAINTS
-- Output Type: ${request.expected_output_type}
-${request.security_context ? `- Security: ${request.security_context}` : ''}
-${outputFormatConstraint}${codeRulesInConstraints}`;
-
-    // Section 4: CONTEXT (limited to first 5 items to save tokens)
-    const contextItems = request.context.slice(0, 5);
-    const context = contextItems.length > 0
-      ? `## CONTEXT
-${contextItems.join('\n')}${request.context.length > 5 ? `\n... and ${request.context.length - 5} more context items` : ''}`
-      : '';
-
-    // Section 5: DEPENDENCIES (with token budget - max 30% of total)
-    const dependencyTokenBudget = Math.floor(maxPromptTokens * 0.3);
-    const dependencies = request.expected_output_type === 'code'
-      ? this.buildDependencyContext(projectPath, dependencyTokenBudget)
-      : '';
-
-    // Section 6: DETAILED RULES (middle - only for Claude, skipped for GPT-4o-mini to avoid "lost in middle")
-    const detailedRules = (request.expected_output_type === 'code' && isVerbose)
-      ? this.DETAILED_CODE_RULES
-      : '';
-
-    // Section 7: CRITICAL REMINDER (bottom of sandwich - recency effect)
-    const criticalReminder = `
----
-CRITICAL REMINDER - READ BEFORE RESPONDING:
-${this.getCriticalReminders(request, provider)}`;
-
-    // Assemble with sandwich structure
-    const sections = [
-      objective,
-      requirements,
-      constraints,
-      context,
-      dependencies,
-      detailedRules,
-      criticalReminder
-    ].filter(section => section.length > 0);
-
-    const fullPrompt = sections.join('\n\n');
-
-    // Log token estimate for monitoring
-    const estimatedTokens = this.estimateTokens(fullPrompt);
-    console.log(`📊 Prompt token estimate for ${provider}:`, {
-      estimated_tokens: estimatedTokens,
-      max_tokens: maxPromptTokens,
-      within_budget: estimatedTokens <= maxPromptTokens,
-      sections: {
-        objective: this.estimateTokens(objective),
-        requirements: this.estimateTokens(requirements),
-        constraints: this.estimateTokens(constraints),
-        context: this.estimateTokens(context),
-        dependencies: this.estimateTokens(dependencies),
-        detailed_rules: this.estimateTokens(detailedRules),
-        critical_reminder: this.estimateTokens(criticalReminder)
-      }
-    });
-
-    return fullPrompt;
-  }
-
-  /**
-   * @deprecated Use buildPromptForProvider() instead
-   * Kept for backward compatibility during migration
-   */
   private buildClaudePrompt(request: ProposerRequest, projectPath?: string): string {
-    return this.buildPromptForProvider(request, 'anthropic', projectPath);
+    const outputFormatGuidance = request.expected_output_type === 'code'
+      ? `
+
+OUTPUT FORMAT REQUIREMENTS:
+- Provide ONLY raw TypeScript code
+- Do NOT wrap code in markdown code fences (\`\`\`)
+- Do NOT include explanatory text before or after the code
+- Start immediately with import/export statements or code
+- Template literals with backticks (\`Hello \${name}\`) are allowed - just don't wrap the entire output in markdown`
+      : '';
+
+    // Add dependency context for code generation tasks
+    const dependencyContext = request.expected_output_type === 'code'
+      ? this.buildDependencyContext(projectPath)
+      : '';
+
+    return `Task: ${request.task_description}
+
+Context: ${request.context.join('\n')}
+
+Expected Output Type: ${request.expected_output_type}
+${request.security_context ? `Security Context: ${request.security_context}` : ''}${dependencyContext}${outputFormatGuidance}
+
+Please provide a detailed, well-structured response that addresses the task requirements. Focus on accuracy, clarity, and actionable guidance.`;
   }
 
-  /**
-   * @deprecated Use buildPromptForProvider() instead
-   * Kept for backward compatibility during migration
-   */
   private buildOpenAIPrompt(request: ProposerRequest, projectPath?: string): string {
-    return this.buildPromptForProvider(request, 'openai', projectPath);
+    const outputFormatGuidance = request.expected_output_type === 'code'
+      ? `
+
+CRITICAL: Output ONLY raw TypeScript code. No markdown (\`\`\`), no explanations, no text. Start directly with code.`
+      : '';
+
+    // Add dependency context for code generation tasks
+    const dependencyContext = request.expected_output_type === 'code'
+      ? this.buildDependencyContext(projectPath)
+      : '';
+
+    return `${request.task_description}
+
+Context: ${request.context.join(' ')}
+
+Provide a concise, practical response for ${request.expected_output_type}.${dependencyContext}${outputFormatGuidance}`;
   }
 }
 

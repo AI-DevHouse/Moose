@@ -1,11 +1,11 @@
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServiceClient } from './supabase';
 import type { Database } from '@/types/supabase';
 import { configService } from '@/lib/config-services';
 
-const supabase = createClient<Database>(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+// Lazy initialization of Supabase client to ensure env vars are loaded
+function getSupabase() {
+  return createSupabaseServiceClient();
+}
 
 export interface ProposerConfig {
   id: string;
@@ -44,6 +44,7 @@ export class ProposerRegistry {
     if (this.initialized) return;
 
     try {
+      const supabase = getSupabase();
       const { data: configs, error } = await supabase
         .from('proposer_configs')
         .select('id, name, model, provider, complexity_threshold, cost_profile, active, created_at, updated_at')
@@ -90,6 +91,7 @@ export class ProposerRegistry {
 
   async registerProposer(config: ProposerConfig): Promise<void> {
     try {
+      const supabase = getSupabase();
       const { error } = await supabase
         .from('proposer_configs')
         .upsert({
