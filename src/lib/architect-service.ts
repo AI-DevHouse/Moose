@@ -13,6 +13,11 @@ import {
 } from './architect-decomposition-rules';
 import { wireframeService } from './wireframe-service';
 import { contractService } from './contract-service';
+import { assessProjectMaturity } from './orchestrator/project-inspector';
+import { inferArchitecture } from './bootstrap-architecture-inferrer';
+import { generateBootstrapWO } from './bootstrap-wo-generator';
+import { ProjectService } from './project-service';
+import { requirementAnalyzer } from './requirement-analyzer';
 
 export interface DecomposeOptions {
   generateWireframes?: boolean;
@@ -124,7 +129,123 @@ export class ArchitectService {
       await this.attachContracts(decomposition);
     }
 
+    // NEW: Greenfield detection and bootstrap injection
+    if (options?.projectId) {
+      await this.injectBootstrapIfNeeded(decomposition, spec, options.projectId);
+    }
+
     return decomposition;
+  }
+
+  /**
+   * Detect greenfield projects and inject bootstrap WO-0 if needed
+   */
+  private async injectBootstrapIfNeeded(
+    decomposition: DecompositionOutput,
+    spec: TechnicalSpec,
+    projectId: string
+  ): Promise<void> {
+    try {
+      const projectService = new ProjectService();
+      const project = await projectService.getProject(projectId);
+
+      if (!project) {
+        console.log('[Architect] Project not found, skipping greenfield detection');
+        return;
+      }
+
+      // Assess project maturity
+      const maturity = assessProjectMaturity(project.local_path);
+
+      console.log(`[Architect] Project maturity assessment:`, {
+        is_greenfield: maturity.is_greenfield,
+        has_src: maturity.has_src_directory,
+        dependency_count: maturity.package_json_dependency_count,
+        ts_file_count: maturity.existing_ts_file_count,
+        confidence: maturity.greenfield_confidence
+      });
+
+      if (!maturity.is_greenfield) {
+        console.log('[Architect] Established project detected, no bootstrap needed');
+        return;
+      }
+
+      console.log(`[Architect] Greenfield project detected (confidence: ${maturity.greenfield_confidence.toFixed(2)})`);
+
+      // Infer architecture from spec + generated WOs
+      const architecture = inferArchitecture(spec, decomposition.work_orders);
+
+      console.log(`[Architect] Inferred architecture:`, {
+        framework: architecture.framework || 'generic TypeScript',
+        needs_jsx: architecture.needs_jsx,
+        state_management: architecture.state_management,
+        testing_framework: architecture.testing_framework,
+        dependencies: architecture.required_dependencies.join(', ') || 'none',
+        dev_dependencies: architecture.required_dev_dependencies.join(', ')
+      });
+
+      // Analyze spec for external service requirements
+      console.log('[Architect] Analyzing spec for external service dependencies...');
+      let requirements;
+      try {
+        requirements = await requirementAnalyzer.analyzeSpec(spec);
+        console.log(`[Architect] Detected ${requirements.length} external service(s):`,
+          requirements.map(r => r.service).join(', ') || 'none'
+        );
+      } catch (error: any) {
+        console.warn('[Architect] Failed to analyze requirements:', error.message);
+        requirements = []; // Continue with empty requirements if analysis fails
+      }
+
+      // Generate bootstrap WO with architecture + requirements
+      const bootstrapWO = generateBootstrapWO(architecture, maturity, requirements);
+
+      console.log(`[Architect] Generated bootstrap WO: "${bootstrapWO.title}"`);
+      console.log(`[Architect] Bootstrap files in scope: ${bootstrapWO.files_in_scope.join(', ')}`);
+
+      // Prepend bootstrap WO as WO-0
+      decomposition.work_orders.unshift(bootstrapWO);
+
+      // Update all feature WO dependencies to include "0"
+      decomposition.work_orders.slice(1).forEach((wo, index) => {
+        // Original dependencies (shifted by 1 because we inserted WO-0)
+        const originalDeps = (wo.dependencies || []).map(depIdx => {
+          const parsed = parseInt(depIdx);
+          if (!isNaN(parsed)) {
+            return (parsed + 1).toString();
+          }
+          return depIdx;
+        });
+
+        // Add dependency on bootstrap WO-0
+        wo.dependencies = ['0', ...originalDeps];
+      });
+
+      // Update decomposition doc to reflect bootstrap injection
+      const frameworkDisplay = architecture.framework
+        ? architecture.framework.charAt(0).toUpperCase() + architecture.framework.slice(1)
+        : 'TypeScript';
+
+      const externalServicesSection = requirements && requirements.length > 0
+        ? `\n**External Services (${requirements.length}):** ${requirements.map(r => r.service).join(', ')}\n`
+        : '';
+
+      decomposition.decomposition_doc =
+        `# Implementation Plan\n\n` +
+        `## Bootstrap Phase\n\n` +
+        `**WO-0 (Bootstrap):** Creates project infrastructure (package.json, tsconfig.json, src/ structure, .env.example)\n\n` +
+        `**Architecture Detected:** ${frameworkDisplay}\n\n` +
+        `**Dependencies:** ${architecture.required_dependencies.length > 0 ? architecture.required_dependencies.join(', ') : 'TypeScript only'}${externalServicesSection}\n` +
+        `**All feature work orders depend on WO-0 completing first.**\n\n` +
+        `---\n\n` +
+        decomposition.decomposition_doc;
+
+      console.log(`[Architect] Bootstrap WO injected as WO-0, ${decomposition.work_orders.length - 1} feature WOs updated`);
+    } catch (error: any) {
+      console.error('[Architect] Failed to inject bootstrap WO:', error.message);
+      // Don't fail the entire decomposition if bootstrap injection fails
+      // Just log the error and continue
+    }
   }
 
   /**

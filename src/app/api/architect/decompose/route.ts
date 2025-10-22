@@ -230,41 +230,21 @@ export async function POST(request: NextRequest) {
           }
         );
 
-        // Analyze requirements (detect external dependencies)
-        console.log('🔍 Analyzing spec for external dependencies...');
-        allRequirements = await requirementAnalyzer.analyzeSpec(spec);
-        console.log(`✅ Detected ${allRequirements.length} external dependencies`);
+        // NOTE: Requirement analysis now integrated into bootstrap WO for greenfield projects
+        // For established projects, requirements are detected but not auto-written to disk
+        // Bootstrap WO-0 handles .env.example creation via proposer (proper git workflow)
+        console.log('ℹ️  Requirement analysis integrated into bootstrap WO for greenfield projects');
 
         allWorkOrders = decomposition.work_orders;
         combinedDecompositionDoc = decomposition.decomposition_doc || '';
         totalCost = decomposition.total_estimated_cost || 0;
       }
 
-      // Update .env.local.template in project directory if requirements found
-      if (allRequirements.length > 0 && project.local_path && fs.existsSync(project.local_path)) {
-        const envTemplatePath = path.join(project.local_path, '.env.local.template');
-
-        // Read existing template or create new one
-        let envContent = '';
-        if (fs.existsSync(envTemplatePath)) {
-          envContent = fs.readFileSync(envTemplatePath, 'utf-8');
-        } else {
-          envContent = '# Environment Variables\n# Copy this file to .env.local and fill in your values\n\n';
-        }
-
-        // Add new environment variables
-        for (const req of allRequirements) {
-          if (!envContent.includes(req.env_var)) {
-            envContent += `\n# ${req.service} (${req.category})${req.required ? ' - REQUIRED' : ' - Optional'}\n`;
-            envContent += `# ${req.instructions}\n`;
-            envContent += `# Get from: ${req.setup_url}\n`;
-            envContent += `${req.env_var}=\n`;
-          }
-        }
-
-        fs.writeFileSync(envTemplatePath, envContent);
-        console.log(`✅ Updated .env.local.template with ${allRequirements.length} dependencies`);
-      }
+      // REMOVED: Server-side .env.local.template write
+      // Reason: Environment template creation now handled by bootstrap WO-0 for greenfield projects
+      // - Greenfield: Bootstrap WO creates .env.example with framework + service requirements
+      // - Established: No automatic env file creation (user manages their own .env files)
+      // This follows proper git workflow (proposer creates files, not server-side writes)
 
       // For non-preprocessed specs, save work orders in single batch
       if (!needsPreprocessing && allWorkOrders.length > 0) {
@@ -296,6 +276,50 @@ export async function POST(request: NextRequest) {
         if (insertError) {
           console.error('Failed to save work orders:', insertError);
           throw new Error(`Failed to save work orders: ${insertError.message}`);
+        }
+
+        // Convert array-index dependencies to UUIDs and update metadata
+        const dependencyUpdates = [];
+
+        for (let i = 0; i < allWorkOrders.length; i++) {
+          const originalWO = allWorkOrders[i];
+          const savedWO = savedWOs[i]; // Same order as inserted
+
+          // Get dependencies from architect output (array indices like ["0", "1"])
+          const deps = originalWO.dependencies || [];
+
+          if (deps.length > 0) {
+            // Convert array indices to actual UUIDs
+            const dependencyUUIDs = deps.map((depIndex: string) => {
+              const depIndexNum = parseInt(depIndex);
+              if (isNaN(depIndexNum) || depIndexNum >= savedWOs.length) {
+                console.warn(`Invalid dependency index "${depIndex}" for WO ${savedWO.title}`);
+                return null;
+              }
+              return savedWOs[depIndexNum].id;
+            }).filter((id: string | null): id is string => id !== null); // Remove invalid entries
+
+            if (dependencyUUIDs.length > 0) {
+              dependencyUpdates.push({
+                id: savedWO.id,
+                metadata: {
+                  ...(savedWO.metadata || {}),
+                  dependencies: dependencyUUIDs
+                }
+              });
+            }
+          }
+        }
+
+        // Update work orders with converted dependencies
+        if (dependencyUpdates.length > 0) {
+          for (const update of dependencyUpdates) {
+            await supabase
+              .from('work_orders')
+              .update({ metadata: update.metadata })
+              .eq('id', update.id);
+          }
+          console.log(`✅ Updated ${dependencyUpdates.length} work orders with dependency UUIDs`);
         }
 
         allWorkOrders = savedWOs; // Replace with saved work orders (includes IDs)
