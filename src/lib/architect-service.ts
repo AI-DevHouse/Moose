@@ -145,6 +145,12 @@ export class ArchitectService {
     spec: TechnicalSpec,
     projectId: string
   ): Promise<void> {
+    // KILL SWITCH: Allow emergency disabling of bootstrap injection
+    if (process.env.DISABLE_BOOTSTRAP_INJECTION === 'true') {
+      console.log('[Architect] Bootstrap injection disabled via DISABLE_BOOTSTRAP_INJECTION env var');
+      return;
+    }
+
     try {
       const projectService = new ProjectService();
       const project = await projectService.getProject(projectId);
