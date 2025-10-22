@@ -8,10 +8,13 @@
     "start": "next start",
     "lint": "next lint",
     "type-check": "tsc --noEmit",
+    "test": "vitest",
+    "test:ui": "vitest --ui",
     "perf:test": "artillery run artillery-performance.yml",
     "perf:report": "artillery run --output report.json artillery-performance.yml && artillery report report.json",
     "backup:config": "tsx scripts/export-config.ts",
-    "restore:config": "tsx scripts/restore-config.ts"
+    "restore:config": "tsx scripts/restore-config.ts",
+    "orchestrator": "tsx --env-file=.env.local scripts/orchestrator-daemon.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.65.0",

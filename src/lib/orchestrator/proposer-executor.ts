@@ -91,7 +91,7 @@ export async function generateCode(wo: WorkOrder): Promise<EnhancedProposerRespo
     const abortController = new AbortController();
     const timeoutId = setTimeout(() => abortController.abort(), 15 * 60 * 1000); // 15 minutes
 
-    const response = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3001'}/api/proposer-enhanced`, {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/api/proposer-enhanced`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'

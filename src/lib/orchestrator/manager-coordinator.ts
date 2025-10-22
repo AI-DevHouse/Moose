@@ -59,7 +59,7 @@ export async function getRoutingDecision(wo: WorkOrder): Promise<RoutingDecision
   });
 
   try {
-    const response = await fetch('http://localhost:3000/api/manager', {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/api/manager`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'

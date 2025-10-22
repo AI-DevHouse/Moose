@@ -11,15 +11,17 @@
  *
  * Environment Variables:
  *   ORCHESTRATOR_POLLING_INTERVAL_MS - Polling interval (default: 10000)
- *   ORCHESTRATOR_MAX_CONCURRENT_EXECUTIONS - Max concurrent work orders (default: 3)
+ *   ORCHESTRATOR_MAX_CONCURRENT_EXECUTIONS - Max concurrent work orders (default: 15)
+ *   WORKTREE_POOL_ENABLED - Enable worktree pool (default: false)
+ *   WORKTREE_POOL_SIZE - Number of worktrees in pool (default: 15)
  *   NEXT_PUBLIC_SUPABASE_URL - Supabase URL
  *   SUPABASE_SERVICE_ROLE_KEY - Supabase service role key
  */
 
-import { OrchestratorService } from '../src/lib/orchestrator/orchestrator-service';
+// Environment variables are loaded via tsx --env-file=.env.local flag in npm script
 
-// Note: Environment variables are loaded via node -r dotenv/config
-// with DOTENV_CONFIG_PATH=.env.local in the npm script
+import { OrchestratorService } from '../src/lib/orchestrator/orchestrator-service';
+import { worktreeHealthMonitor } from '../src/lib/orchestrator/worktree-health-monitor';
 
 // Validate required environment variables
 const requiredEnvVars = [
@@ -57,7 +59,11 @@ const orchestrator = OrchestratorService.getInstance();
 console.log('🦌 Moose Mission Control - Orchestrator Daemon');
 console.log('==============================================');
 console.log(`Polling Interval: ${pollingInterval}ms`);
-console.log(`Max Concurrent: ${process.env.ORCHESTRATOR_MAX_CONCURRENT_EXECUTIONS || 3}`);
+console.log(`Max Concurrent: ${process.env.ORCHESTRATOR_MAX_CONCURRENT_EXECUTIONS || 15}`);
+console.log(`Worktree Pool: ${process.env.WORKTREE_POOL_ENABLED === 'true' ? 'Enabled' : 'Disabled'}`);
+if (process.env.WORKTREE_POOL_ENABLED === 'true') {
+  console.log(`Worktree Pool Size: ${process.env.WORKTREE_POOL_SIZE || 15}`);
+}
 console.log(`Supabase URL: ${process.env.NEXT_PUBLIC_SUPABASE_URL}`);
 console.log('==============================================\n');
 
@@ -91,6 +97,7 @@ setInterval(() => {
 process.on('SIGINT', () => {
   console.log('\n\n⚠️  Received SIGINT, shutting down gracefully...');
   orchestrator.stopPolling();
+  worktreeHealthMonitor.stop();
   console.log('✅ Orchestrator stopped');
   process.exit(0);
 });
@@ -98,6 +105,7 @@ process.on('SIGINT', () => {
 process.on('SIGTERM', () => {
   console.log('\n\n⚠️  Received SIGTERM, shutting down gracefully...');
   orchestrator.stopPolling();
+  worktreeHealthMonitor.stop();
   console.log('✅ Orchestrator stopped');
   process.exit(0);
 });

@@ -9,25 +9,27 @@ import {
 } from './dependency-resolver';
 
 /**
- * Polls the work_orders table for pending Work Orders that have been approved by Director
+ * Polls the work_orders table for approved Work Orders ready for execution
  *
- * Query criteria:
- * - status = 'pending'
- * - metadata->>'approved_by_director' = 'true' (or auto_approved = true in metadata)
+ * NEW Clean State Machine:
+ * - Query: status = 'approved' (simple!)
  * - Dependency resolution: Only return WOs where all dependencies are completed
  * - Order by created_at ASC (FIFO for WOs with no dependencies)
  * - Limit 10 per poll
  *
- * @returns Array of pending Work Orders ready for execution (dependencies satisfied)
+ * State flow: pending → approved → in_progress → completed/failed/needs_review
+ *
+ * @returns Array of approved Work Orders ready for execution (dependencies satisfied)
  */
 export async function pollPendingWorkOrders(): Promise<WorkOrder[]> {
   const supabase = createSupabaseServiceClient();
 
   try {
+    // Simple query: just get approved WOs
     const { data, error } = await supabase
       .from('work_orders')
       .select('*')
-      .eq('status', 'pending')
+      .eq('status', 'approved')
       .order('created_at', { ascending: true })
       .limit(50); // Increased limit to handle dependency chains
 
@@ -40,16 +42,9 @@ export async function pollPendingWorkOrders(): Promise<WorkOrder[]> {
       return [];
     }
 
-    // Filter for approved Work Orders
-    // Check metadata for auto_approved=true (from Director)
-    const approvedWorkOrders = data.filter((wo: any) => {
-      const metadata = wo.metadata || {};
-      return metadata.auto_approved === true ||
-             metadata.approved_by_director === true ||
-             metadata.director_approved === true; // Support both field names
-    });
+    const approvedWorkOrders = data as WorkOrder[];
 
-    console.log(`[WorkOrderPoller] Found ${approvedWorkOrders.length} approved Work Orders out of ${data.length} pending`);
+    console.log(`[WorkOrderPoller] Found ${approvedWorkOrders.length} approved Work Orders`);
 
     // Apply dependency resolution
     const completedIds = await getCompletedWorkOrderIds(supabase);
