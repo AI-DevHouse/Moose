@@ -1,0 +1,295 @@
+> I can see the list of work orders and the columns - are the instructions only what's in the description column?  Does our system test the completed 
+proposer code against the acceptance criteria? 
+
+● Great questions! Let me clarify both:
+
+  1. Instructions to Proposer (Multiple Columns)
+
+  The proposer receives MORE than just the description:
+
+  What the proposer gets:
+  // From work_orders table:
+  - title                    // "Add TypeScript strict mode configuration"
+  - description              // Full description paragraph
+  - acceptance_criteria[]    // Array of specific requirements
+  - complexity_score         // 1-10 rating
+  - files_to_modify[]        // Target files (if specified)
+
+  // Additional context added by system:
+  - Project file tree        // Full directory structure
+  - Dependency analysis      // External packages detected
+  - Routing decision         // Why this proposer was chosen
+  - Contract/wireframe       // If applicable
+
+  Example from system prompt:
+  Work Order: [title]
+
+  Description:
+  [description]
+
+  Acceptance Criteria:
+  1. [criterion 1]
+  2. [criterion 2]
+  3. [criterion 3]
+
+  Project Context:
+  [file tree, dependencies, etc.]
+
+  Generate production-ready code that satisfies ALL acceptance criteria.
+
+  So yes, acceptance_criteria is a separate column (text array) that gets passed to the proposer.
+
+  ---
+  2. Testing Against Acceptance Criteria (CRITICAL GAP)
+
+  Short answer: NO - The system does NOT validate the code against acceptance criteria semantically.
+
+  What the System Actually Tests
+
+  Acceptance Validator (src/lib/acceptance-validator.ts) only checks:
+
+  1. Build Success (0/10 in v107)
+    - Runs npm run build
+    - Pass/fail based on exit code
+  2. Test Success
+    - Runs npm test
+    - Pass/fail based on exit code
+  3. TypeScript Errors
+    - Counts TS errors from build output
+  4. Lint Errors
+    - Counts ESLint errors
+  5. TODO Count
+    - Searches for TODO/FIXME comments
+  6. Test Coverage
+    - Parses coverage report percentage
+
+  What It DOESN'T Test
+
+  ❌ Semantic verification - Doesn't check if code actually satisfies acceptance criteria
+  ❌ Functional correctness - Doesn't run integration tests specific to the WO
+  ❌ Acceptance criteria checklist - Doesn't verify each criterion is met
+
+  Example of the Gap
+
+  Acceptance Criteria:
+  1. ✅ tsconfig.json has "strict": true enabled
+  2. ❌ All strict mode sub-options are explicitly configured  ← Not checked
+  3. ❌ No TypeScript errors after enabling ← Checked (build success)
+  4. ✅ Build passes successfully ← Checked
+  5. ❌ Existing tests continue to pass ← Checked
+
+  Current validation only checks #3, #4, #5 (automated checks)
+  It doesn't verify #1, #2 (semantic requirements)
+
+  ---
+  This Is Why Quality Is Low
+
+  The proposer is told:
+  "Generate code that satisfies ALL acceptance criteria"
+
+  But it knows:
+  - It won't be tested against those criteria
+  - Only automated checks run (build, tests, lint)
+  - It can generate incomplete code and still "pass" if builds succeed
+
+  What Should Happen (Phase 2 Goal)
+
+  Option A: Enhanced Validation
+  - Parse acceptance criteria
+  - Generate test cases from criteria
+  - Run verification against each criterion
+  - Score based on how many criteria are satisfied
+
+  Option B: LLM-Based Review
+  - Have Claude review the generated code
+  - Check each acceptance criterion programmatically
+  - Return detailed pass/fail for each criterion
+  - This would be part of the "supervised learning" loop
+
+  Option C: Human Review
+  - Current system marks WOs as "needs_review" if score <7/10
+  - Human reviews PR and verifies acceptance criteria manually
+  - Provides feedback for learning
+
+  ---
+  For Your Training Approach
+
+  This gap is actually very important for training:
+
+  Current problem:
+  - gpt-4o-mini generates incomplete code
+  - System only checks "does it build?" not "does it work?"
+  - No feedback on whether acceptance criteria were met
+
+  Training improvement:
+  You could add a training objective:
+  - Generate tests from acceptance criteria
+  - Verify code against those tests
+  - Score based on test pass rate
+
+  This would force the model to:
+  1. Actually read and understand acceptance criteria
+  2. Generate complete implementations that pass those tests
+  3. Get real feedback on functional correctness
+
+  Would you like me to look at the actual acceptance_criteria values in the database to see what kind of requirements are being specified?
+
+> yes 
+
+● I'll query the database to show you actual acceptance_criteria examples from the work orders:
+
+● Write(scripts\show-acceptance-criteria.ts)
+  ⎿  Wrote 1 lines to scripts\show-acceptance-criteria.ts
+     import { config } from 'dotenv'
+     import { resolve } from 'path'
+     import { createSupabaseServiceClient } from '../src/lib/supabase'
+     config({ path: resolve(__dirname, '../.env.local') })
+     async function showAcceptanceCriteria() {
+       const supabase = createSupabaseServiceClient()
+       console.log('📋 Work Order Acceptance Criteria Examples\n')
+
+● Bash(powershell.exe -File scripts/run-with-env.ps1 scripts/show-acceptance-criteria.ts) timeout: 30s
+  ⎿  [dotenv@17.2.3] injecting env (0) from .env.local -- tip: ⚙️  load multiple .env files with { path: ['.env.local', '.env'] }
+     📋 Work Order Acceptance Criteria Examples
+     … +189 lines (ctrl+o to expand)
+
+● Excellent! Now I can see the actual acceptance criteria. Let me analyze what we're looking at:
+
+  Key Observations
+
+  1. Acceptance Criteria Are Well-Structured
+
+  All 10 WOs have:
+  - 3-4 specific, testable criteria each
+  - Clear, actionable requirements
+  - Focused scope (not vague)
+
+  Examples:
+  "Add .editorconfig for consistent formatting"
+  1. .editorconfig exists ← File existence check
+  2. Indent rules are configured ← Content check
+  3. Line ending rules are set ← Content check
+
+  2. Most Criteria Are Automatically Verifiable
+
+  Looking at these, I can categorize them:
+
+  ✅ Can be automatically checked:
+  - File existence (.editorconfig exists, CONTRIBUTING.md exists)
+  - Config values (.prettierrc is added, strict mode is enabled)
+  - Code quality (No type errors in codebase)
+  - Error handling presence (All API endpoints have error handling)
+
+  ⚠️ Harder to automatically verify:
+  - Semantic correctness (Coding standards are documented - need NLP)
+  - Quality of documentation (Flow is explained clearly - subjective)
+  - Proper implementation (Parser correctly identifies... - needs functional tests)
+
+  3. The Gap Between Criteria and Validation
+
+  What proposer was supposed to do:
+  // WO: "Add TypeScript strict mode configuration"
+  // Criteria:
+  // 1. TypeScript strict mode is enabled
+  // 2. No type errors in codebase
+  // 3. Change is documented
+
+  What proposer actually did (3.3/10 score):
+  {
+    "compilerOptions": {
+      "strict": true
+      // TODO: Add other strict options
+    }
+  }
+
+  What current validator checks:
+  - ✅ Does it build? → YES (because TODO doesn't break builds)
+  - ❌ Is criterion #1 met? → NOT CHECKED
+  - ❌ Is criterion #2 met? → NOT CHECKED (build passed, but incomplete)
+  - ❌ Is criterion #3 met? → NOT CHECKED
+
+  4. Why Completeness Score is 2.0/10
+
+  The acceptance validator has a "completeness" dimension but it's measuring:
+  - TODO/FIXME count (indicates incomplete work)
+  - NOT: Whether acceptance criteria are satisfied
+
+  This is why we see:
+  - Completeness: 2.0/10 (found TODOs, code is skeletal)
+  - But validator didn't fail the WO explicitly for missing criteria
+
+  ---
+  Training Opportunity
+
+  These acceptance criteria are perfect for generating training data because:
+
+  Option 1: Generate Tests from Criteria
+
+  For each WO, you could:
+  // Criterion: ".editorconfig exists"
+  test('editorconfig file should exist', () => {
+    expect(fs.existsSync('.editorconfig')).toBe(true)
+  })
+
+  // Criterion: "Indent rules are configured"
+  test('editorconfig should have indent rules', () => {
+    const content = fs.readFileSync('.editorconfig', 'utf-8')
+    expect(content).toMatch(/indent_style/)
+    expect(content).toMatch(/indent_size/)
+  })
+
+  Option 2: LLM-Based Verification
+
+  Use Claude to check:
+  Given this work order and acceptance criteria:
+  [WO details + criteria]
+
+  And this generated code:
+  [code]
+
+  Check each criterion and return:
+  {
+    "criterion_1": { "met": true/false, "reason": "..." },
+    "criterion_2": { "met": true/false, "reason": "..." },
+    ...
+    "completeness_score": 8/10
+  }
+
+  Option 3: Enhanced Training Labels
+
+  Create training dataset:
+  {
+    "work_order": {
+      "title": "Add TypeScript strict mode",
+      "acceptance_criteria": [
+        "TypeScript strict mode is enabled",
+        "No type errors in codebase",
+        "Change is documented"
+      ]
+    },
+    "bad_output": {
+      "code": "{ strict: true }",
+      "criteria_met": [true, false, false],  // Only met 1/3
+      "score": 3.3
+    },
+    "good_output": {
+      "code": "{ strict: true, strictNullChecks: true, ... }",
+      "criteria_met": [true, true, true],   // Met all 3
+      "score": 9.0
+    }
+  }
+
+  ---
+  Recommendation
+
+  For your GPU training approach, I'd suggest:
+
+  1. Export all 57 WOs with acceptance_criteria
+  2. Generate "gold standard" implementations using Claude Sonnet 4.5 that actually satisfy all criteria
+  3. Create verification tests for each criterion
+  4. Train gpt-4o-mini to generate code that passes those tests
+  5. Measure success by % of criteria satisfied, not just build success
+
+  This would directly address the completeness problem (2.0/10) by forcing the model to actually satisfy requirements, not just generate buildable code.       
+
+  Want me to create an export script that structures this data for training?

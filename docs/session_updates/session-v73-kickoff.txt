@@ -1,0 +1,20 @@
+● Session v73 - Phase 1 Retry (Correct Aider Git Fix Applied)
+
+  Read these documents completely:
+  1. docs/session_updates/SESSION_START_QUICK.md
+  2. docs/session_updates/session-v72-20251011-1355-handover.md
+
+  Critical: v71 fix FAILED in v72. Correct fix implemented: GIT_DIR/GIT_WORK_TREE environment variables.
+
+  Your task: Execute Phase 1 retry v73 with 5 work orders (Claude Sonnet 4.5).
+
+  Expected outcome: ≥80% success rate (4-5 of 5 WOs complete with commits and PRs).
+
+  Monitor closely: Watch for "Setting GIT_DIR=...\.git, GIT_WORK_TREE=..." in Aider logs.
+  Verify: Aider shows "Git repo: .git with N files" (NOT "Git repo: none").
+
+  First steps:
+  1. Reset failed WO from v72
+  2. Approve 5 WOs for Phase 1
+  3. Start orchestrator daemon
+  4. Monitor execution

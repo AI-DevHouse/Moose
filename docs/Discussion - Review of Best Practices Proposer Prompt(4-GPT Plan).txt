@@ -1,0 +1,181 @@
+Excellent — here’s **Hybrid Implementation Memo v1.0**, the synthesis of GPT-5’s strategic rigor + Claude’s execution velocity.
+It’s written so you can paste straight into your Moose / Orchestrator repo or internal project tracker.
+
+---
+
+# 🧩 Hybrid Implementation Memo v1.0
+
+**Objective:** Raise mid-complexity WO quality from ≈58 → ≥ 80 / 100 in ≤ 2 weeks by combining deterministic validation, structured refinement, and automatic decomposition.
+
+---
+
+## 1. Current Capability Snapshot
+
+| Layer                    | Current State                                 | Maturity |
+| ------------------------ | --------------------------------------------- | -------- |
+| **Orchestrator**         | Functional (Claude 4.5 + gpt-4o-mini routing) | ✅        |
+| **Decomposer**           | Built ✔   Integration partial ⚠️              | 0.7      |
+| **Refinement Loop**      | Syntax-level / manual escalation              | 0.5      |
+| **Claude Code**          | Active executor for build tasks               | ✅        |
+| **Validator**            | Planned only                                  | 0.0      |
+| **Metrics & Governance** | Manual spreadsheets                           | 0.3      |
+
+---
+
+## 2. Strategic Principles
+
+1. **Determinism first.** Catch predictable failures (tests / imports / error handling) via programmatic validator.
+2. **Cognitive load reduction.** Decompose WOs > 0.7 complexity; shorten token context.
+3. **Measured automation.** No component promoted to production without quantitative improvement (≥ +10 score, ≤ 3 refinement cycles).
+4. **Fast-build, slow-release.** Leverage Claude Code for speed, GPT metrics for stability.
+
+---
+
+## 3. Phase 0 – Instrumentation Sprint (≈ 10 hours)
+
+### Day 1 – Integration Setup
+
+| Task                                                                                                               | Owner       | Outcome                                   |
+| ------------------------------------------------------------------------------------------------------------------ | ----------- | ----------------------------------------- |
+| Integrate decomposer into orchestrator (flow: if complexity > 0.7 → decompose → parallel sub-WO execution → merge) | Claude Code | Automatic routing of high-complexity work |
+| Add complexity logging to DB                                                                                       | Claude Code | Complexity audit trail                    |
+
+### Day 2 – Validator v1 Build
+
+Claude Code instruction template:
+
+```markdown
+Build a modular validator with:
+- Soft scoring (0–10) per rule
+- 3-cycle escalation threshold
+- Token-level diff tracking between refinement runs
+- Versioned rule store (JSON + timestamp)
+Rules: Tests / Placeholders / Imports / ErrorHandling / TypeSafety
+Return: {wo_id, rule, score, message, severity, diff_ratio}
+Expose POST /validator/results for orchestrator callback
+```
+
+### Day 3 – Governance & Metrics Schema
+
+Create Supabase table `validator_metrics` fields:
+
+| Field             | Type        |
+| ----------------- | ----------- |
+| wo_id             | UUID        |
+| validator_version | text        |
+| complexity        | float       |
+| initial_score     | int         |
+| final_score       | int         |
+| cycles            | int         |
+| zero_delta        | bool        |
+| diff_ratio        | float       |
+| timestamp         | timestamptz |
+
+---
+
+## 4. Phase 1 – Pilot Validation (≈ 3 days)
+
+**Sample:** 10 WOs (3 low, 5 mid, 2 high → decomposed).
+**Metrics Targets:**
+
+| Metric                     | Target   |
+| -------------------------- | -------- |
+| Pass 1 success rate        | ≥ 60 %   |
+| Avg refinement cycles      | ≤ 3      |
+| Zero-delta iterations      | < 20 %   |
+| Quality gain per rule type | ≥ +5 pts |
+| Input tokens vs score R²   | < 0.3    |
+
+**If targets met:** Proceed → Phase 2.
+**If failed:** Revert to 2-week Conservative plan (GPT path).
+
+---
+
+## 5. Phase 2 – Template Enhancement (+2 days)
+
+Claude Code prompt:
+
+```markdown
+For each WO category (Redux store, React component, API integration…)
+generate markdown template with:
+1. Critical section (top) listing mandatory tests
+2. Explicit file tree
+3. ≤ 30-line code examples
+4. Success checklist
+```
+
+Store as `/templates/v2/<type>.md` and log token count to assess context impact.
+
+---
+
+## 6. Phase 3 – Tuning & Rollout (+3 days)
+
+* Adjust validator thresholds to minimize false positives (< 5 %).
+* Enable auto-promotion to production when mean score ≥ 75 for three consecutive batches.
+* Archive metrics and validator version for each run.
+
+---
+
+## 7. Fallback / Escalation Rules
+
+| Condition                               | Action                                          |
+| --------------------------------------- | ----------------------------------------------- |
+| Avg cycles > 3                          | Increase feedback examples in refinement prompt |
+| Zero-delta > 20 %                       | Trigger human review tag                        |
+| R² > 0.3 (tokens vs score)              | Reduce template length                          |
+| Validator false positive > 5 %          | Roll back to previous version                   |
+| Any metric below baseline for 2 batches | Pause automation                                |
+
+---
+
+## 8. Deliverables & Timeline
+
+| Day  | Deliverable                                      |
+| ---- | ------------------------------------------------ |
+| 1    | Decomposition integration complete               |
+| 2    | Validator v1 built + hooked into refinement loop |
+| 3    | Metrics schema + governance tables               |
+| 4–6  | Pilot run (10 WOs) + analysis                    |
+| 7–8  | Template generation v2                           |
+| 9–10 | Tuning + production decision                     |
+
+**Expected total:** ≈ 10 active days (60–80 dev hours equivalent).
+
+---
+
+## 9. Success Definition
+
+* Mid-complexity average ≥ 75 / 100
+* ≤ 3 refinement cycles mean
+* Manual review time reduced ≥ 50 %
+* Validator false positive < 5 %
+* Cost / WO ≤ $0.10
+
+---
+
+## 10. Next Actions (Today → Tomorrow)
+
+1. **Confirm current status** of decomposition integration and refinement automation.
+2. **Issue Claude Code instruction** for Validator v1 (build spec above).
+3. **Create Supabase table** `validator_metrics`.
+4. **Schedule Pilot Run** (10 WOs).
+5. **Log baseline scores** before validator activation.
+
+---
+
+## 11. Governance Note
+
+All validator rule sets must be versioned and referenced by WO batch.
+No PR merging without recorded validator pass and metrics snapshot.
+
+---
+
+### Summary Mantra
+
+> **Claude Code builds the system fast.
+> GPT-5 metrics keep it honest.
+> You steer by data, not optimism.**
+
+---
+
+Would you like me to follow this with the **exact Claude Code prompt bundle** (validator + metrics logger + template generator) so you can paste those instructions directly into Claude Code next?

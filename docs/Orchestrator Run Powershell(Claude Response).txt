@@ -1,0 +1,64 @@
+## Recurring Problems Analysis
+
+### Critical Issues
+
+**Git Branch Conflicts (3 failures)**
+- Work orders failing because feature branches already exist in the repository
+- Error: `fatal: a branch named 'feature/wo-{id}-...' already exists`
+- Root cause: Orchestrator attempting to re-create branches from previous runs
+- **Fix needed**: Check if branch exists before creation, or delete/reuse existing branches
+
+**GitHub PR Number Extraction (Every successful WO)**
+- JQ expression syntax error when retrieving PR numbers
+- Error: `failed to parse jq expression... unexpected token "'"`
+- Likely: Windows/PowerShell quote escaping issue with the gh CLI command
+- **Fix needed**: Adjust quote handling in GitHubIntegration for Windows
+
+**Database Schema Mismatch**
+- ResultTracker trying to write to non-existent `action` column in `github_events` table
+- Error occurs after every work order completion
+- Database schema out of sync with code expectations
+- **Fix needed**: Run migration to add missing column or update code to match schema
+
+### Performance Issues
+
+**Aider Asking Questions vs. Executing**
+- Some work orders show Aider requesting clarification instead of implementing
+- Examples: WO 666660fb asked about IPC architecture, WO a97e01e0 asked about authentication
+- Creates delays and prevents autonomous execution
+- **Fix needed**: Provide more complete context in work order instructions or improve prompt specificity
+
+**Capacity Bottleneck**
+- Frequent "[CapacityManager] Waiting for claude-sonnet-4-5 capacity (2/2 active)" messages
+- Max concurrent limit of 3 WOs, but only 2 Claude slots available
+- Creates cascading delays when multiple WOs need the same model
+- **Fix needed**: Consider increasing Claude capacity limit or adding GPT-4o-mini for simpler tasks
+
+**Long Execution Times**
+- Individual work orders taking 2-4 minutes to complete
+- WO 666660fb: ~3.8 minutes, WO a97e01e0: ~2.2 minutes
+- Mostly waiting for Claude API responses
+- **Fix needed**: May be unavoidable, but consider parallel execution optimization
+
+### Minor Issues
+
+**Aider Terminal Warnings**
+- Repeated warnings about xterm-256color terminal type in Windows
+- Doesn't prevent execution but clutters logs
+- **Fix needed**: Set appropriate terminal environment variable or suppress warnings
+
+**EventEmitter Listeners Missing**
+- Multiple `[EventEmitter] No listeners for {wo-id}, event: started/progress/completed`
+- Suggests UI/monitoring not connected to these events
+- **Fix needed**: Add listeners if real-time monitoring is needed, or remove logs if intentional
+
+## Recommended Priority
+
+1. **Immediate**: Fix branch conflict issue (blocking 3 WOs)
+2. **High**: Fix database schema for github_events
+3. **High**: Fix GitHub PR number extraction  
+4. **Medium**: Improve work order context to reduce Aider questions
+5. **Medium**: Review capacity management strategy
+6. **Low**: Clean up terminal warnings
+
+Would you like detailed recommendations for fixing any specific issue?

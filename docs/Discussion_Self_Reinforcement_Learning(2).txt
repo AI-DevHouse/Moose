@@ -1,0 +1,73 @@
+The purpose of this discussion is to work out how to reduce cost in development.
+Currently our thinking is to train 4o-mini so it is capable of handling all or most of the WOs.
+Claude 4.5 will be the reviewer and trainer and manage updates to the governing principles prompt.
+
+Specific WO advice will only be applied to the governing principles if it is successful and identified as a recurring need.
+
+I would like you to:
+
+1) Review the below and compare it to the current reality of the system, highlighting what changes would need to be made.
+2) Compare it to the current prompt-enhancement plan.
+3) Provide recommendations as to the best way to achieve the above goals.
+
+
+Workflow: WO Lifecycle from Tech Spec to Performance Benchmarks
+
+Column 1 – Main Linear Flow
+
+Tech Spec
+↓
+
+Decompose WOs
+↓
+
+WO Contract Check
+↓
+
+Complexity Assigned
+↓
+
+Governing Principles Prompt
+↓
+
+WOs go to Base Proposer
+↓
+
+Proposer Coding
+↓
+
+WO Implementation Tested
+↓
+
+Logs
+↓
+
+Performance Benchmarks
+
+Column 2 – Trainer Feedback Loop (Left Side)
+
+From Logs → Logs Reviewed by Advanced AI “Trainer” → WO Specific Advice → Proposer Coding
+
+Purpose:
+The trainer AI reviews logs, identifies weaknesses or improvements, generates targeted WO-specific advice, and routes it back into the coding step.
+
+Column 3 – Principles Feedback Loop (Right Side)
+
+From Performance Benchmarks → Successful Advice Added to Principles → Governing Principles Prompt
+
+Purpose:
+When successful approaches are detected (validated by performance metrics), they are generalized and added to the governing principles used in future proposals.
+
+System Characteristics
+
+Bidirectional learning: both feedback loops (Trainer and Principles) refine future performance.
+
+Autonomy layers:
+
+Base Proposer handles generation.
+
+Trainer AI handles pattern learning from logs.
+
+Governing Principles layer acts as shared intelligence.
+
+Review & reinforcement: all changes are validated through implementation testing and benchmark logging.

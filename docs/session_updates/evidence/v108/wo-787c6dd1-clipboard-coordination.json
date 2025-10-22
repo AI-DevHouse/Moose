@@ -1,0 +1,376 @@
+{
+  "wo_id": "787c6dd1-e0c4-490a-95af-a851e07996b1",
+  "title": "Build Clipboard-WebView Coordination Layer",
+  "complexity": 0.98,
+  "total_acceptance_criteria": 10,
+  "target_files": [
+    "src/main/coordination/ClipboardCoordinator.ts",
+    "src/main/coordination/clipboard-coordinator.ts",
+    "src/lib/coordination/ClipboardCoordinator.ts"
+  ],
+  "acceptance_criteria": [
+    {
+      "id": "AC-001",
+      "description": "ClipboardCoordinator class manages workflow state machine",
+      "weight": 1.0,
+      "evaluation_type": "code_inspection",
+      "checks": [
+        {
+          "id": "AC-001-1",
+          "type": "class_exists",
+          "name": "ClipboardCoordinator",
+          "required": true,
+          "points": 3
+        },
+        {
+          "id": "AC-001-2",
+          "type": "state_machine_present",
+          "patterns": ["state", "currentState", "setState", "transition"],
+          "required": true,
+          "points": 3
+        },
+        {
+          "id": "AC-001-3",
+          "type": "method_exists",
+          "methods": ["start", "stop", "getState", "transition"],
+          "min_required": 2,
+          "points": 2
+        },
+        {
+          "id": "AC-001-4",
+          "type": "implements_interface",
+          "description": "Class should have clear interface/type definition",
+          "points": 2
+        }
+      ],
+      "pass_threshold": 7,
+      "max_points": 10
+    },
+    {
+      "id": "AC-002",
+      "description": "State transitions tracked: idle → preparing → writing → pasting → injecting → waiting → complete",
+      "weight": 1.0,
+      "evaluation_type": "code_inspection",
+      "checks": [
+        {
+          "id": "AC-002-1",
+          "type": "enum_or_type_exists",
+          "name_patterns": ["State", "WorkflowState", "CoordinatorState"],
+          "required_values": ["idle", "preparing", "writing", "pasting", "injecting", "waiting", "complete"],
+          "min_matches": 6,
+          "points": 4
+        },
+        {
+          "id": "AC-002-2",
+          "type": "state_transition_logic",
+          "description": "Code must handle state transitions (switch statement, if/else, or state machine)",
+          "patterns": ["switch.*state", "if.*state.*===", "transition", "setState"],
+          "required": true,
+          "points": 3
+        },
+        {
+          "id": "AC-002-3",
+          "type": "state_validation",
+          "description": "Invalid state transitions should be prevented",
+          "patterns": ["throw", "error", "invalid", "cannot transition"],
+          "points": 3
+        }
+      ],
+      "pass_threshold": 7,
+      "max_points": 10
+    },
+    {
+      "id": "AC-003",
+      "description": "Timing coordinator ensures proper sequencing with configurable delays",
+      "weight": 1.0,
+      "evaluation_type": "code_inspection",
+      "checks": [
+        {
+          "id": "AC-003-1",
+          "type": "delay_mechanism",
+          "patterns": ["setTimeout", "delay", "wait", "sleep"],
+          "required": true,
+          "points": 3
+        },
+        {
+          "id": "AC-003-2",
+          "type": "configurable_timing",
+          "description": "Delays should be configurable (constants, config object, or parameters)",
+          "patterns": ["config", "delay", "timeout", "const.*DELAY", "options"],
+          "required": true,
+          "points": 4
+        },
+        {
+          "id": "AC-003-3",
+          "type": "sequence_coordination",
+          "description": "Multiple async operations coordinated in sequence",
+          "patterns": ["await", "then", "async", "Promise"],
+          "required": true,
+          "points": 3
+        }
+      ],
+      "pass_threshold": 7,
+      "max_points": 10
+    },
+    {
+      "id": "AC-004",
+      "description": "Focus manager switches between webviews and verifies focus before paste",
+      "weight": 1.0,
+      "evaluation_type": "code_inspection",
+      "checks": [
+        {
+          "id": "AC-004-1",
+          "type": "focus_management",
+          "patterns": ["focus", "webview", "setFocus", "isFocused"],
+          "required": true,
+          "points": 3
+        },
+        {
+          "id": "AC-004-2",
+          "type": "focus_verification",
+          "description": "Must check if webview has focus before pasting",
+          "patterns": ["isFocused", "hasFocus", "checkFocus", "verify.*focus"],
+          "required": true,
+          "points": 4
+        },
+        {
+          "id": "AC-004-3",
+          "type": "webview_switching",
+          "description": "Ability to switch focus between different webviews",
+          "patterns": ["switch", "webview", "target", "provider"],
+          "points": 3
+        }
+      ],
+      "pass_threshold": 7,
+      "max_points": 10
+    },
+    {
+      "id": "AC-005",
+      "description": "Error recovery handles failures at each stage (clipboard write fail, paste fail, injection fail)",
+      "weight": 1.0,
+      "evaluation_type": "code_inspection",
+      "checks": [
+        {
+          "id": "AC-005-1",
+          "type": "try_catch_blocks",
+          "description": "Try-catch blocks for error handling",
+          "patterns": ["try", "catch"],
+          "min_occurrences": 3,
+          "required": true,
+          "points": 3
+        },
+        {
+          "id": "AC-005-2",
+          "type": "specific_error_handling",
+          "description": "Handles specific failure types mentioned in AC",
+          "patterns": ["clipboard.*fail", "paste.*fail", "injection.*fail", "write.*fail"],
+          "min_matches": 2,
+          "points": 4
+        },
+        {
+          "id": "AC-005-3",
+          "type": "error_recovery_logic",
+          "description": "Recovery actions defined (not just catching errors)",
+          "patterns": ["recover", "retry", "fallback", "reset"],
+          "points": 3
+        }
+      ],
+      "pass_threshold": 7,
+      "max_points": 10
+    },
+    {
+      "id": "AC-006",
+      "description": "Rollback mechanism reverts clipboard content on workflow failure",
+      "weight": 1.0,
+      "evaluation_type": "code_inspection",
+      "checks": [
+        {
+          "id": "AC-006-1",
+          "type": "state_backup",
+          "description": "Original clipboard content saved before modification",
+          "patterns": ["original", "previous", "backup", "save.*clipboard", "store.*clipboard"],
+          "required": true,
+          "points": 4
+        },
+        {
+          "id": "AC-006-2",
+          "type": "rollback_implementation",
+          "description": "Rollback/revert function exists",
+          "patterns": ["rollback", "revert", "restore", "undo"],
+          "required": true,
+          "points": 4
+        },
+        {
+          "id": "AC-006-3",
+          "type": "rollback_on_error",
+          "description": "Rollback called in error handling paths",
+          "patterns": ["catch.*rollback", "catch.*revert", "catch.*restore", "finally.*restore"],
+          "points": 2
+        }
+      ],
+      "pass_threshold": 8,
+      "max_points": 10
+    },
+    {
+      "id": "AC-007",
+      "description": "Event emitter broadcasts workflow progress to renderer process",
+      "weight": 1.0,
+      "evaluation_type": "code_inspection",
+      "checks": [
+        {
+          "id": "AC-007-1",
+          "type": "event_emitter_pattern",
+          "patterns": ["EventEmitter", "emit", "on", "off", "removeListener"],
+          "min_matches": 2,
+          "required": true,
+          "points": 3
+        },
+        {
+          "id": "AC-007-2",
+          "type": "progress_events",
+          "description": "Events emitted for workflow progress",
+          "patterns": ["emit.*progress", "emit.*state", "emit.*workflow", "emit.*status"],
+          "required": true,
+          "points": 4
+        },
+        {
+          "id": "AC-007-3",
+          "type": "renderer_communication",
+          "description": "Events sent to renderer process (IPC or webContents.send)",
+          "patterns": ["webContents.send", "window.send", "ipcMain", "renderer"],
+          "points": 3
+        }
+      ],
+      "pass_threshold": 7,
+      "max_points": 10
+    },
+    {
+      "id": "AC-008",
+      "description": "IPC handlers for workflow:start, workflow:status, workflow:abort channels",
+      "weight": 1.0,
+      "evaluation_type": "code_inspection",
+      "checks": [
+        {
+          "id": "AC-008-1",
+          "type": "ipc_handler_registration",
+          "patterns": ["ipcMain.handle", "ipcMain.on"],
+          "min_occurrences": 3,
+          "required": true,
+          "points": 3
+        },
+        {
+          "id": "AC-008-2",
+          "type": "specific_channels",
+          "description": "Required IPC channels implemented",
+          "required_channels": ["workflow:start", "workflow:status", "workflow:abort"],
+          "patterns": ["workflow:start", "workflow:status", "workflow:abort"],
+          "min_matches": 3,
+          "required": true,
+          "points": 5
+        },
+        {
+          "id": "AC-008-3",
+          "type": "handler_implementation",
+          "description": "Handlers actually call coordinator methods",
+          "patterns": ["coordinator.start", "coordinator.getStatus", "coordinator.abort"],
+          "min_matches": 2,
+          "points": 2
+        }
+      ],
+      "pass_threshold": 8,
+      "max_points": 10
+    },
+    {
+      "id": "AC-009",
+      "description": "Integration tests validate full workflow with mock webviews",
+      "weight": 0.5,
+      "evaluation_type": "test_file_inspection",
+      "test_file_patterns": [
+        "**/*.test.ts",
+        "**/*.spec.ts",
+        "**/ClipboardCoordinator.test.ts",
+        "**/clipboard-coordinator.test.ts"
+      ],
+      "checks": [
+        {
+          "id": "AC-009-1",
+          "type": "test_file_exists",
+          "required": true,
+          "points": 3
+        },
+        {
+          "id": "AC-009-2",
+          "type": "integration_test_present",
+          "patterns": ["describe.*integration", "it.*workflow", "it.*full.*flow", "end-to-end"],
+          "points": 4
+        },
+        {
+          "id": "AC-009-3",
+          "type": "mock_webviews",
+          "patterns": ["mock.*webview", "vi.fn", "jest.fn", "stub"],
+          "points": 3
+        }
+      ],
+      "pass_threshold": 5,
+      "max_points": 10,
+      "optional": true
+    },
+    {
+      "id": "AC-010",
+      "description": "Timeout handling aborts workflow after 60s with detailed error state",
+      "weight": 1.0,
+      "evaluation_type": "code_inspection",
+      "checks": [
+        {
+          "id": "AC-010-1",
+          "type": "timeout_constant",
+          "description": "60 second (60000ms) timeout defined",
+          "patterns": ["60000", "60.*1000", "TIMEOUT.*60"],
+          "required": true,
+          "points": 2
+        },
+        {
+          "id": "AC-010-2",
+          "type": "timeout_mechanism",
+          "patterns": ["setTimeout", "timeout", "AbortController", "timeoutId"],
+          "required": true,
+          "points": 3
+        },
+        {
+          "id": "AC-010-3",
+          "type": "abort_on_timeout",
+          "description": "Workflow aborted when timeout occurs",
+          "patterns": ["abort", "cancel", "timeout.*abort", "clearTimeout"],
+          "required": true,
+          "points": 3
+        },
+        {
+          "id": "AC-010-4",
+          "type": "detailed_error_state",
+          "description": "Error includes context about timeout",
+          "patterns": ["timeout", "error.*state", "error.*context", "TimeoutError"],
+          "points": 2
+        }
+      ],
+      "pass_threshold": 7,
+      "max_points": 10
+    }
+  ],
+  "scoring": {
+    "total_possible_points": 100,
+    "pass_threshold": 70,
+    "grade_scale": {
+      "A": 90,
+      "B": 80,
+      "C": 70,
+      "D": 60,
+      "F": 0
+    }
+  },
+  "evaluation_notes": [
+    "AC-009 (Integration tests) is weighted at 0.5 and optional - implementation more important than tests for initial iteration",
+    "Each AC has explicit point values to enable objective scoring",
+    "Pattern matching is case-insensitive unless specified",
+    "Implementation may use different file names/locations - evaluator should search multiple locations"
+  ]
+}

@@ -1,0 +1,54 @@
+Claude Code's Suggestion: Branch Context Preservation
+Approach: Before Aider retry, check current branch and switch back if needed.
+Pros:
+
+✅ Minimal code change
+✅ Quick to implement
+✅ No disk overhead
+✅ Keeps existing architecture
+
+Cons:
+
+❌ Still has race conditions! Even with checking, two Aiders can still:
+
+Modify the same files simultaneously
+Create conflicting unstaged changes
+Corrupt each other's work in real-time
+
+
+❌ Only fixes the retry case, not concurrent execution
+❌ Branch switching itself can fail if working directory is dirty
+❌ Doesn't prevent the core problem: shared mutable state
+
+
+Worktree Pool
+Approach: Each concurrent WO gets its own isolated directory.
+Pros:
+
+✅ Eliminates race conditions entirely (true root cause fix)
+✅ Concurrent Aiders can't interfere - different filesystems
+✅ No branch checking needed - impossible to cross-contaminate
+✅ Scales to high concurrency
+✅ Each WO has clean, predictable environment
+
+Cons:
+
+❌ More complex to implement (pool management, cleanup)
+❌ ~15× disk space (if 15 workers)
+❌ Requires architecture refactor
+
+
+The Key Difference
+Claude Code's approach assumes you can manage concurrency in a shared directory.
+You can't. Even with perfect branch checking, two Aiders writing files simultaneously = corruption.
+Example of what still breaks:
+Time: 0s - WO-A's Aider: writes to src/store.ts
+Time: 0.1s - WO-B's Aider: writes to src/api.ts  
+Time: 0.2s - WO-A's Aider: tries to commit
+          → ERROR: src/api.ts has unstaged changes (from WO-B!)
+Claude Code's fix only prevents commits going to the wrong branch. It doesn't prevent file-level conflicts.
+
+My Take
+Claude Code identified the symptom correctly (branch mix-up) but the suggested fix only addresses one manifestation of the deeper problem (shared working directory).
+For 500 WOs with concurrent execution, you need worktree pool or full serialization with locks. The branch-checking approach will still have data corruption issues.
+Does this clarify why I'm pushing for worktree pool as the real fix?

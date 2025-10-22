@@ -1,0 +1,103 @@
+Excellent question — this is the real leverage point of Phase 1.
+Here’s a clean, prioritized list of **sanitizer correction functions** you should implement, grouped by type of issue and cost-benefit.
+
+---
+
+## 🧹 Core Mechanical Fixes (implement first)
+
+These directly address 90 % of the recurring TS errors in your logs.
+
+| #     | Function                          | Purpose                                                      | Example / Fix                                                                  |
+| ----- | --------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------ |
+| **1** | `fixSmartQuotes()`                | Replace curly or angled quotes with plain ASCII `'` and `"`  | `const a = “foo”` → `const a = "foo"`                                          |
+| **2** | `fixUnquotedModuleDeclarations()` | Quote module names in `declare module` statements            | `declare module foo {}` → `declare module 'foo' {}`                            |
+| **3** | `fixEmDashes()`                   | Convert em/en dashes and exotic hyphens to `-`               | `const a — b` → `const a - b`                                                  |
+| **4** | `fixUnclosedTemplateLiterals()`   | Detect odd number of backticks and close with a trailing one | <code>const s = `Hello ${name}</code> → <code>const s = `Hello ${name}`</code> |
+| **5** | `stripZeroWidthChars()`           | Remove zero-width spaces, BOMs, non-ASCII control chars      | cleans invisible corruption from copy-pasted code                              |
+
+---
+
+## 🧩 Syntax-level Safety Fixes (next layer)
+
+These prevent the common TS 1434 / 1109 / 1127 class errors.
+
+| #      | Function                          | Purpose                                                                    | Example / Fix                                               |
+| ------ | --------------------------------- | -------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| **6**  | `fixDanglingBracesAndParens()`    | Balance `{}`, `()`, `[]` counts per file; append missing closers           | Unbalanced block endings                                    |
+| **7**  | `fixTrailingCommasOrSemicolons()` | Remove dangling commas/semicolons that appear before `}` or EOF            | `,}` → `}`                                                  |
+| **8**  | `removeBacktickFences()`          | Strip accidental markdown code fences (```ts)                              | `ts … ` → raw code                                          |
+| **9**  | `normalizeIndentation()`          | Convert mixed tabs/spaces to 2 spaces; prevents parse issues in nested JSX |                                                             |
+| **10** | `ensureValidImportSyntax()`       | Quote bare module specifiers with `/` or `@`                               | `import x from types/react` → `import x from 'types/react'` |
+
+---
+
+## 🧠 Semantic-assist Fixes (optional, low cost)
+
+Applied last; these don’t change meaning but help the compiler recover.
+
+| #      | Function                    | Purpose                                                                              | Example / Fix     |
+| ------ | --------------------------- | ------------------------------------------------------------------------------------ | ----------------- |
+| **11** | `fixNamespaceCallables()`   | Detect patterns like `SomeType()` and comment them out if `SomeType` is not callable | prevents `TS2349` |
+| **12** | `stripDuplicateExports()`   | Remove consecutive identical `export` statements                                     |                   |
+| **13** | `collapseNestedBackticks()` | Replace ` `Hello` ` with a single backtick literal                                   |                   |
+
+---
+
+## 🔧 Implementation pattern
+
+Each function should return `{ code: string; changed: boolean; description: string }`.
+
+Example scaffold:
+
+```ts
+export function fixSmartQuotes(code: string) {
+  const replaced = code
+    .replace(/[“”]/g, '"')
+    .replace(/[‘’]/g, "'");
+  return { code: replaced, changed: replaced !== code, description: "Smart quotes → ASCII" };
+}
+```
+
+Then run them in order:
+
+```ts
+export function sanitizeTypeScript(code: string) {
+  const changes: string[] = [];
+  for (const fn of [
+    fixSmartQuotes,
+    fixEmDashes,
+    stripZeroWidthChars,
+    fixUnquotedModuleDeclarations,
+    fixUnclosedTemplateLiterals,
+    removeBacktickFences,
+    fixDanglingBracesAndParens,
+  ]) {
+    const result = fn(code);
+    if (result.changed) {
+      code = result.code;
+      changes.push(result.description);
+    }
+  }
+  return { sanitized: code, changes_made: changes };
+}
+```
+
+---
+
+## ✅ Telemetry to capture
+
+* Count of functions triggered
+* Pre/post diff size
+* File hash before/after
+* Whether sanitizer prevented a TS error later (for learning metrics)
+
+---
+
+### TL;DR
+
+Start with **7 core correction functions**:
+`fixSmartQuotes`, `fixUnquotedModuleDeclarations`, `fixEmDashes`,
+`fixUnclosedTemplateLiterals`, `stripZeroWidthChars`,
+`removeBacktickFences`, `fixDanglingBracesAndParens`.
+
+These will eliminate nearly all purely mechanical TS errors, dramatically reducing wasted refinement cycles and giving your adaptive learning loop cleaner data to work from.

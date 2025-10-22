@@ -1,0 +1,788 @@
+Review the logic for the assignment of complexity to my work orders.    Complexity Score
+  - Average: 0.81 (range: 0.33 to 0.98)
+  - 32 out of 81 WOs have complexity scores assigned
+  - These are fairly complex tasks overall
+  Model Distribution (for executed WOs)
+  - Claude Sonnet 4.5: 23 WOs (28.4%) ← Handling more complex work
+  - GPT-4o-mini: 8 WOs (9.9%) ← Handling simpler work
+  - Not yet executed: 35 WOs (43.2%)
+  - Unknown model: 15 WOs (18.5%) (older executions)
+  Key finding: Claude 4.5 is being used ~3x more frequently than GPT-4o-mini for the executed work orders, which aligns with the high average     
+  complexity score (0.81). The routing logic appears to be preferring Claude for these more complex tasks.
+  Current Status
+  - Pending: 45 (55.6%)
+  - In Progress: 24 (29.6%)
+  - Failed: 12 (14.8%)
+  The orchestrator is actively processing work orders right now, so these numbers are changing as it runs.
+> What file contains the routing logic? 
+● Search(pattern: "**/*router*.ts")
+  ⎿  Found 33 files (ctrl+o to expand)
+● Search(pattern: "**/*routing*.ts")
+  ⎿  Found 4 files (ctrl+o to expand)
+● Search(pattern: "**/*proposer*service*.ts")
+  ⎿  Found 1 file (ctrl+o to expand)
+● Read(src\lib\enhanced-proposer-service.ts)
+  ⎿  Read 100 lines
+● The routing logic is spread across two main files:
+  1. src/lib/enhanced-proposer-service.ts (lines 141-189)
+    - Analyzes task complexity using complexityAnalyzer
+    - Calls the Manager API to get routing decision
+    - The Manager uses the complexity score to decide between Claude 4.5 and GPT-4o-mini
+  2. src/lib/manager-routing-rules.ts - This likely contains the actual routing rules
+  Let me check the Manager routing rules:
+● Read(src\lib\manager-routing-rules.ts)
+  ⎿  Read 361 lines
+● Perfect! The routing logic is in src/lib/manager-routing-rules.ts (lines 132-166).
+  How the Routing Works
+  The selectProposerByComplexity() function uses this logic:
+  1. Filters candidates where complexity_score <= proposer.complexity_threshold (line 139)
+    - The complexity_threshold acts as a maximum ceiling for what that proposer can handle
+  2. If multiple candidates qualify, it picks the cheapest one (lines 156-162)
+  3. If no candidates qualify, it uses the proposer with the highest capability (lines 145-150)
+  Why Claude 4.5 Gets Used More
+  With an average complexity of 0.81:
+  - If GPT-4o-mini's threshold is set to ~0.5, it can't handle tasks above 0.5
+  - If Claude Sonnet 4.5's threshold is set to ~1.0, it can handle up to 1.0
+  - Since most tasks (0.81 avg) exceed GPT-4o-mini's ceiling → Claude gets selected
+  Want me to check what the actual complexity_threshold values are for each proposer in the database?Scrutinized complexity scoring logic for work order routing40sThe user is asking me to review the complexity assignment logic for work orders. They've provided two files:
+
+complexity-analyzer.ts - Contains the complexity scoring logic
+complexity-estimator.ts - Estimates project complexity and batching
+
+They've also shared data showing:
+
+Average complexity: 0.81 (range 0.33 to 0.98)
+Claude 4.5 used 3x more than GPT-4o-mini
+Claude handling more complex work
+
+They mentioned the routing logic is in enhanced-proposer-service.ts and manager-routing-rules.ts, and that routing works by:
+
+Filtering candidates where complexity_score <= proposer.complexity_threshold
+Picking cheapest if multiple qualify
+Using highest capability if none qualify
+
+The user wants me to review the logic. Based on my guidelines:
+
+This is a technical review
+Should provide options + recommendation
+Focus on architecture/principles
+2-6 sections with 3-6 bullets each
+Summary first, detail on request
+
+Let me analyze the complexity scoring logic in complexity-analyzer.ts:
+Key aspects:
+
+Seven factors weighted to produce a score 0-1:
+
+codeComplexity (0.20)
+contextRequirements (0.10)
+securityImplications (0.20)
+architecturalImpact (0.20)
+reasoningDepth (0.10)
+memoryPressure (0.10)
+coordinationComplexity (0.10)
+
+
+Hard stop keywords force Claude 4.5 regardless of score (security/architecture)
+Each factor has pattern matching and scoring logic
+
+Issues I see:
+
+The baseline scores are quite high (0.1-0.3 across factors)
+Pattern matching is additive, so scores stack quickly
+Weight distribution may not reflect actual task requirements
+Memory pressure calculation seems conservative (uses GPT-4o-mini's smaller context)
+No dynamic adjustment based on actual performance
+
+The memory pressure calculation reveals potential systemic bias. By anchoring to GPT-4o-mini's context limitations, the scoring mechanism artificially inflates complexity scores. This conservative approach explains the high 0.81 average complexity, effectively routing most tasks to Claude 4.5. The lack of performance-based dynamic adjustment means the system perpetuates an inefficient routing strategy that doesn't optimize for actual task requirements or model capabilities.Complexity Assignment Review
+Your average complexity of 0.81 is exceptionally high. This indicates the scoring logic is either over-weighting factors or your work orders are genuinely complex. Based on the code, I see systematic inflation.
+Core Issues
+Baseline Score Inflation
+
+Most factors start at 0.1-0.3 baseline before any pattern matching
+assessReasoningDepth starts at 0.3 baseline (30% complexity floor)
+assessSecurityImplications starts at 0.2, then adds up to 1.2 in weights
+Combined baselines can reach 0.4-0.5 before considering actual task complexity
+
+Additive Pattern Matching
+
+Patterns stack without diminishing returns (e.g., "refactor architecture" triggers multiple 0.18 weights)
+A task mentioning "async integration" hits 3+ patterns in assessCodeComplexity alone
+No normalization between overlapping indicators
+
+Weight Distribution Misalignment
+
+High-impact factors (security 0.20, architectural 0.20) + hard stops mean most non-trivial tasks exceed 0.5
+Context requirements only 0.10 despite being critical for GPT-4o-mini viability
+Memory pressure 0.10 but calculated conservatively (uses GPT-4o-mini's 128K limit as ceiling)
+
+Routing Consequences
+With 0.81 average complexity:
+
+If GPT-4o-mini threshold is 0.5 → excludes 80%+ of tasks
+Claude 4.5 becomes default for anything beyond "trivial"
+Cost optimization goal undermined by inflated scoring
+
+Options
+A. Recalibrate Baselines (Quick Fix)
+
+Reduce baseline scores: reasoning depth 0.3 → 0.1, security 0.2 → 0.05
+Normalize pattern weights to sum to max 0.5 per factor
+Target: 0.3-0.5 average complexity for balanced routing
+
+B. Redesign Factor Logic (Strategic)
+
+Use multiplicative rather than additive pattern matching
+Implement diminishing returns for overlapping indicators
+Add factor interdependencies (e.g., high coordination + low context = different than high coordination + high context)
+
+C. Empirical Calibration (Data-Driven)
+
+Use getRoutingAccuracyByComplexity() data to identify mis-routed tasks
+Adjust weights based on actual GPT-4o-mini success rate at each complexity band
+Implement feedback loop: if GPT-4o-mini succeeds at 0.6, raise threshold
+
+Recommendation: A + C
+
+Immediate: Lower baselines and normalize pattern weights (30 min code change)
+Next week: Run 100-200 tasks, collect routing accuracy data, tune thresholds
+Phase 2: Implement adaptive weight adjustment based on performance metrics
+
+Specific Code Changes
+typescript// Reduce baseline inflation
+private assessReasoningDepth(...): number {
+  let score = 0.1; // was 0.3
+  // ... existing pattern logic
+}
+
+private assessSecurityImplications(...): number {
+  let score = 0.05; // was 0.2
+  // Normalize total pattern weights to 0.5 max
+}
+
+// Add pattern overlap normalization
+private assessCodeComplexity(description: string): number {
+  const matches = complexityIndicators
+    .filter(({pattern}) => pattern.test(description));
+  
+  // Diminishing returns: first match = full weight, subsequent = 50%
+  let score = 0.05; // baseline
+  matches.forEach((indicator, idx) => {
+    score += indicator.weight * (idx === 0 ? 1.0 : 0.5);
+  });
+  
+  return Math.min(score, 1.0);
+}
+Want me to detail the empirical calibration approach or draft the full recalibration?RetryCyesStrategized comprehensive recalibration with empirical approach and artifacts.The user said "yes" but didn't specify which option. Given my working guidelines to avoid unnecessary clarification when there's an established pattern, I should interpret this as "yes to all" - provide both the detailed empirical calibration approach AND draft the full recalibration.
+I should:
+
+Detail the empirical calibration approach (data collection, analysis, feedback loop)
+Draft the full code recalibration with specific changes
+Present as actionable implementation plan with code artifacts
+
+Following my guidelines:
+
+Multiple options with recommendation
+Get to the point efficiently
+Create artifacts for substantial code
+Focus on principles and architecture, not detailed implementation (unless code)
+Present strategic direction clearly
+
+I'll create an artifact with the recalibrated complexity analyzer code, and provide the empirical calibration strategy in the response.Full Recalibration Plan
+
+
+// Complexity Analyzer - Phase 2.2.4 RECALIBRATED
+// Reduced baseline inflation, normalized pattern weights, diminishing returns
+
+import { createClient } from '@supabase/supabase-js';
+import type { Database } from '@/types/supabase';
+
+const supabase = createClient<Database>(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
+
+export interface ComplexityFactors {
+  codeComplexity: number;
+  contextRequirements: number;
+  securityImplications: number;
+  architecturalImpact: number;
+  reasoningDepth: number;
+  memoryPressure: number;
+  coordinationComplexity: number;
+}
+
+export interface ComplexityWeights {
+  codeComplexity: number;
+  contextRequirements: number;
+  securityImplications: number;
+  architecturalImpact: number;
+  reasoningDepth: number;
+  memoryPressure: number;
+  coordinationComplexity: number;
+}
+
+export interface ComplexityAnalysis {
+  score: number;
+  factors: ComplexityFactors;
+  weights: ComplexityWeights;
+  reasoning: string;
+  metadata: {
+    estimated_tokens: number;
+    estimated_files_touched: number;
+    risk_indicators: string[];
+    confidence: number;
+  };
+  hard_stop_required?: boolean;
+}
+
+export interface AnalyzerRequest {
+  task_description: string;
+  context: string[];
+  security_context?: 'high' | 'medium' | 'low';
+  expected_output_type: 'code' | 'analysis' | 'planning' | 'refactoring';
+  priority?: 'high' | 'medium' | 'low';
+}
+
+export class ComplexityAnalyzer {
+  private static instance: ComplexityAnalyzer;
+  
+  // RECALIBRATED WEIGHTS - Increased context importance, reduced reasoning weight
+  private weights: ComplexityWeights = {
+    codeComplexity: 0.20,
+    contextRequirements: 0.15,      // was 0.10
+    securityImplications: 0.20,
+    architecturalImpact: 0.20,
+    reasoningDepth: 0.05,            // was 0.10
+    memoryPressure: 0.10,
+    coordinationComplexity: 0.10
+  };
+
+  private readonly CONTEXT_LIMITS = {
+    'claude-sonnet-4-5': 200000,
+    'gpt-4o-mini': 128000
+  };
+
+  private readonly USABLE_CONTEXT_RATIO = 0.80;
+
+  private readonly HARD_STOP_KEYWORDS = {
+    security: [
+      'authentication',
+      'authorization',
+      'sql injection',
+      'xss',
+      'csrf',
+      'encryption',
+      'security vulnerability',
+      'password',
+      'token validation',
+      'api key',
+      'credential',
+      'security flaw'
+    ],
+    architecture: [
+      'system design',
+      'architecture decision',
+      'api contract',
+      'database schema',
+      'breaking change',
+      'backwards compatibility',
+      'migration strategy',
+      'schema change'
+    ]
+  };
+
+  static getInstance(): ComplexityAnalyzer {
+    if (!ComplexityAnalyzer.instance) {
+      ComplexityAnalyzer.instance = new ComplexityAnalyzer();
+    }
+    return ComplexityAnalyzer.instance;
+  }
+
+  private detectHardStop(
+    task_description: string,
+    context: string[],
+    security_context?: 'high' | 'medium' | 'low'
+  ): boolean {
+    if (security_context === 'high') {
+      return true;
+    }
+
+    const searchText = `${task_description} ${context.join(' ')}`.toLowerCase();
+
+    for (const keyword of this.HARD_STOP_KEYWORDS.security) {
+      if (searchText.includes(keyword.toLowerCase())) {
+        return true;
+      }
+    }
+
+    for (const keyword of this.HARD_STOP_KEYWORDS.architecture) {
+      if (searchText.includes(keyword.toLowerCase())) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  async analyze(request: AnalyzerRequest): Promise<ComplexityAnalysis> {
+    const factors = await this.calculateFactors(request);
+    const score = this.calculateWeightedScore(factors);
+    const reasoning = this.generateReasoning(factors, score);
+    const metadata = this.generateMetadata(request, factors);
+    const hard_stop_required = this.detectHardStop(
+      request.task_description,
+      request.context,
+      request.security_context
+    );
+
+    return {
+      score,
+      factors,
+      weights: { ...this.weights },
+      reasoning,
+      metadata,
+      hard_stop_required
+    };
+  }
+
+  private async calculateFactors(request: AnalyzerRequest): Promise<ComplexityFactors> {
+    const { task_description, context, security_context, expected_output_type } = request;
+
+    return {
+      codeComplexity: this.assessCodeComplexity(task_description),
+      contextRequirements: this.assessContextRequirements(context),
+      securityImplications: this.assessSecurityImplications(security_context, task_description),
+      architecturalImpact: this.assessArchitecturalImpact(task_description, expected_output_type),
+      reasoningDepth: this.assessReasoningDepth(task_description, expected_output_type),
+      memoryPressure: this.assessMemoryPressure(task_description, context),
+      coordinationComplexity: this.assessCoordinationComplexity(task_description)
+    };
+  }
+
+  private calculateWeightedScore(factors: ComplexityFactors): number {
+    return (
+      factors.codeComplexity * this.weights.codeComplexity +
+      factors.contextRequirements * this.weights.contextRequirements +
+      factors.securityImplications * this.weights.securityImplications +
+      factors.architecturalImpact * this.weights.architecturalImpact +
+      factors.reasoningDepth * this.weights.reasoningDepth +
+      factors.memoryPressure * this.weights.memoryPressure +
+      factors.coordinationComplexity * this.weights.coordinationComplexity
+    );
+  }
+
+  // ========== RECALIBRATED FACTOR ASSESSMENT ==========
+
+  private assessCodeComplexity(description: string): number {
+    const complexityIndicators = [
+      { pattern: /\b(refactor|architecture|design pattern|algorithm|optimization)\b/i, weight: 0.18 },
+      { pattern: /\b(async|concurrent|parallel|threading|performance)\b/i, weight: 0.18 },
+      { pattern: /\b(integration|api|database|schema|migration)\b/i, weight: 0.15 },
+      { pattern: /\b(complex|sophisticated|advanced|enterprise)\b/i, weight: 0.12 },
+      { pattern: /\b(multi-step|workflow|orchestration|pipeline)\b/i, weight: 0.15 }
+    ];
+
+    // CHANGE: Reduced baseline from 0.1 to 0.05
+    let score = 0.05;
+    
+    // CHANGE: Diminishing returns for pattern overlap
+    const matches = complexityIndicators.filter(({ pattern }) => pattern.test(description));
+    matches.forEach((indicator, idx) => {
+      const multiplier = idx === 0 ? 1.0 : 0.6; // First match full weight, subsequent 60%
+      score += indicator.weight * multiplier;
+    });
+
+    return Math.min(score, 1.0);
+  }
+
+  private assessContextRequirements(context: string[]): number {
+    const contextSize = context.join(' ').length;
+    const estimatedTokens = contextSize / 4;
+    
+    // CHANGE: Steeper curve to better differentiate context needs
+    if (estimatedTokens > 50000) return 0.95;
+    if (estimatedTokens > 30000) return 0.80;
+    if (estimatedTokens > 15000) return 0.60;
+    if (estimatedTokens > 5000) return 0.35;
+    if (estimatedTokens > 1000) return 0.15;
+    return 0.05;
+  }
+
+  private assessSecurityImplications(security_context: string | undefined, description: string): number {
+    if (security_context === 'high') return 0.9;
+    if (security_context === 'medium') return 0.6;
+    
+    const securityKeywords = [
+      { pattern: /\b(auth|authentication|authorization|permission|rbac|oauth)\b/i, weight: 0.25 },
+      { pattern: /\b(security|encryption|decrypt|crypto|secret|key)\b/i, weight: 0.25 },
+      { pattern: /\b(validate|sanitize|escape|injection|xss|csrf)\b/i, weight: 0.20 },
+      { pattern: /\b(vulnerability|exploit|attack|breach)\b/i, weight: 0.30 }
+    ];
+
+    // CHANGE: Reduced baseline from 0.2 to 0.05, normalized max pattern weight to 0.6
+    let score = 0.05;
+    
+    const matches = securityKeywords.filter(({ pattern }) => pattern.test(description));
+    matches.forEach((keyword, idx) => {
+      const multiplier = idx === 0 ? 1.0 : 0.5;
+      score += keyword.weight * multiplier;
+    });
+
+    return Math.min(score, 1.0);
+  }
+
+  private assessArchitecturalImpact(description: string, outputType: string): number {
+    const architecturalKeywords = [
+      { pattern: /\b(architecture|system|infrastructure|scalability)\b/i, weight: 0.3 },
+      { pattern: /\b(service|microservice|module|component|package)\b/i, weight: 0.15 },
+      { pattern: /\b(migration|upgrade|breaking change|deprecate)\b/i, weight: 0.3 },
+      { pattern: /\b(cross-cutting|integration|dependency|coupling)\b/i, weight: 0.2 }
+    ];
+
+    // CHANGE: Reduced baseline from 0.2 to 0.05
+    let score = 0.05;
+    
+    const matches = architecturalKeywords.filter(({ pattern }) => pattern.test(description));
+    matches.forEach((keyword, idx) => {
+      const multiplier = idx === 0 ? 1.0 : 0.6;
+      score += keyword.weight * multiplier;
+    });
+
+    // Moderate boost for planning/analysis (was larger)
+    if (outputType === 'planning' && score > 0.3) score += 0.15;
+    if (outputType === 'analysis' && score > 0.3) score += 0.08;
+
+    return Math.min(score, 1.0);
+  }
+
+  private assessReasoningDepth(description: string, outputType: string): number {
+    const reasoningKeywords = [
+      { pattern: /\b(analyze|evaluate|compare|assess|determine)\b/i, weight: 0.2 },
+      { pattern: /\b(strategy|approach|decision|trade-off|consider)\b/i, weight: 0.2 },
+      { pattern: /\b(optimize|improve|enhance|refine)\b/i, weight: 0.15 },
+      { pattern: /\b(multiple|various|several|different)\b/i, weight: 0.1 }
+    ];
+
+    // CHANGE: Reduced baseline from 0.3 to 0.1 (most significant reduction)
+    let score = 0.1;
+    
+    const matches = reasoningKeywords.filter(({ pattern }) => pattern.test(description));
+    matches.forEach((keyword, idx) => {
+      const multiplier = idx === 0 ? 1.0 : 0.5;
+      score += keyword.weight * multiplier;
+    });
+
+    // CHANGE: Reduced output type boost
+    if (outputType === 'analysis') score += 0.15;
+    if (outputType === 'planning') score += 0.12;
+
+    return Math.min(score, 1.0);
+  }
+
+  private assessMemoryPressure(description: string, context: string[]): number {
+    const descriptionTokens = description.length / 4;
+    const contextTokens = context.join(' ').length / 4;
+    
+    const outputMultipliers = {
+      simple: 500,
+      moderate: 2000,
+      complex: 4000
+    };
+    
+    const isComplex = /\b(refactor|architecture|migration|multiple files)\b/i.test(description);
+    const isModerate = /\b(implement|create|build|add)\b/i.test(description);
+    const estimatedOutput = isComplex ? outputMultipliers.complex : 
+                           isModerate ? outputMultipliers.moderate : 
+                           outputMultipliers.simple;
+
+    const totalEstimatedTokens = descriptionTokens + contextTokens + estimatedOutput;
+
+    // CHANGE: More aggressive pressure curve using GPT-4o-mini limit
+    const usableContext = this.CONTEXT_LIMITS['gpt-4o-mini'] * this.USABLE_CONTEXT_RATIO;
+    const pressure = totalEstimatedTokens / usableContext;
+
+    // CHANGE: Earlier pressure detection (0.5 = 50% context used)
+    if (pressure > 0.8) return 0.9;
+    if (pressure > 0.6) return 0.7;
+    if (pressure > 0.4) return 0.5;
+    if (pressure > 0.2) return 0.3;
+    return Math.min(pressure * 2, 0.2); // Linear scale for low pressure
+  }
+
+  private assessCoordinationComplexity(description: string): number {
+    const fileIndicators = [
+      { pattern: /\b(\d+)\s+(files?|modules?|components?|services?)\b/i, multiplier: 1 },
+      { pattern: /\b(multiple|several|various)\s+(files?|modules?|components?)\b/i, multiplier: 3 },
+      { pattern: /\b(across|throughout|spanning)\b/i, multiplier: 4 },
+      { pattern: /\b(entire|whole|all)\s+(codebase|system|application)\b/i, multiplier: 10 }
+    ];
+
+    let estimatedFiles = 1;
+
+    for (const { pattern, multiplier } of fileIndicators) {
+      const match = description.match(pattern);
+      if (match) {
+        if (match[1] && !isNaN(parseInt(match[1]))) {
+          estimatedFiles = Math.max(estimatedFiles, parseInt(match[1]));
+        } else {
+          estimatedFiles = Math.max(estimatedFiles, multiplier);
+        }
+      }
+    }
+
+    // CHANGE: Gentler curve (was 1 file = 0.1, now = 0.05)
+    // 1 file = 0.05, 3 files = 0.15, 5 files = 0.25, 10+ = 0.5+
+    const normalized = Math.min(estimatedFiles / 20, 1.0);
+    return Math.max(normalized, 0.05);
+  }
+
+  // ========== METADATA & REASONING ==========
+
+  private generateMetadata(request: AnalyzerRequest, factors: ComplexityFactors): ComplexityAnalysis['metadata'] {
+    const estimatedTokens = Math.round(
+      (request.task_description.length + request.context.join(' ').length) / 4
+    );
+
+    const estimatedFiles = Math.max(Math.round(factors.coordinationComplexity * 20), 1);
+
+    const riskIndicators: string[] = [];
+    if (factors.securityImplications > 0.6) riskIndicators.push('security');
+    if (factors.architecturalImpact > 0.6) riskIndicators.push('architecture');
+    if (factors.memoryPressure > 0.7) riskIndicators.push('memory_pressure');
+    if (factors.coordinationComplexity > 0.5) riskIndicators.push('multi_file');
+
+    const avgFactor = (
+      factors.codeComplexity + factors.contextRequirements + 
+      factors.securityImplications + factors.architecturalImpact + 
+      factors.reasoningDepth + factors.memoryPressure + 
+      factors.coordinationComplexity
+    ) / 7;
+
+    const confidence = avgFactor > 0.3 ? 0.85 : 0.70;
+
+    return {
+      estimated_tokens: estimatedTokens,
+      estimated_files_touched: estimatedFiles,
+      risk_indicators: riskIndicators,
+      confidence
+    };
+  }
+
+  private generateReasoning(factors: ComplexityFactors, score: number): string {
+    const highFactors = Object.entries(factors)
+      .filter(([_, value]) => value > 0.6)
+      .map(([key, _]) => key)
+      .map(key => key.replace(/([A-Z])/g, ' $1').toLowerCase().trim());
+
+    const mediumFactors = Object.entries(factors)
+      .filter(([_, value]) => value > 0.35 && value <= 0.6)
+      .map(([key, _]) => key)
+      .map(key => key.replace(/([A-Z])/g, ' $1').toLowerCase().trim());
+
+    if (score > 0.6) {
+      return `High complexity (${score.toFixed(2)}) - elevated: ${highFactors.join(', ')}. Claude Sonnet 4.5 recommended.`;
+    } else if (score > 0.35) {
+      const factorList = [...highFactors, ...mediumFactors].slice(0, 3).join(', ');
+      return `Medium complexity (${score.toFixed(2)}). Factors: ${factorList || 'moderate requirements'}. Threshold routing applies.`;
+    } else {
+      return `Low complexity (${score.toFixed(2)}). Suitable for GPT-4o-mini. ${mediumFactors.length > 0 ? 'Minor ' + mediumFactors[0] : 'Straightforward task'}.`;
+    }
+  }
+
+  // ========== PERFORMANCE TRACKING ==========
+
+  async getRoutingAccuracyByComplexity(): Promise<{
+    complexity_bands: Array<{
+      min: number;
+      max: number;
+      total_requests: number;
+      correct_routes: number;
+      accuracy: number;
+      avg_cost: number;
+    }>;
+  }> {
+    const { data: performanceData, error } = await supabase
+      .from('cost_tracking')
+      .select('metadata')
+      .eq('service_name', 'enhanced_proposer_service')
+      .order('created_at', { ascending: false })
+      .limit(500);
+
+    if (error || !performanceData) {
+      return { complexity_bands: [] };
+    }
+
+    interface RequestData {
+      complexity: number;
+      proposer: string;
+      fallback: boolean;
+      correct: boolean;
+    }
+
+    const bands: Array<{
+      min: number;
+      max: number;
+      requests: RequestData[];
+      costs: number[];
+    }> = [
+      { min: 0, max: 0.35, requests: [], costs: [] },
+      { min: 0.35, max: 0.6, requests: [], costs: [] },
+      { min: 0.6, max: 0.8, requests: [], costs: [] },
+      { min: 0.8, max: 1.0, requests: [], costs: [] }
+    ];
+
+    performanceData.forEach(record => {
+      const metadata = record.metadata as any;
+      const complexity = metadata?.complexity_score || 0;
+      const proposer = metadata?.proposer_used;
+      const fallback = metadata?.fallback_used || false;
+
+      const band = bands.find(b => complexity >= b.min && complexity < b.max);
+      if (band) {
+        band.requests.push({
+          complexity,
+          proposer,
+          fallback,
+          correct: this.wasRoutingCorrect(complexity, proposer, fallback)
+        });
+        band.costs.push(metadata?.execution_time_ms || 0);
+      }
+    });
+
+    return {
+      complexity_bands: bands.map(band => ({
+        min: band.min,
+        max: band.max,
+        total_requests: band.requests.length,
+        correct_routes: band.requests.filter(r => r.correct).length,
+        accuracy: band.requests.length > 0 
+          ? band.requests.filter(r => r.correct).length / band.requests.length 
+          : 0,
+        avg_cost: band.costs.length > 0
+          ? band.costs.reduce((a, b) => a + b, 0) / band.costs.length
+          : 0
+      }))
+    };
+  }
+
+  private wasRoutingCorrect(complexity: number, proposer: string, fallback: boolean): boolean {
+    // CHANGE: Updated threshold from 0.3 to 0.35 to match new scoring
+    if (complexity < 0.35 && proposer === 'gpt-4o-mini' && !fallback) return true;
+    if (complexity >= 0.35 && proposer === 'claude-sonnet-4-5') return true;
+    return false;
+  }
+
+  // ========== WEIGHT MANAGEMENT ==========
+
+  updateWeights(newWeights: Partial<ComplexityWeights>): void {
+    this.weights = { ...this.weights, ...newWeights };
+    
+    const sum = Object.values(this.weights).reduce((a, b) => a + b, 0);
+    if (Math.abs(sum - 1.0) > 0.01) {
+      throw new Error(`Weights must sum to 1.0, got ${sum.toFixed(3)}`);
+    }
+  }
+
+  getWeights(): ComplexityWeights {
+    return { ...this.weights };
+  }
+}
+
+export const complexityAnalyzer = ComplexityAnalyzer.getInstance();
+
+
+
+1. Empirical Calibration Strategy
+Data Collection Phase (Week 1)
+
+Run 100-200 diverse work orders through current system
+Log: complexity score, model selected, execution success/failure, token usage, cost
+Track fallback triggers (when GPT-4o-mini exceeds context or fails)
+Store in cost_tracking.metadata for analysis
+
+Analysis Metrics
+
+Routing Accuracy: % of tasks correctly sized for selected model
+Cost Efficiency: Actual cost vs optimal cost (if always routed perfectly)
+Complexity Band Performance:
+
+0.0-0.3: GPT-4o-mini success rate
+0.3-0.5: Boundary zone analysis (which model performs better?)
+0.5-0.7: Claude 4.5 necessity threshold
+0.7-1.0: Claude 4.5 required zone
+
+
+
+Feedback Loop Implementation
+typescript// Add to manager-routing-rules.ts
+async function calibrateThresholds(): Promise<void> {
+  const bands = await complexityAnalyzer.getRoutingAccuracyByComplexity();
+  
+  // Find optimal threshold: highest complexity where GPT-4o-mini succeeds >90%
+  const optimalThreshold = bands
+    .filter(b => b.accuracy > 0.9)
+    .reduce((max, b) => b.max > max ? b.max : max, 0.3);
+  
+  // Update proposer thresholds in DB
+  await updateProposerThreshold('gpt-4o-mini', optimalThreshold);
+}
+Automated Weight Tuning (Phase 2.2.5+)
+
+Use performance data to identify over-weighted factors
+If GPT-4o-mini consistently succeeds at tasks with high memoryPressure → reduce weight
+If Claude 4.5 required for tasks with low architecturalImpact → increase weight
+Gradient descent on weight vector to minimize cost while maintaining quality
+
+2. Immediate Recalibration CodeRecalibrated Complexity AnalyzerCode // Complexity Analyzer - Phase 2.2.4 RECALIBRATED
+// Reduced baseline inflation, normalized pattern weights, diminishing returns
+
+import { createClient } from '@supabase/supabase-js';
+import type { Database } from '@/types/supabase';
+
+const supabase 3. Expected Impact
+Scoring Changes
+
+Average complexity: 0.81 → 0.35-0.50 (target)
+Low complexity floor: 0.3 → 0.15-0.25
+Medium complexity range: 0.4-0.6 → 0.35-0.6 (better defined)
+
+Routing Changes
+
+GPT-4o-mini usage: 9.9% → 40-50% (estimated)
+Claude 4.5 usage: 28.4% → 15-20% for high complexity only
+Cost reduction: 30-40% on successfully routed tasks
+
+Key Calibrations Made
+
+Baseline reductions: reasoning 0.3→0.1, security 0.2→0.05, code 0.1→0.05
+Diminishing returns: subsequent pattern matches 50-60% weight
+Context weight: 0.10→0.15 (more differentiation)
+Memory pressure: earlier detection, steeper curve
+New thresholds: 0.35 (was 0.3), 0.6 (was 0.7) for routing bands
+
+4. Implementation Steps
+Immediate (30 min)
+
+Replace complexity-analyzer.ts with recalibrated version
+Test on 10-20 existing work orders, verify score reduction
+Deploy to staging environment
+
+Week 1 (Data Collection)
+
+Run 100-200 work orders with logging enabled
+Monitor fallback rate (target: <10%)
+Track cost per work order
+
+Week 2 (Threshold Tuning)
+
+Analyze routing accuracy by complexity band
+Adjust GPT-4o-mini threshold based on empirical data
+Document optimal threshold (likely 0.4-0.5)
+
+Week 3+ (Automated Learning)
+
+Implement calibrateThresholds() function
+Run weekly calibration based on performance
+Build weight adjustment logic (gradient descent on cost/quality)
+

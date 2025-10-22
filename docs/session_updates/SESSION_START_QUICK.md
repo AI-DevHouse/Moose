@@ -15,29 +15,29 @@
 ## 1. ORIENTATION
 Project: **Moose Mission Control**
 Background rules → [SESSION_HANDOVER_MASTER.md](C:\dev\moose-mission-control\docs\session_updates\SESSION_HANDOVER_MASTER.md)
-Current state → [session-v82-20251015-1030-handover.md](C:\dev\moose-mission-control\docs\session_updates\session-v82-20251015-1030-handover.md)
+Current state → [session-v120-20251022-1500-handover.md](C:\dev\moose-mission-control\docs\session_updates\session-v120-20251022-1500-handover.md)
 
 ---
 
 ## 2. BEFORE YOU START (CHECKLIST)
-☑ Load MASTER §5.1 and confirm compliance.  
-☑ Verify Supabase + Git connections active.  
-☑ Open current handover → read Δ Summary + Next Actions.  
+☑ Load MASTER §5.1 and confirm compliance.
+☑ Verify Supabase + Git connections active.
+☑ Open current handover → read Δ Summary + Next Actions.
 ☑ Confirm scripts exist and environment variables loaded.
 
 ---
 
 ## 3. TODAY'S WORKFLOW
-1️⃣ Continue from v82 Next Actions.
-2️⃣ Document progress in a new `session-v83-…-handover.md`.
-3️⃣ Keep updates short (≤5 bullets); store logs under `/evidence/v83/`.
+1️⃣ Continue from v120 Next Actions.
+2️⃣ Document progress in a new `session-v121-…-handover.md`.
+3️⃣ Keep updates short (≤5 bullets); store logs under `/evidence/v121/`.
 4️⃣ If unexpected behaviour → pause and verify code/schema before changes.
 
 ---
 
 ## 4. WRAP-UP
-📝 Create v83 handover using MASTER §9 template.
-📂 Archive handovers older than v80 → `archive\`.
+📝 Create v121 handover using MASTER §9 template.
+📂 Archive handovers older than v118 → `archive\`.
 
 ---
 
@@ -45,7 +45,7 @@ Current state → [session-v82-20251015-1030-handover.md](C:\dev\moose-mission-c
 | Purpose | File | Path |
 |----------|------|------|
 | Rules | MASTER | docs\session_updates\ |
-| Last Session | v82 | docs\session_updates\ |
+| Last Session | v120 | docs\session_updates\ |
 | Evidence | evidence\ | docs\session_updates\evidence\ |
 | Archive | archive\ | docs\session_updates\archive\ |
 

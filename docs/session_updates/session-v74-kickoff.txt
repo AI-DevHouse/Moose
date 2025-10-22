@@ -1,0 +1,20 @@
+● Session v74 - Phase 1 Retry (Create Missing API Route)
+
+  Read these documents completely:
+  1. docs/session_updates/SESSION_START_QUICK.md
+  2. docs/session_updates/session-v73-20251014-1000-handover.md
+
+  Critical Blocker: Missing /api/manager API route (404 error) - must create before Phase 1 retry
+
+  Your task: Create /api/manager route, audit other APIs, execute Phase 1 retry v76
+
+  Expected outcome: ≥80% success rate (4-5 of 5 WOs complete with commits and PRs)
+
+  First steps:
+  1. Read Manager service (src/lib/orchestrator/manager.ts)
+  2. Create /api/manager route (src/app/api/manager/route.ts)
+  3. Audit for other missing API routes
+  4. Reset system with full-system-reset.ts
+  5. Approve 5 WOs for Phase 1
+  6. Start orchestrator daemon
+  7. Monitor for forward slashes in GIT_DIR/GIT_WORK_TREE logs

@@ -1,0 +1,947 @@
+**Excellent feedback - these are production-critical improvements.** Let me add them to the work order:
+
+```markdown
+## PHASE 2.5: PRODUCTION HARDENING (Add After Core Implementation)
+
+### Component 5: Sampling & Rate Limiting
+
+**Update:** `src/lib/failure-logger.ts`
+
+```typescript
+interface LoggingConfig {
+  log_all_failures: boolean; // Always true
+  success_sample_rate: number; // 0.1 = log 10% of successes
+  partial_success_sample_rate: number; // 0.2 = log 20% of partial
+}
+
+export async function logWorkOrderResult(
+  data: FailureData,
+  config: LoggingConfig = { 
+    log_all_failures: true, 
+    success_sample_rate: 0.1,
+    partial_success_sample_rate: 0.2 
+  }
+) {
+  const is_failure = data.final_errors > 0 || data.stalled;
+  const is_success = data.final_errors === 0 && !data.stalled;
+  const improvement_rate = calculateImprovementRate(data);
+  const is_partial = improvement_rate > 0.5 && !is_success;
+  
+  // Always log failures
+  if (is_failure) {
+    await logProposerFailure(data);
+    return;
+  }
+  
+  // Sample successes
+  if (is_success && Math.random() < config.success_sample_rate) {
+    await logProposerFailure({ ...data, is_sampled_success: true });
+    return;
+  }
+  
+  // Sample partial successes
+  if (is_partial && Math.random() < config.partial_success_sample_rate) {
+    await logProposerFailure({ ...data, is_sampled_success: true });
+    return;
+  }
+  
+  // For non-logged items, still update metrics (lightweight)
+  await recordWorkOrderResult(
+    data.proposer_name,
+    data.complexity_score,
+    data.final_errors,
+    improvement_rate,
+    data.stalled
+  );
+}
+```
+
+**Benefits:**
+- Database grows ~10x slower
+- Failures always captured for learning
+- Still have success data for metric calculation
+- Cost: ~negligible (one random() call)
+
+---
+
+### Component 6: Rolling Windows
+
+**Update:** `src/lib/adaptive-threshold.ts`
+
+```typescript
+const ROLLING_WINDOW_SIZE = 50; // Last 50 attempts per band
+
+// Store individual attempts, not just aggregates
+interface AttemptRecord {
+  proposer_name: string;
+  complexity_band: string;
+  timestamp: string;
+  was_success: boolean;
+  improvement_rate: number;
+}
+
+// New lightweight table for rolling windows
+// proposer_attempts: id, proposer_name, complexity_band, timestamp, was_success, improvement_rate
+
+export async function recordWorkOrderResult(
+  proposer_name: string,
+  complexity_score: number,
+  final_errors: number,
+  improvement_rate: number,
+  stalled: boolean
+) {
+  const band = getComplexityBand(complexity_score);
+  const was_success = final_errors === 0 && !stalled;
+  
+  // Insert new attempt
+  await supabase.from('proposer_attempts').insert({
+    proposer_name,
+    complexity_band: band,
+    timestamp: new Date().toISOString(),
+    was_success,
+    improvement_rate
+  });
+  
+  // Clean old attempts (keep only last N per band)
+  await pruneOldAttempts(proposer_name, band, ROLLING_WINDOW_SIZE);
+  
+  // Recalculate metrics from rolling window
+  await updateMetricsFromWindow(proposer_name, band);
+}
+
+async function pruneOldAttempts(
+  proposer_name: string, 
+  band: string, 
+  keep_count: number
+) {
+  // Delete attempts older than the Nth most recent
+  const { data: cutoff } = await supabase
+    .from('proposer_attempts')
+    .select('timestamp')
+    .eq('proposer_name', proposer_name)
+    .eq('complexity_band', band)
+    .order('timestamp', { ascending: false })
+    .limit(1)
+    .range(keep_count - 1, keep_count - 1);
+  
+  if (cutoff && cutoff[0]) {
+    await supabase
+      .from('proposer_attempts')
+      .delete()
+      .eq('proposer_name', proposer_name)
+      .eq('complexity_band', band)
+      .lt('timestamp', cutoff[0].timestamp);
+  }
+}
+
+async function updateMetricsFromWindow(proposer_name: string, band: string) {
+  const { data: attempts } = await supabase
+    .from('proposer_attempts')
+    .select('*')
+    .eq('proposer_name', proposer_name)
+    .eq('complexity_band', band)
+    .order('timestamp', { ascending: false })
+    .limit(ROLLING_WINDOW_SIZE);
+  
+  if (!attempts || attempts.length === 0) return;
+  
+  const successes = attempts.filter(a => a.was_success).length;
+  const success_rate = successes / attempts.length;
+  const avg_improvement = attempts.reduce((sum, a) => sum + a.improvement_rate, 0) / attempts.length;
+  
+  // Upsert to proposer_success_metrics
+  await supabase.from('proposer_success_metrics').upsert({
+    proposer_name,
+    complexity_band: band,
+    attempts: attempts.length,
+    successes,
+    success_rate,
+    avg_improvement_rate: avg_improvement,
+    recorded_at: new Date().toISOString()
+  }, { onConflict: 'proposer_name,complexity_band' });
+}
+```
+
+**Benefits:**
+- Metrics reflect recent performance only
+- Bad early performance doesn't permanently hurt threshold
+- Easy to tune window size per deployment
+- Cost: Extra table, but much smaller than full failure logs
+
+---
+
+### Component 7: Versioned Prompt Registry
+
+**New Table:** `prompt_versions`
+
+```sql
+create table prompt_versions (
+  id uuid primary key default gen_random_uuid(),
+  version text unique not null, -- "v1.0", "v1.1", "v2.0"
+  created_at timestamptz default now(),
+  
+  proposer_name text not null,
+  base_prompt text not null,
+  system_changes text, -- Description of what changed
+  
+  -- A/B test results
+  is_active boolean default false,
+  test_sample_size int default 0,
+  test_success_rate numeric,
+  test_avg_improvement numeric,
+  
+  -- Promotion
+  promoted_at timestamptz,
+  replaced_version text, -- Previous version this replaced
+  
+  index (proposer_name, is_active)
+);
+```
+
+**Update:** `src/lib/prompt-enhancer.ts`
+
+```typescript
+export async function getActivePromptVersion(
+  proposer_name: string
+): Promise<{ version: string; base_prompt: string }> {
+  const { data } = await supabase
+    .from('prompt_versions')
+    .select('version, base_prompt')
+    .eq('proposer_name', proposer_name)
+    .eq('is_active', true)
+    .single();
+  
+  return data || { version: 'v1.0', base_prompt: DEFAULT_PROMPT };
+}
+
+export async function buildEnhancedPrompt(
+  proposer_name: string,
+  enhancementCodes: string[]
+): Promise<{ prompt: string; version: string; used: string[] }> {
+  const { version, base_prompt } = await getActivePromptVersion(proposer_name);
+  
+  // ... rest of enhancement logic
+  
+  return { 
+    prompt: enhanced, 
+    version, // Track which version was used
+    used: enhancements.map(e => e.error_code) 
+  };
+}
+```
+
+**Update failure logging to track version:**
+```typescript
+await logProposerFailure({
+  // ... other fields
+  prompt_version: promptResult.version, // Now meaningful!
+  prompt_enhancements_used: promptResult.used
+});
+```
+
+**Benefits:**
+- Know which prompt changes actually helped
+- Easy rollback if new version performs worse
+- A/B test different base prompts
+- Historical audit trail
+
+---
+
+### Component 8: Automatic Re-evaluation
+
+**New Table:** `threshold_experiments`
+
+```sql
+create table threshold_experiments (
+  id uuid primary key default gen_random_uuid(),
+  started_at timestamptz default now(),
+  
+  proposer_name text not null,
+  old_threshold numeric not null,
+  new_threshold numeric not null,
+  
+  -- Experiment parameters
+  test_sample_size int default 30, -- How many tests before deciding
+  confidence_threshold numeric default 0.7, -- Min success rate to promote
+  
+  -- Current status
+  status text default 'running', -- running, promoted, rejected, aborted
+  current_sample_count int default 0,
+  current_success_rate numeric,
+  
+  -- Decision
+  decided_at timestamptz,
+  decision_reason text,
+  
+  index (proposer_name, status)
+);
+```
+
+**Update:** `src/lib/adaptive-threshold.ts`
+
+```typescript
+export async function proposeThresholdIncrease(
+  proposer_name: string,
+  new_threshold: number
+) {
+  const { data: currentConfig } = await supabase
+    .from('proposers')
+    .select('complexity_threshold')
+    .eq('name', proposer_name)
+    .single();
+  
+  if (!currentConfig) return;
+  
+  // Check if already testing a threshold
+  const { data: activeExperiment } = await supabase
+    .from('threshold_experiments')
+    .select('*')
+    .eq('proposer_name', proposer_name)
+    .eq('status', 'running')
+    .single();
+  
+  if (activeExperiment) {
+    console.log('⚠️ Experiment already running, skipping');
+    return;
+  }
+  
+  // Start new experiment
+  await supabase.from('threshold_experiments').insert({
+    proposer_name,
+    old_threshold: currentConfig.complexity_threshold,
+    new_threshold,
+    status: 'running'
+  });
+  
+  console.log(`🧪 Started threshold experiment: ${currentConfig.complexity_threshold} → ${new_threshold}`);
+}
+
+// Call after each work order in the new threshold band
+export async function recordExperimentResult(
+  proposer_name: string,
+  complexity_score: number,
+  was_success: boolean
+) {
+  const { data: experiment } = await supabase
+    .from('threshold_experiments')
+    .select('*')
+    .eq('proposer_name', proposer_name)
+    .eq('status', 'running')
+    .single();
+  
+  if (!experiment) return; // No active experiment
+  
+  // Check if this WO falls in the test range
+  if (complexity_score < experiment.old_threshold || 
+      complexity_score > experiment.new_threshold) {
+    return; // Outside experiment band
+  }
+  
+  // Increment sample count
+  const new_count = experiment.current_sample_count + 1;
+  const new_successes = (experiment.current_success_rate || 0) * experiment.current_sample_count + (was_success ? 1 : 0);
+  const new_success_rate = new_successes / new_count;
+  
+  await supabase
+    .from('threshold_experiments')
+    .update({
+      current_sample_count: new_count,
+      current_success_rate: new_success_rate
+    })
+    .eq('id', experiment.id);
+  
+  // Check if experiment is complete
+  if (new_count >= experiment.test_sample_size) {
+    await evaluateExperiment(experiment.id);
+  }
+}
+
+async function evaluateExperiment(experiment_id: string) {
+  const { data: exp } = await supabase
+    .from('threshold_experiments')
+    .select('*')
+    .eq('id', experiment_id)
+    .single();
+  
+  if (!exp) return;
+  
+  const success = exp.current_success_rate >= exp.confidence_threshold;
+  
+  if (success) {
+    // Promote new threshold
+    await supabase
+      .from('proposers')
+      .update({ complexity_threshold: exp.new_threshold })
+      .eq('name', exp.proposer_name);
+    
+    await supabase
+      .from('threshold_experiments')
+      .update({
+        status: 'promoted',
+        decided_at: new Date().toISOString(),
+        decision_reason: `Success rate ${exp.current_success_rate.toFixed(2)} exceeded ${exp.confidence_threshold}`
+      })
+      .eq('id', experiment_id);
+    
+    console.log(`✅ Promoted threshold to ${exp.new_threshold}`);
+  } else {
+    // Reject - keep old threshold
+    await supabase
+      .from('threshold_experiments')
+      .update({
+        status: 'rejected',
+        decided_at: new Date().toISOString(),
+        decision_reason: `Success rate ${exp.current_success_rate.toFixed(2)} below ${exp.confidence_threshold}`
+      })
+      .eq('id', experiment_id);
+    
+    console.log(`❌ Rejected threshold increase - performance insufficient`);
+  }
+}
+```
+
+**Benefits:**
+- Safe, data-driven threshold increases
+- No blind trust in calculations
+- Automatic rollback if performance drops
+- Clear audit trail of why thresholds changed
+
+---
+
+### Component 9: Sanitizer Integration
+
+**New File:** `src/lib/code-sanitizer.ts`
+
+```typescript
+export function sanitizeTypeScript(code: string): {
+  sanitized: string;
+  changes_made: string[];
+} {
+  const changes: string[] = [];
+  let sanitized = code;
+  
+  // Fix unquoted module declarations
+  const modulePattern = /declare module ([^'"][^\s{]+)/g;
+  if (modulePattern.test(sanitized)) {
+    sanitized = sanitized.replace(modulePattern, "declare module '$1'");
+    changes.push('unquoted_module_declarations');
+  }
+  
+  // Fix smart quotes
+  if (/[""]/.test(sanitized)) {
+    sanitized = sanitized.replace(/[""]/g, '"');
+    changes.push('smart_double_quotes');
+  }
+  if (/['']/.test(sanitized)) {
+    sanitized = sanitized.replace(/['']/g, "'");
+    changes.push('smart_single_quotes');
+  }
+  
+  // Fix em-dashes and en-dashes
+  if (/[—–]/.test(sanitized)) {
+    sanitized = sanitized.replace(/[—–]/g, '-');
+    changes.push('unicode_dashes');
+  }
+  
+  // Fix unclosed template literals (heuristic)
+  const templatePattern = /`[^`]*$/gm;
+  if (templatePattern.test(sanitized)) {
+    sanitized = sanitized.replace(templatePattern, match => match + '`');
+    changes.push('unclosed_template_literals');
+  }
+  
+  return { sanitized, changes_made: changes };
+}
+```
+
+**Update refinement loop:**
+
+```typescript
+// BEFORE running tsc
+const { sanitized, changes_made } = sanitizeTypeScript(generatedCode);
+
+if (changes_made.length > 0) {
+  console.log(`🧹 Sanitizer fixed: ${changes_made.join(', ')}`);
+  generatedCode = sanitized;
+}
+
+// NOW run tsc on sanitized code
+const tsErrors = await checkTypeScript(generatedCode);
+
+// When logging failures, exclude sanitizer-fixed errors
+const excludedErrorCodes = new Set(
+  changes_made.includes('unquoted_module_declarations') ? ['TS1443'] : []
+);
+
+const realErrors = tsErrors.filter(e => !excludedErrorCodes.has(e.code));
+
+// Log only real errors for learning
+await logProposerFailure({
+  // ...
+  error_codes: realErrors.map(e => e.code),
+  sanitizer_changes: changes_made // Track what was auto-fixed
+});
+```
+
+**Benefits:**
+- Prevents false learning from mechanical issues
+- Keeps failure data focused on semantic/reasoning problems
+- Still tracks what sanitizer fixes (maybe LLM can learn to avoid)
+- Immediate quality improvement before refinement even starts
+
+---
+
+## Updated PHASE 3: VALIDATION
+
+**Success Metrics (after 100 work orders):**
+
+1. **TS1443 reduction:** 50%+ drop (or move to sanitizer-fixed category)
+2. **Success rate in 0.3-0.4 band:** 70%+ after enhancements
+3. **Threshold promotion:** Experiment successfully promotes to 0.4+
+4. **Database growth:** <10MB per 1000 work orders (via sampling)
+5. **Metrics stability:** Rolling window shows consistent improvement
+
+**A/B Test Framework:**
+
+```typescript
+// Run this weekly
+import { runThresholdExperiment } from './lib/adaptive-threshold';
+
+// Propose increase if metrics support it
+await runThresholdExperiment('gpt-4o-mini', {
+  current: 0.3,
+  proposed: 0.4,
+  sample_size: 30,
+  confidence: 0.7
+});
+
+// System automatically:
+// 1. Routes 30 WOs in 0.3-0.4 range to gpt-4o-mini
+// 2. Tracks success rate
+// 3. Promotes if ≥70% success
+// 4. Rejects otherwise
+```
+
+---
+
+## DELIVERABLES (Updated)
+
+1. Database migrations for 6 tables (was 3)
+   - proposer_failures
+   - prompt_enhancements
+   - proposer_success_metrics
+   - **proposer_attempts** (rolling windows)
+   - **prompt_versions** (versioned prompts)
+   - **threshold_experiments** (A/B testing)
+
+2. Core modules (same as before)
+3. **New:** `src/lib/code-sanitizer.ts`
+4. **Updated:** All modules with sampling, rolling windows, versioning
+5. **New:** `src/scripts/run-threshold-experiment.ts`
+6. Documentation with production considerations
+
+---
+
+## IMPLEMENTATION ORDER (Updated)
+
+1. Phase 1: Discovery
+2. Phase 2: Core implementation
+3. **Phase 2.5: Production hardening** (these improvements)
+4. Phase 3: Validation
+5. Phase 4: Enable in production with sampling
+
+**Stop Points:**
+- After Component 5: Verify sampling logic works
+- After Component 6: Confirm rolling windows calculate correctly
+- After Component 8: Run one manual experiment before automation
+- After Component 9: Verify sanitizer doesn't over-correct
+
+---
+
+**Critical Note:** The sanitizer (Component 9) should be implemented FIRST in your current system to immediately improve quality, even before the learning pipeline. The learning pipeline should then focus on errors the sanitizer CAN'T fix.
+```
+
+**Key improvements integrated:**
+1. ✅ Rate limiting via sampling (Component 5)
+2. ✅ Rolling windows for metrics (Component 6)
+3. ✅ Versioned prompt registry (Component 7)
+4. ✅ Automatic re-evaluation via experiments (Component 8)
+5. ✅ Sanitizer hook to prevent false learning (Component 9)
+
+This is now a production-grade system design. The feedback transformed it from "functional" to "scalable and robust."
+
+
+
+**No - and you've identified the critical gap.** 
+
+The current design is **reactive and static**:
+
+1. ✅ Detects that TS1443 happens frequently
+2. ✅ Injects a pre-written rule: "Always quote module declarations"
+3. ❌ **But doesn't automatically improve that rule** if it's ineffective
+4. ❌ **Doesn't generate NEW rules** for errors without pre-written enhancements
+
+## What's Missing: The Auto-Improvement Loop
+
+You need **Component 10: Meta-Prompt Generator** that uses Claude/GPT-4 to:
+
+```markdown
+### Component 10: Self-Improving Prompt Generator
+
+**File:** `src/lib/meta-prompt-generator.ts`
+
+```typescript
+import Anthropic from '@anthropic-ai/sdk';
+import { supabase } from './supabase';
+
+interface EnhancementEffectiveness {
+  error_code: string;
+  current_text: string;
+  times_used: number;
+  error_reduction_rate: number; // % fewer errors when used
+  recent_failures: string[]; // Sample error messages
+}
+
+export async function analyzeEnhancementEffectiveness(): Promise<EnhancementEffectiveness[]> {
+  // For each active enhancement, measure its actual impact
+  const { data: enhancements } = await supabase
+    .from('prompt_enhancements')
+    .select('*')
+    .eq('active', true);
+  
+  const results: EnhancementEffectiveness[] = [];
+  
+  for (const enhancement of enhancements || []) {
+    // Compare failure rates with vs without this enhancement
+    const { data: withEnhancement } = await supabase
+      .from('proposer_failures')
+      .select('error_codes')
+      .contains('prompt_enhancements_used', [enhancement.error_code])
+      .gte('created_at', thirtyDaysAgo());
+    
+    const { data: withoutEnhancement } = await supabase
+      .from('proposer_failures')
+      .select('error_codes')
+      .not('prompt_enhancements_used', 'cs', `{${enhancement.error_code}}`)
+      .gte('created_at', thirtyDaysAgo());
+    
+    const errorFreqWith = countErrorCode(withEnhancement, enhancement.error_code);
+    const errorFreqWithout = countErrorCode(withoutEnhancement, enhancement.error_code);
+    
+    const reduction_rate = errorFreqWithout > 0 
+      ? (errorFreqWithout - errorFreqWith) / errorFreqWithout 
+      : 0;
+    
+    // Get recent failure messages for this error code
+    const { data: recentFailures } = await supabase
+      .from('proposer_failures')
+      .select('error_samples')
+      .contains('error_codes', [enhancement.error_code])
+      .order('created_at', { ascending: false })
+      .limit(10);
+    
+    const sampleMessages = recentFailures
+      ?.flatMap(f => f.error_samples)
+      .filter(s => s.code === enhancement.error_code)
+      .map(s => s.message)
+      .slice(0, 5) || [];
+    
+    results.push({
+      error_code: enhancement.error_code,
+      current_text: enhancement.enhancement_text,
+      times_used: enhancement.times_used,
+      error_reduction_rate: reduction_rate,
+      recent_failures: sampleMessages
+    });
+  }
+  
+  return results;
+}
+
+export async function generateImprovedEnhancement(
+  effectiveness: EnhancementEffectiveness
+): Promise<string | null> {
+  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  
+  const prompt = `You are analyzing the effectiveness of prompt instructions designed to prevent coding errors in an AI system.
+
+## Current Instruction
+Error Code: ${effectiveness.error_code}
+Current text given to the model:
+"""
+${effectiveness.current_text}
+"""
+
+## Effectiveness Data
+- Times used: ${effectiveness.times_used}
+- Error reduction when used: ${(effectiveness.error_reduction_rate * 100).toFixed(1)}%
+- Status: ${effectiveness.error_reduction_rate > 0.5 ? '✅ Working well' : '⚠️ Needs improvement'}
+
+## Recent Failures Despite This Instruction
+These errors still occurred even with the instruction above:
+${effectiveness.recent_failures.map((msg, i) => `${i + 1}. ${msg}`).join('\n')}
+
+## Your Task
+${effectiveness.error_reduction_rate > 0.5 
+  ? 'This instruction is working well. Suggest minor refinements to make it even more effective, or return "KEEP_AS_IS" if no improvement is needed.'
+  : 'This instruction is NOT effectively preventing errors. Write a COMPLETELY NEW instruction that addresses why the current one is failing.'}
+
+## Requirements
+1. Be specific and actionable (show exact code examples)
+2. Keep under 200 words
+3. Focus on WHY this error happens and HOW to prevent it
+4. Use clear formatting that models can easily parse
+5. If the error keeps happening despite instructions, the instruction may be too vague or missing the root cause
+
+Return ONLY the improved instruction text, or "KEEP_AS_IS" if no changes needed.`;
+
+  const message = await anthropic.messages.create({
+    model: 'claude-sonnet-4-20250514',
+    max_tokens: 1000,
+    messages: [{
+      role: 'user',
+      content: prompt
+    }]
+  });
+  
+  const improvedText = message.content[0].type === 'text' 
+    ? message.content[0].text.trim() 
+    : null;
+  
+  return improvedText === 'KEEP_AS_IS' ? null : improvedText;
+}
+
+export async function generateNewEnhancement(
+  error_code: string,
+  failure_samples: string[]
+): Promise<string> {
+  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  
+  const prompt = `You are creating prompt instructions to prevent coding errors in an AI system.
+
+## New Error Pattern Detected
+Error Code: ${error_code}
+This error has no prevention instruction yet.
+
+## Sample Failures
+${failure_samples.map((msg, i) => `${i + 1}. ${msg}`).join('\n')}
+
+## Your Task
+Write a clear, actionable instruction that will help prevent this error in future code generation.
+
+## Requirements
+1. Explain WHY this error occurs
+2. Show exact code examples (❌ WRONG vs ✅ RIGHT)
+3. Be specific enough that an LLM can follow it
+4. Keep under 200 words
+5. Focus on prevention, not just detection
+
+Return ONLY the instruction text.`;
+
+  const message = await anthropic.messages.create({
+    model: 'claude-sonnet-4-20250514',
+    max_tokens: 1000,
+    messages: [{
+      role: 'user',
+      content: prompt
+    }]
+  });
+  
+  return message.content[0].type === 'text' 
+    ? message.content[0].text.trim() 
+    : '';
+}
+
+// Auto-improve all enhancements
+export async function runAutoImprovement() {
+  console.log('🔄 Analyzing enhancement effectiveness...');
+  
+  const effectiveness = await analyzeEnhancementEffectiveness();
+  
+  for (const enh of effectiveness) {
+    // Improve existing enhancements that aren't working well
+    if (enh.error_reduction_rate < 0.5 && enh.times_used >= 10) {
+      console.log(`⚠️ ${enh.error_code} only ${(enh.error_reduction_rate * 100).toFixed(0)}% effective, improving...`);
+      
+      const improved = await generateImprovedEnhancement(enh);
+      
+      if (improved) {
+        await supabase
+          .from('prompt_enhancements')
+          .update({ 
+            enhancement_text: improved,
+            last_updated: new Date().toISOString()
+          })
+          .eq('error_code', enh.error_code);
+        
+        console.log(`✅ Updated ${enh.error_code} enhancement`);
+      }
+    }
+  }
+  
+  // Generate enhancements for common errors without instructions
+  const { data: commonErrors } = await supabase.rpc('get_common_unaddressed_errors', { min_occurrences: 5 });
+  
+  for (const error of commonErrors || []) {
+    console.log(`🆕 Creating enhancement for ${error.error_code}...`);
+    
+    const { data: samples } = await supabase
+      .from('proposer_failures')
+      .select('error_samples')
+      .contains('error_codes', [error.error_code])
+      .limit(10);
+    
+    const messages = samples
+      ?.flatMap(s => s.error_samples)
+      .filter(s => s.code === error.error_code)
+      .map(s => s.message)
+      .slice(0, 5) || [];
+    
+    const newEnhancement = await generateNewEnhancement(error.error_code, messages);
+    
+    await supabase
+      .from('prompt_enhancements')
+      .insert({
+        error_code: error.error_code,
+        enhancement_text: newEnhancement,
+        priority: 5, // Medium priority for auto-generated
+        active: true
+      });
+    
+    console.log(`✅ Created enhancement for ${error.error_code}`);
+  }
+  
+  console.log('✅ Auto-improvement complete');
+}
+```
+
+**Database Function for Unaddressed Errors:**
+
+```sql
+create or replace function get_common_unaddressed_errors(min_occurrences int)
+returns table (error_code text, occurrence_count bigint)
+language sql
+as $$
+  select unnest(error_codes) as error_code, count(*) as occurrence_count
+  from proposer_failures
+  where created_at > now() - interval '30 days'
+    and not exists (
+      select 1 from prompt_enhancements pe 
+      where pe.error_code = unnest(proposer_failures.error_codes)
+    )
+  group by error_code
+  having count(*) >= min_occurrences
+  order by occurrence_count desc;
+$$;
+```
+
+**Cron Job:** `src/scripts/auto-improve-prompts.ts`
+
+```typescript
+import { runAutoImprovement } from '../lib/meta-prompt-generator';
+
+// Run weekly via cron or manually
+async function main() {
+  console.log('🤖 Starting automated prompt improvement...');
+  await runAutoImprovement();
+  console.log('✅ Done');
+}
+
+main();
+```
+
+---
+
+## The Complete Feedback Loop
+
+```
+┌─────────────────────────────────────────────────────────┐
+│ gpt-4o-mini generates code with current prompts        │
+└────────────────┬────────────────────────────────────────┘
+                 │
+                 ▼
+┌─────────────────────────────────────────────────────────┐
+│ Self-refinement tries to fix errors                     │
+└────────────────┬────────────────────────────────────────┘
+                 │
+                 ▼
+┌─────────────────────────────────────────────────────────┐
+│ Residual errors logged to proposer_failures            │
+└────────────────┬────────────────────────────────────────┘
+                 │
+                 ▼
+┌─────────────────────────────────────────────────────────┐
+│ Weekly: Claude analyzes which enhancements work         │
+│ - Measures error reduction rates                        │
+│ - Identifies ineffective instructions                   │
+│ - Finds new error patterns                              │
+└────────────────┬────────────────────────────────────────┘
+                 │
+                 ▼
+┌─────────────────────────────────────────────────────────┐
+│ Claude rewrites/creates better enhancements             │
+│ - "Module quotes" instruction not working? Rewrite it   │
+│ - New TS2345 error appearing? Generate instruction      │
+└────────────────┬────────────────────────────────────────┘
+                 │
+                 ▼
+┌─────────────────────────────────────────────────────────┐
+│ Updated enhancements injected in next gpt-4o-mini call  │
+└────────────────┬────────────────────────────────────────┘
+                 │
+                 └──────────────┐
+                                │
+                                ▼
+                        (Loop continues)
+```
+
+---
+
+## What This Achieves
+
+**Current system:**
+- Human writes: "Always quote module declarations"
+- System injects it when TS1443 occurs
+- **No learning if it doesn't work**
+
+**With Component 10:**
+- System detects TS1443 still happens 40% of the time
+- Claude analyzes: "The instruction is too vague about WHEN to quote"
+- Claude rewrites: "Always wrap module declarations in single quotes. This includes `declare module 'foo'`, `declare module '@types/node'`, and ambient module declarations. Never leave module names unquoted."
+- System tests new version
+- If better → promote it
+- If not → Claude tries again with more context
+
+**The system literally writes its own improvements.**
+
+---
+
+## Updated Work Order Addition
+
+Add this to the Claude Code work order:
+
+```markdown
+## PHASE 4: SELF-IMPROVING PROMPT GENERATION
+
+### Component 10: Meta-Prompt Generator
+
+[Include the full component above]
+
+**Trigger schedule:**
+- Run `auto-improve-prompts.ts` weekly via cron
+- Or manually after every 50+ failures captured
+- Or when an enhancement's effectiveness drops below 30%
+
+**Safety mechanisms:**
+1. Human approval required for first 5 auto-generated enhancements
+2. Version all prompt changes (use prompt_versions table)
+3. A/B test auto-generated vs manual enhancements
+4. Rollback if success rate drops after update
+
+**Success criteria:**
+- Auto-generated enhancements reduce errors 40%+ within 2 weeks
+- System creates useful enhancements for new error codes within 24 hours
+- No human intervention needed after initial validation period
+```
+
+**Now the answer to your question is YES** - the system auto-improves the prompts that prevent errors in the first place, using Claude as the "meta-AI" that teaches gpt-4o-mini how to improve.

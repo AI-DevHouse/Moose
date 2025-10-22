@@ -1,0 +1,440 @@
+## Comprehensive Fix Recommendations for Claude Code
+
+### 1. IMMEDIATE: Git Branch Conflict Issue
+
+**Problem**: Work orders fail when attempting to create branches that already exist
+
+**Root Cause**: `aider-executor.ts` line ~106 doesn't check for existing branches before `git checkout -b`
+
+**Fix Implementation**:
+
+```typescript
+// In src/lib/orchestrator/aider-executor.ts, modify createFeatureBranch function:
+
+async function createFeatureBranch(branchName: string, workingDirectory: string): Promise<void> {
+  try {
+    // Check if branch already exists locally
+    const { stdout: localBranches } = execSync('git branch', {
+      cwd: workingDirectory,
+      encoding: 'utf8'
+    });
+    
+    const branchExists = localBranches.split('\n').some(b => 
+      b.trim().replace('* ', '') === branchName
+    );
+
+    if (branchExists) {
+      // Branch exists - delete and recreate, or checkout and reset
+      console.log(`[AiderExecutor] Branch ${branchName} already exists, checking out and resetting`);
+      execSync(`git checkout ${branchName}`, { cwd: workingDirectory });
+      execSync(`git reset --hard origin/main`, { cwd: workingDirectory }); // or appropriate base branch
+    } else {
+      // Create new branch as normal
+      execSync(`git checkout -b ${branchName}`, { cwd: workingDirectory });
+    }
+    
+    console.log(`[AiderExecutor] Feature branch ready: ${branchName}`);
+  } catch (error) {
+    throw new Error(`Failed to create feature branch: ${error.message}`);
+  }
+}
+```
+
+**Alternative Approach** (cleaner for fresh starts):
+```typescript
+// Force delete existing branch before creating
+if (branchExists) {
+  execSync(`git branch -D ${branchName}`, { cwd: workingDirectory });
+}
+execSync(`git checkout -b ${branchName}`, { cwd: workingDirectory });
+```
+
+**Testing**: Create a branch manually, then run a WO that targets the same branch name
+
+---
+
+### 2. HIGH: Database Schema - Missing github_events.action Column
+
+**Problem**: `ResultTracker` attempting to write to non-existent `action` column
+
+**Root Cause**: Database schema doesn't include `action` column that code expects
+
+**Fix Option A - Add Migration**:
+
+Create new migration file: `supabase/migrations/003_add_github_events_action.sql`
+
+```sql
+-- Add action column to github_events table
+ALTER TABLE github_events 
+ADD COLUMN IF NOT EXISTS action TEXT;
+
+-- Add comment explaining the column
+COMMENT ON COLUMN github_events.action IS 'Type of GitHub action (e.g., pr_created, pr_merged)';
+
+-- Optional: Add index if this column will be queried frequently
+CREATE INDEX IF NOT EXISTS idx_github_events_action 
+ON github_events(action);
+```
+
+**Fix Option B - Update Code to Match Schema**:
+
+In `src/lib/orchestrator/result-tracker.ts`, modify the GitHub events insertion:
+
+```typescript
+// Remove 'action' from the insert if it doesn't exist
+await supabase
+  .from('github_events')
+  .insert({
+    work_order_id: workOrderId,
+    event_type: 'pr_created', // Use event_type instead of action
+    pr_url: prUrl,
+    created_at: new Date().toISOString()
+    // Remove: action: 'created'
+  });
+```
+
+**Recommended**: Option A (add the column) - cleaner and allows future functionality
+
+**Apply Migration**:
+```bash
+# If using Supabase CLI
+supabase db push
+
+# Or apply manually in Supabase dashboard SQL editor
+```
+
+---
+
+### 3. HIGH: GitHub PR Number Extraction - JQ Quote Escaping
+
+**Problem**: JQ expression fails due to Windows PowerShell quote handling
+
+**Current Failing Command** (in `github-integration.ts`):
+```typescript
+const cmd = `gh pr list --head ${branchName} --json number --jq '.[0].number' --repo ${repo}`;
+```
+
+**Fix for Windows Compatibility**:
+
+```typescript
+// In src/lib/orchestrator/github-integration.ts
+
+private async getPRNumber(branchName: string, repo: string): Promise<number | null> {
+  try {
+    // Use double quotes for Windows, and escape properly
+    const isWindows = process.platform === 'win32';
+    
+    let cmd: string;
+    if (isWindows) {
+      // Windows PowerShell - use double quotes and escape inner quotes
+      cmd = `"${ghPath}" pr list --head ${branchName} --json number --jq ".[0].number" --repo ${repo}`;
+    } else {
+      // Unix - original format works
+      cmd = `"${ghPath}" pr list --head ${branchName} --json number --jq '.[0].number' --repo ${repo}`;
+    }
+
+    const { stdout } = execSync(cmd, {
+      cwd: projectDirectory,
+      encoding: 'utf8',
+      shell: isWindows ? 'powershell.exe' : undefined
+    });
+
+    const prNumber = parseInt(stdout.trim(), 10);
+    return isNaN(prNumber) ? null : prNumber;
+    
+  } catch (error) {
+    console.error(`[GitHubIntegration] Error getting PR number:`, error);
+    return null;
+  }
+}
+```
+
+**Alternative Approach** (more robust):
+```typescript
+// Use GitHub CLI's --json flag without jq
+const cmd = `"${ghPath}" pr list --head ${branchName} --json number --repo ${repo}`;
+const { stdout } = execSync(cmd, { cwd: projectDirectory, encoding: 'utf8' });
+const prList = JSON.parse(stdout);
+const prNumber = prList.length > 0 ? prList[0].number : null;
+```
+
+---
+
+### 4. MEDIUM: Improve Work Order Context to Reduce Aider Questions
+
+**Problem**: Aider asks clarifying questions instead of implementing, blocking autonomous execution
+
+**Root Cause**: Work order instructions lack sufficient architectural context
+
+**Fix Implementation**:
+
+In `src/lib/orchestrator/proposer-executor.ts`, enhance the prompt:
+
+```typescript
+// Add architectural context section to the instruction
+const architecturalContext = `
+ARCHITECTURAL CONTEXT:
+- This is an Electron application using TypeScript
+- Authentication: Users manually sign into each provider's webview (no OAuth needed)
+- State Management: Redux with redux-persist (already configured)
+- IPC: Use existing colon-separated channel pattern (e.g., 'provider:action')
+- Security: Webviews use sandbox attributes, no additional CSP needed initially
+- Provider Detection: Monitor DOM changes using MutationObserver in preload scripts
+
+IMPORTANT ASSUMPTIONS:
+- Make reasonable architectural decisions based on existing patterns
+- Create placeholder types if dependencies don't exist yet
+- Implement functional code first, optimization comes later
+- If unclear, choose the simpler option and note it in comments
+`;
+
+const instruction = `
+${architecturalContext}
+
+${workOrder.title}
+
+DESCRIPTION:
+${workOrder.description}
+
+ACCEPTANCE CRITERIA:
+${workOrder.acceptance_criteria.join('\n')}
+
+FILES TO MODIFY/CREATE:
+${workOrder.files_in_scope.join('\n')}
+
+EXECUTE WITHOUT ASKING QUESTIONS - make reasonable assumptions based on context above.
+`;
+```
+
+**Additional Fix**: Add project-level context file
+
+Create `C:\dev\multi-llm-discussion-v1\.aider.context.md`:
+
+```markdown
+# Project Architecture Context
+
+## Tech Stack
+- Framework: Electron v28+, TypeScript 5.3+
+- UI: React with Redux Toolkit
+- IPC: Main ↔ Renderer communication using custom channels
+
+## Coding Standards
+- Use existing patterns from src/main/ipc/handlers/*
+- All IPC channels use format: `category:action`
+- Authentication: Manual user login in webviews, no OAuth
+- State: Redux slices in src/renderer/store/*
+- Types: Define in src/types/* and import
+
+## Decision Guidelines
+- When uncertain about types: create placeholder and refine later
+- When uncertain about UI: use existing component patterns
+- When uncertain about IPC: follow clipboard-handlers.ts pattern
+- Prioritize working code over perfect abstraction
+```
+
+Then reference in Aider command:
+```typescript
+// In aider-executor.ts, add context flag
+const aiderCmd = [
+  'py', '-3.11', '-m', 'aider',
+  '--message-file', instructionFile,
+  '--read', 'C:\\dev\\multi-llm-discussion-v1\\.aider.context.md', // Add this
+  '--model', model,
+  '--yes',
+  '--auto-commits',
+  ...filePaths
+].join(' ');
+```
+
+---
+
+### 5. MEDIUM: Capacity Management Strategy
+
+**Problem**: Frequent capacity bottlenecks with 3 max concurrent but only 2 Claude slots
+
+**Root Cause**: Configuration mismatch between orchestrator concurrency and model capacity
+
+**Fix Option A - Align Concurrency Limits**:
+
+In orchestrator configuration:
+```typescript
+// src/lib/orchestrator/orchestrator-service.ts
+
+const ORCHESTRATOR_CONFIG = {
+  maxConcurrent: 2, // Match Claude capacity instead of 3
+  pollingInterval: 10000
+};
+
+// Or dynamically set based on available capacity
+const ORCHESTRATOR_CONFIG = {
+  maxConcurrent: Math.min(
+    CLAUDE_CAPACITY, 
+    GPT_CAPACITY
+  ), 
+  pollingInterval: 10000
+};
+```
+
+**Fix Option B - Increase Claude Capacity**:
+
+In capacity manager:
+```typescript
+// src/lib/orchestrator/capacity-manager.ts
+
+const MODEL_CAPACITY = {
+  'claude-sonnet-4-5': 3, // Increase from 2 to 3
+  'gpt-4o-mini': 5
+};
+```
+
+**Fix Option C - Smarter Routing** (Best):
+
+```typescript
+// In manager-coordinator.ts, prefer GPT for simpler tasks
+
+private selectProposer(workOrder: WorkOrder): string {
+  const complexity = workOrder.complexity_score;
+  
+  // Use GPT-4o-mini for simpler work when Claude is busy
+  if (complexity < 0.7 && this.capacityManager.hasCapacity('gpt-4o-mini')) {
+    return 'gpt-4o-mini';
+  }
+  
+  // Use Claude for complex work
+  if (this.capacityManager.hasCapacity('claude-sonnet-4-5')) {
+    return 'claude-sonnet-4-5';
+  }
+  
+  // Fallback to GPT if Claude unavailable
+  if (this.capacityManager.hasCapacity('gpt-4o-mini')) {
+    return 'gpt-4o-mini';
+  }
+  
+  return null; // No capacity available
+}
+```
+
+**Recommended**: Implement Option C alongside setting `maxConcurrent: 2`
+
+---
+
+### 6. LOW: Aider Terminal Warnings
+
+**Problem**: Repeated "Can't initialize prompt toolkit" warnings clutter logs
+
+**Fix**:
+
+In `aider-executor.ts`, set environment variables:
+
+```typescript
+// Before executing Aider command
+const aiderEnv = {
+  ...process.env,
+  TERM: 'dumb', // Disable fancy terminal features
+  PYTHONIOENCODING: 'utf-8',
+  NO_COLOR: '1' // Disable color output if desired
+};
+
+const { stdout, stderr } = execSync(aiderCmd, {
+  cwd: projectDirectory,
+  encoding: 'utf8',
+  env: aiderEnv, // Use modified environment
+  maxBuffer: 10 * 1024 * 1024
+});
+```
+
+**Alternative**: Suppress specific warnings:
+
+```typescript
+// Filter stderr output
+const filteredStderr = stderr
+  .split('\n')
+  .filter(line => !line.includes("Can't initialize prompt toolkit"))
+  .filter(line => !line.includes("Terminal does not support"))
+  .join('\n');
+
+if (filteredStderr.trim()) {
+  console.error('[Aider]', filteredStderr);
+}
+```
+
+---
+
+### 7. LOW: EventEmitter Listeners Missing
+
+**Problem**: Logs show "No listeners" for work order events
+
+**Fix Option A - Add Listeners** (if monitoring needed):
+
+```typescript
+// In orchestrator-service.ts, add event listeners
+
+private setupEventListeners(workOrderId: string): void {
+  this.eventEmitter.on(workOrderId, 'started', (data) => {
+    console.log(`[Orchestrator] WO ${workOrderId} started`, data);
+    // Optionally: Send to UI via WebSocket/SSE
+  });
+
+  this.eventEmitter.on(workOrderId, 'progress', (data) => {
+    console.log(`[Orchestrator] WO ${workOrderId} progress:`, data.stage);
+    // Optionally: Update progress bar
+  });
+
+  this.eventEmitter.on(workOrderId, 'completed', (data) => {
+    console.log(`[Orchestrator] WO ${workOrderId} completed`, data);
+    // Cleanup listener
+    this.eventEmitter.removeAllListeners(workOrderId);
+  });
+
+  this.eventEmitter.on(workOrderId, 'failed', (data) => {
+    console.error(`[Orchestrator] WO ${workOrderId} failed:`, data.error);
+    // Cleanup listener
+    this.eventEmitter.removeAllListeners(workOrderId);
+  });
+}
+
+// Call before starting execution
+await this.setupEventListeners(workOrder.id);
+await this.executeWorkOrderAsync(workOrder);
+```
+
+**Fix Option B - Remove Logs** (if intentional):
+
+```typescript
+// In orchestrator-service.ts, remove or comment out emit calls
+// this.eventEmitter.emit(workOrderId, 'started', { timestamp: Date.now() });
+
+// Or add conditional logging
+if (this.eventEmitter.listenerCount(workOrderId) > 0) {
+  this.eventEmitter.emit(workOrderId, 'progress', progressData);
+}
+```
+
+**Recommended**: Option B (remove logs) unless you plan to implement real-time monitoring UI
+
+---
+
+## Implementation Order
+
+**Day 1 - Critical Fixes**:
+1. Git branch conflict resolution (30 min)
+2. Database schema migration (15 min)
+3. GitHub PR extraction fix (30 min)
+
+**Day 2 - Performance**:
+4. Work order context enhancement (1 hour)
+5. Capacity management optimization (1 hour)
+
+**Day 3 - Polish**:
+6. Terminal warnings suppression (15 min)
+7. EventEmitter cleanup (30 min)
+
+**Testing Checklist**:
+- [ ] Run orchestrator with 3-5 work orders
+- [ ] Verify no branch conflicts
+- [ ] Confirm PR numbers extracted correctly
+- [ ] Check database writes succeed
+- [ ] Monitor for Aider clarification questions
+- [ ] Observe capacity usage patterns
+
+Would you like me to create individual task files for Claude Code for any of these fixes?

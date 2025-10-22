@@ -1,0 +1,56 @@
+The Real Problem
+You're correct that the v71 fix didn't work. The issue is that Git uses environment variables like GIT_DIR and GIT_WORK_TREE to specify the repository location Git - git Documentation, and Aider respects these. The Git priming in the parent process doesn't help because each Aider child process does its own Git repository discovery.
+Recommended Solution: Set GIT_DIR Environment Variable
+This is the most reliable approach:
+
+Set GIT_DIR and GIT_WORK_TREE environment variables when spawning Aider
+These are standard Git environment variables that all Git tools respect
+Eliminates ambiguity about which repository to use
+
+Implementation:
+In aider-executor.ts, when spawning the Aider process, add these environment variables:
+typescriptconst aiderProcess = spawn('python', ['-m', 'aider', ...args], {
+  cwd: workingDirectory,
+  env: {
+    ...process.env,
+    GIT_DIR: path.join(workingDirectory, '.git'),
+    GIT_WORK_TREE: workingDirectory
+  }
+});
+Why this works:
+
+GIT_DIR specifies the path to the .git directory, and when set, Git uses it instead of searching for .git directories Git - git Documentation
+GIT_WORK_TREE specifies the root of the working tree Git - git Documentation
+This explicitly tells Aider's internal Git commands exactly where the repository is
+No race condition - it's set before Aider even starts
+
+Alternative Approaches (Ranked)
+2. Verify Git repo exists before spawning Aider (defensive but not a fix)
+
+Check that .git directory exists at workingDirectory
+Log an error if it doesn't
+This won't fix the race condition but could help diagnose issues
+
+3. Sequential execution (NOT recommended)
+
+Would slow down the entire system
+Doesn't actually fix the root cause
+Only mentioned for completeness
+
+4. Delay/retry logic (NOT recommended)
+
+Doesn't address root cause
+Adds latency
+Could still fail intermittently
+
+My Strong Recommendation
+Use the GIT_DIR and GIT_WORK_TREE environment variables approach. This is:
+
+✅ The most direct solution
+✅ Uses standard Git mechanisms
+✅ Eliminates ambiguity
+✅ No performance impact
+✅ No architectural changes needed
+✅ Will work reliably for concurrent processes
+
+This should have been the original fix. The Git priming approach was addressing the symptom (Git detection failing) rather than the root cause (Aider not knowing explicitly where the repo is).

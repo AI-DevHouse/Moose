@@ -1,0 +1,25 @@
+SESSION v69 KICKOFF
+
+Read: C:\dev\moose-mission-control\docs\session_updates\SESSION_START_QUICK.md
+
+CRITICAL: Session v68 FAILED (75.5% failure rate). Manual cleanup was skipped.
+
+Before doing ANYTHING:
+1. Read the v68 critical error section in SESSION_START_QUICK.md (lines 9-22)
+2. Read session-v68-20251011-1040-handover.md for full context
+
+Your tasks:
+1. Clean target repo (48 branches + 25 open PRs)
+2. Reset 37 failed + 12 in-progress WOs to pending
+3. Three-phase test approach:
+   - Phase 1: 5 WOs (normal routing) - validate cleanup worked
+   - Phase 2: 5 WOs (GPT-4o-mini ONLY) - compare outcomes
+   - Phase 3: Remaining ~40 WOs (normal routing) - full run
+
+IMPORTANT:
+- Test phases validate system before committing to full run
+- Phase 2 requires forcing all 5 WOs to GPT-4o-mini (override Manager routing)
+
+DO NOT start orchestrator until cleanup is verified complete.
+
+All code fixes are done. This is purely cleanup + phased test run.

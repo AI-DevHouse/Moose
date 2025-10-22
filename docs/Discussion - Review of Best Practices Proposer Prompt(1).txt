@@ -1,0 +1,256 @@
+Looking at your `buildClaudePrompt()` and `buildOpenAIPrompt()` methods, here's my analysis against the best-practice rules:
+
+## What You're Doing Well ✅
+
+1. **Clear sections** - Task, Context, Output Type
+2. **Dependency context** - Smart to include available packages
+3. **Detailed code quality rules** - The 5-point implementation rules are excellent
+4. **Output format specification** - Clear about no markdown wrappers
+5. **Concise, no filler** - No conversational fluff
+
+## Critical Issues to Fix 🔴
+
+### 1. **Structure Violations - "Lost in the Middle" Problem**
+
+Your current structure:
+```
+Task → Context → Output Type → [HUGE dependency block] → [HUGE rules block] → Output format
+```
+
+The dependency context (can be 100+ lines) and code quality rules (50+ lines) are buried in the middle. GPT-4o-mini will likely miss critical details here.
+
+**Fix:** Use the sandwich structure
+
+```typescript
+private buildOpenAIPrompt(request: ProposerRequest, projectPath?: string): string {
+  const dependencyContext = request.expected_output_type === 'code'
+    ? this.buildDependencyContext(projectPath)
+    : '';
+
+  const codeRules = request.expected_output_type === 'code' ? `
+
+## CRITICAL RULES (MANDATORY)
+1. NO PLACEHOLDERS - Complete functional code only
+2. ERROR HANDLING - Wrap all external operations in try-catch
+3. INPUT VALIDATION - Validate all public method inputs
+4. CONTEXT AWARENESS - Verify execution environment (Node vs Browser)
+5. RESOURCE CLEANUP - Remove listeners, clear timers, close handles` : '';
+
+  return `## OBJECTIVE
+${request.task_description}
+
+## REQUIREMENTS
+${this.extractNumberedRequirements(request)}
+
+## CONSTRAINTS
+- Output Type: ${request.expected_output_type}
+${request.security_context ? `- Security: ${request.security_context}` : ''}
+- Format: Raw TypeScript code ONLY (no markdown, no explanations)
+
+## CONTEXT
+${request.context.join('\n')}
+${dependencyContext}
+${codeRules}
+
+---
+CRITICAL REMINDER - READ BEFORE RESPONDING:
+1. NO PLACEHOLDERS or TODOs
+2. ALL external operations need try-catch
+3. Output format: Raw code only, no \`\`\` fences
+`;
+}
+```
+
+### 2. **No Numbered Requirements**
+
+You pass `task_description` as free text, but don't extract requirements.
+
+**Fix:** Add a helper method
+
+```typescript
+private extractNumberedRequirements(request: ProposerRequest): string {
+  // If task description has bullet points, convert to numbered list
+  // Otherwise, make the whole task requirement #1
+  const lines = request.task_description.split('\n');
+  const requirements: string[] = [];
+  
+  lines.forEach(line => {
+    const trimmed = line.trim();
+    if (trimmed.startsWith('-') || trimmed.startsWith('•') || trimmed.startsWith('*')) {
+      requirements.push(trimmed.replace(/^[-•*]\s*/, ''));
+    }
+  });
+  
+  if (requirements.length === 0) {
+    return `1. ${request.task_description}`;
+  }
+  
+  return requirements.map((req, i) => `${i + 1}. ${req}`).join('\n');
+}
+```
+
+### 3. **Code Quality Rules Too Long**
+
+Your 5-point rule block is ~80 lines. For GPT-4o-mini, this is too much detail in the middle of the prompt.
+
+**Fix:** Create two versions
+
+```typescript
+// Concise version for GPT-4o-mini (put at END of prompt)
+private get CONCISE_CODE_RULES(): string {
+  return `
+CRITICAL RULES (MANDATORY):
+1. NO PLACEHOLDERS - Complete functional code only
+2. ERROR HANDLING - try-catch for: fs, fetch, IPC, DB operations
+3. INPUT VALIDATION - Check type/range/format on all public methods
+4. CONTEXT AWARENESS - Main=Node.js (Vitest), Renderer=Browser (React)
+5. CLEANUP - Remove listeners, clear timers, close handles`;
+}
+
+// Detailed version for Claude (can go in middle, Claude handles it better)
+private get DETAILED_CODE_RULES(): string {
+  return `/* your current 80-line version */`;
+}
+```
+
+### 4. **Dependency Context is Enormous**
+
+This can be 100+ lines and goes in the middle. Move it OR truncate it.
+
+**Fix:** Summarize for prompt, link to full context
+
+```typescript
+private buildDependencyContext(projectPath?: string): string {
+  const fullContext = this.buildFullDependencyContext(projectPath);
+  
+  // For GPT-4o-mini, provide summary only
+  const summary = this.summarizeDependencies(fullContext);
+  
+  return `
+## AVAILABLE DEPENDENCIES (Summary - Top 10 most relevant)
+${summary.top10.join(', ')}
+... and ${summary.totalCount - 10} more
+
+IMPORT RULES:
+1. Use ONLY packages listed above
+2. For internal: use @/ alias
+3. If package missing: use workaround with available packages
+
+[Full dependency list available in context]`;
+}
+```
+
+### 5. **OpenAI Prompt Too Different**
+
+Your OpenAI prompt is much more compressed than Claude's. This inconsistency makes A/B testing harder.
+
+**Fix:** Use same structure, just adjust verbosity
+
+```typescript
+private buildPromptForProvider(
+  request: ProposerRequest, 
+  provider: 'anthropic' | 'openai',
+  projectPath?: string
+): string {
+  const isVerbose = provider === 'anthropic'; // Claude can handle more detail
+  
+  return `## OBJECTIVE
+${request.task_description}
+
+## REQUIREMENTS
+${this.extractNumberedRequirements(request)}
+
+## CONSTRAINTS
+- Output: ${request.expected_output_type}
+- Format: Raw TypeScript (no markdown)
+${request.security_context ? `- Security: ${request.security_context}` : ''}
+
+## CONTEXT
+${request.context.join('\n')}
+
+${request.expected_output_type === 'code' ? this.buildDependencyContext(projectPath) : ''}
+
+${request.expected_output_type === 'code' ? 
+  (isVerbose ? this.DETAILED_CODE_RULES : this.CONCISE_CODE_RULES) : ''}
+
+---
+CRITICAL REMINDER:
+${this.getCriticalReminders(request, provider)}`;
+}
+
+private getCriticalReminders(request: ProposerRequest, provider: string): string {
+  if (request.expected_output_type !== 'code') {
+    return `- Provide ${request.expected_output_type} focused on: ${request.task_description}`;
+  }
+  
+  // Top 3 rules only - put at END for sandwich effect
+  return `1. NO PLACEHOLDERS - Implement all functionality
+2. ERROR HANDLING - try-catch all external operations  
+3. OUTPUT FORMAT - Raw code only, no \`\`\` markdown fences`;
+}
+```
+
+## Recommended Refactor
+
+```typescript
+private buildPrompt(
+  request: ProposerRequest,
+  proposer: ProposerConfig,
+  projectPath?: string
+): string {
+  const isVerbose = proposer.provider === 'anthropic';
+  const maxPromptTokens = proposer.provider === 'openai' ? 6000 : 12000; // Stay under limits
+  
+  // Build sections
+  const objective = `## OBJECTIVE\n${request.task_description}`;
+  const requirements = `## REQUIREMENTS\n${this.extractNumberedRequirements(request)}`;
+  const constraints = this.buildConstraints(request);
+  const context = `## CONTEXT\n${request.context.slice(0, 5).join('\n')}`; // Limit context items
+  
+  const dependencies = request.expected_output_type === 'code'
+    ? this.buildDependencyContext(projectPath, maxPromptTokens * 0.3) // Max 30% of tokens
+    : '';
+    
+  const rules = request.expected_output_type === 'code'
+    ? (isVerbose ? this.DETAILED_CODE_RULES : this.CONCISE_CODE_RULES)
+    : '';
+    
+  const criticalReminder = `\n---\nCRITICAL REMINDER:\n${this.getCriticalReminders(request)}`;
+  
+  // Assemble with sandwich structure
+  return [
+    objective,
+    requirements,
+    constraints,
+    context,
+    dependencies,
+    rules,
+    criticalReminder  // Repeat critical stuff at END
+  ].filter(Boolean).join('\n\n');
+}
+```
+
+## Token Budget Management
+
+Add token counting to prevent overruns:
+
+```typescript
+private estimateTokens(text: string): number {
+  // Rough estimate: 1 token ≈ 4 characters
+  return Math.ceil(text.length / 4);
+}
+
+private buildDependencyContext(projectPath: string | undefined, maxTokens: number): string {
+  const fullContext = this.buildFullDependencyContext(projectPath);
+  const tokens = this.estimateTokens(fullContext);
+  
+  if (tokens <= maxTokens) {
+    return fullContext;
+  }
+  
+  // Truncate and summarize
+  return this.truncateDependencyContext(fullContext, maxTokens);
+}
+```
+
+This restructuring will significantly improve GPT-4o-mini's focus and completion quality while staying under the 6K-8K token sweet spot.

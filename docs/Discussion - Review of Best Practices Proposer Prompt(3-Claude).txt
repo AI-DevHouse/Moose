@@ -1,0 +1,328 @@
+**This changes EVERYTHING.** You buried the lede - you have Claude Code AND a working decomposition system? 
+
+Let me completely reframe this:
+
+## You Already Have the Solutions
+
+**Critical realization:** You're not constrained by *your* technical skills - you're constrained by *your orchestrator's* LLM capabilities. But you have:
+
+1. ✅ **Technical executor** (Claude Code) - can implement anything I recommend
+2. ✅ **Decomposition system** (Claude 4.5) - already solves high complexity problem
+3. ✅ **Working orchestration system** - proven you can build complex systems this way
+
+**The real question is: Why isn't your decomposition system preventing 0.98 complexity WOs from reaching the proposer in the first place?**
+
+## Immediate Strategy Shift
+
+### **Problem 1: You're Testing Against the Wrong Baseline**
+
+Your high complexity WO (0.98) that failed - **this should have been decomposed before reaching the proposer.**
+
+**Question for you:** Is your decomposition system:
+- A) Running on ALL incoming work, but still producing 0.98 complexity WOs?
+- B) Optional, and you chose to test single-pass for the A/B test?
+- C) Not integrated with the proposer orchestration flow yet?
+
+**If A:** Your decomposer needs tuning - Claude 4.5 should break 0.98 → multiple <0.5 WOs
+
+**If B or C:** The solution is trivial - just use decomposition consistently
+
+### **Problem 2: You're Overthinking the Validator**
+
+With Claude Code, you can build arbitrarily sophisticated validation:
+
+```markdown
+Hey Claude Code, implement a validator that:
+
+1. Scans test files for assertions and counts them
+2. Extracts component exports and verifies tests import them
+3. Detects trivial assertions like expect(true).toBe(true)
+4. Identifies I/O operations without error handling
+5. Checks if imports reference non-existent files
+6. Returns specific, actionable feedback for each issue
+
+Make it modular so I can add new checks easily.
+```
+
+**Claude Code will build this for you.** The 10-hour estimate becomes irrelevant - you're not writing it, you're specifying it.
+
+### **Problem 3: You Can Generate Code Examples**
+
+For WO templates:
+
+```markdown
+Hey Claude Code, for this work order about Redux store setup, 
+generate a minimal example showing:
+- Expected store.ts structure
+- Expected test file with 3 test cases
+- Expected type definitions
+
+Keep it under 30 lines per example.
+```
+
+**Now your WO templates can include concrete code examples** without you needing to write them.
+
+## Revised Strategic Picture
+
+### **What You Actually Need**
+
+**Tier 1: Flow Control (Highest Priority)**
+
+```
+Incoming work
+    ↓
+Check complexity score
+    ↓
+If >0.7 → Send to decomposer (Claude 4.5)
+    ↓
+Get back N sub-WOs (each <0.5)
+    ↓
+Process each sub-WO through proposer
+    ↓
+Tier 3 validator on each output
+    ↓
+Refinement loop if validation fails
+    ↓
+Merge results into final PR
+```
+
+**You already have most of this!** You just need:
+- Integration between decomposer and proposer orchestration
+- Validator implementation (Claude Code can build it)
+- Refinement loop logic (probably already exists?)
+
+**Tier 2: Quality Guardrails**
+
+The validator becomes your quality gateway:
+- Catches issues deterministically
+- Provides feedback for refinement
+- Gaming detection (sophisticated checks Claude Code can implement)
+
+**Tier 3: Template Optimization**
+
+With Claude Code generating examples:
+- WO templates can be much more explicit
+- Code snippets show expected patterns
+- Models have concrete targets to match
+
+## The Real Questions
+
+### **Q1: Why did WO-787c6dd1 (0.98) reach the proposer without decomposition?**
+
+This is the core issue. If your decomposition system works, this shouldn't happen.
+
+**Possible answers:**
+- Decomposition is manual/optional (you chose not to use it for testing)
+- Decomposition ran but produced sub-WOs that are still too complex
+- Decomposition isn't integrated into the orchestration flow
+- There's a bug in complexity scoring (0.98 should trigger decomposition)
+
+**What's the actual situation?**
+
+### **Q2: Does your current system have a refinement loop?**
+
+Your evidence shows "2 refinement cycles" for some PRs. Is this:
+- Automated loop that catches syntax errors and refines?
+- Manual process where you review and ask for fixes?
+- Something else?
+
+**If you already have automated refinement, the validator just needs to hook into it.**
+
+### **Q3: What does "100% autonomy" mean in your context?**
+
+Given you work through Claude Code, does "100% autonomy" mean:
+- A) Zero human involvement (system runs entirely on its own)
+- B) No human technical intervention (but you can instruct Claude Code to fix issues)
+- C) No manual code writing (but you can orchestrate AI tools to solve problems)
+
+**This distinction matters for strategy.**
+
+## Recommended Action Plan (Revised)
+
+### **Phase 0: Integrate What You Have (2 hours)**
+
+**Action 1: Connect decomposer to orchestration**
+
+```typescript
+// In your orchestrator flow
+async function processWorkOrder(wo: WorkOrder) {
+  // Check complexity
+  if (wo.complexity > 0.7) {
+    console.log(`High complexity ${wo.complexity} - decomposing...`)
+    const subWOs = await decomposer.decompose(wo)
+    
+    // Process each sub-WO
+    const results = await Promise.all(
+      subWOs.map(sub => this.proposer.generate(sub))
+    )
+    
+    // Merge results
+    return this.merger.combineResults(results)
+  }
+  
+  // Low/mid complexity - direct processing
+  return this.proposer.generate(wo)
+}
+```
+
+**Expected outcome:** High complexity automatically handled via decomposition
+
+**Action 2: Verify decomposition quality**
+
+Test: Does decomposer break 0.98 → multiple WOs each <0.5?
+
+If not, tune decomposition prompts.
+
+### **Phase 1: Build Validator (4 hours with Claude Code)**
+
+**Instruct Claude Code:**
+
+```markdown
+Build a completeness validator with these checks:
+
+1. **Test Assertions**
+   - Count expect() statements in test files
+   - Require minimum 3 per test case
+   - Detect trivial assertions (true === true)
+   - Verify tests import components they're testing
+
+2. **Placeholder Detection**
+   - Regex: /{\s*\/\/.*\s*}/
+   - TODO/FIXME markers
+   - Empty function bodies
+   - throw new Error("Not implemented")
+
+3. **Import Validation**
+   - Parse all import statements
+   - Check if imported files exist in the PR or project
+   - Flag broken imports
+
+4. **Error Handling**
+   - Find: fs.*, fetch(), axios., JSON.parse
+   - Verify each has try-catch or .catch()
+   - Flag uncaught operations
+
+5. **Type Safety**
+   - Detect `: any` type annotations
+   - Require specific types
+
+Return: { isValid, errors: [{ file, line, message, severity }] }
+
+Make it easy to add new validation rules.
+```
+
+**Claude Code will implement this. You review and approve.**
+
+**Expected time:** 2 hours for Claude Code to build, 2 hours for you to test/refine
+
+### **Phase 2: Enhance WO Templates (2 hours with Claude Code)**
+
+**Instruct Claude Code:**
+
+```markdown
+For each work order type (Redux store, validation suite, etc.),
+generate template improvements:
+
+1. CRITICAL section at top with test requirements
+2. Explicit file structure tree
+3. Code examples for each main requirement (max 30 lines each)
+4. Success checklist
+
+Generate examples for:
+- Redux store setup
+- React component creation  
+- API integration
+- Test suite creation
+- Validation logic
+
+Format as markdown templates I can use.
+```
+
+**Claude Code generates templates. You integrate them into WO creation.**
+
+### **Phase 3: Test End-to-End (4 hours)**
+
+Run your 3 test WOs through the new pipeline:
+
+**Low (0.41):** Direct to proposer + validator
+- Expected: 78 → 85/100
+
+**Mid (0.55):** Direct to proposer + validator  
+- Expected: 58 → 75-80/100
+
+**High (0.98):** Decompose → process sub-WOs → merge
+- Expected: Each sub-WO 75-80/100
+
+**Measure:**
+- Quality scores
+- Refinement cycles needed
+- Decomposition effectiveness
+- Cost per WO
+
+## The Actual Priorities (Given Your Setup)
+
+### **Priority 1: Use Your Decomposition System**
+**Effort:** 2 hours (integration work)
+**Impact:** Eliminates high complexity failures immediately
+**You already built this!** Just use it consistently.
+
+### **Priority 2: Build Validator via Claude Code**
+**Effort:** 4 hours (instructing + testing)
+**Impact:** +19-28 points on mid complexity
+**Claude Code can implement sophisticated checks.**
+
+### **Priority 3: Enhance Templates via Claude Code**
+**Effort:** 2 hours (instructing + integration)
+**Impact:** +8-12 points across all complexity
+**Claude Code can generate code examples.**
+
+### **Priority 4: Refinement Loop Validation**
+**Effort:** 2 hours (testing)
+**Impact:** Confirms validator will work
+**You need to test if your existing refinement loop handles validator feedback well.**
+
+## Questions I Need Answered
+
+**1. Decomposition Integration:**
+- Is your decomposer integrated with the orchestrator?
+- Why did the 0.98 complexity WO go to proposer instead of decomposer?
+- What complexity threshold triggers decomposition?
+
+**2. Current Refinement:**
+- Do you have an automated refinement loop?
+- What triggers refinement currently? (syntax errors only?)
+- How many cycles before it gives up?
+
+**3. Claude Code Workflow:**
+- When you say "100% autonomy," can you instruct Claude Code to fix issues?
+- Or does "autonomous" mean the orchestrator runs without your involvement?
+
+**4. Decomposition Quality:**
+- When decomposer breaks down a 0.98 WO, what's the resulting complexity range?
+- Are sub-WOs typically <0.5 or still in mid range?
+
+**5. Current Pain Points:**
+- What's actually blocking you from production readiness?
+- Is it quality scores, cost, reliability, something else?
+
+## My Updated Recommendation
+
+**You're 80% of the way there.** You have:
+- ✅ Working orchestration
+- ✅ Decomposition system (underutilized?)
+- ✅ Technical executor (Claude Code)
+- ✅ Refinement capability (needs validator integration)
+
+**The gap is small:**
+1. **Consistently use decomposition** for complexity >0.7 (2 hrs)
+2. **Build validator via Claude Code** (4 hrs)
+3. **Test the integrated flow** (4 hrs)
+
+**Total: 10 hours to production-ready system**
+
+**But I need to understand:**
+- Why you're not using decomposition on high complexity
+- Whether your refinement loop can handle validator feedback
+- What "100% autonomy" means in your Claude Code context
+
+**Can you clarify these points?** Then I can give you the exact implementation steps.

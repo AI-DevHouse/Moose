@@ -1,0 +1,1973 @@
+Technical Specification: WO Scope Validation with Threshold-Based Refinement (Strategy C)
+Document Version: 1.0
+Date: 2025-10-22
+Audience: Claude Code (Implementation Agent)
+Purpose: Evaluate feasibility and provide data-driven recommendations
+
+Executive Summary
+Objective: Add work order scope validation to the decomposition pipeline to prevent oversized WOs (like WO-11 at 0.85 complexity) from reaching the proposer.
+Approach: Threshold-based hybrid that uses complexity signals to trigger selective refinement, balancing quality improvement against cost/time overhead.
+Your Task: Evaluate this proposal against the actual codebase, real decomposition data, and production workflows to determine:
+
+Is this the right problem to solve?
+Is Strategy C the right solution?
+What are the real-world trade-offs?
+What should we actually implement?
+
+
+Background: The Problem
+Evidence from Production
+Example: WO-11 from 42-WO Project
+json{
+  "idx": 11,
+  "title": "Implement Route Structure and Page Scaffolding for Core Features",
+  "files_in_scope": [
+    "src/renderer/routes/routes.tsx",
+    "src/renderer/pages/HomePage.tsx",
+    "src/renderer/pages/DiscussionsPage.tsx",
+    "src/renderer/pages/SettingsPage.tsx",
+    "src/renderer/pages/AlignmentDashboardPage.tsx",
+    "src/renderer/pages/NotFoundPage.tsx",
+    "src/renderer/hooks/useNavigation.ts",
+    "src/renderer/types/routes.ts",
+    "tests/renderer/routes/routes.test.tsx"
+  ],
+  "acceptance_criteria": [
+    "Route configuration with React Router v6 for all main sections",
+    "HomePage component displays session overview and quick actions",
+    "DiscussionsPage component with list view scaffold connected to sessionsSlice (WO-9)",
+    "SettingsPage component with tabs for Providers, Preferences, and Advanced",
+    "AlignmentDashboardPage component scaffold for alignment visualization",
+    "Lazy loading implemented for all page components with Suspense boundaries",
+    "Navigation hooks (useNavigate, useParams) typed and tested",
+    "404 NotFoundPage component with navigation back to home",
+    "Page transitions smooth with loading states",
+    "All pages connect to appropriate Redux slices and display loading/error states",
+    "TypeScript route parameter types defined"
+  ],
+  "context_budget_estimate": 2400,
+  "complexity_score": 0.85,
+  "risk_level": "low"
+}
+Hypothesis: This WO combines 6-7 distinct logical units (routing + 5 pages + hooks) and should have been 6 separate WOs.
+Questions for Claude Code
+Q1: Pull the last 20 decompositions from the database. How many WOs have:
+
+6+ files in files_in_scope?
+8+ acceptance criteria?
+Estimated at 2500+ tokens?
+
+Q2: Of those "large" WOs, what percentage failed during proposal or required multiple refinement cycles?
+Q3: Look at acceptance results. Do WOs with 6+ files have lower acceptance_score or higher todo_count?
+SQL Query to run:
+sqlSELECT 
+  id,
+  title,
+  array_length(files_in_scope, 1) as file_count,
+  array_length(acceptance_criteria, 1) as criteria_count,
+  context_budget_estimate,
+  complexity_score,
+  acceptance_result->>'acceptance_score' as score,
+  acceptance_result->>'todo_count' as todos
+FROM work_orders
+WHERE created_at > NOW() - INTERVAL '30 days'
+  AND array_length(files_in_scope, 1) >= 6
+ORDER BY created_at DESC;
+```
+
+**Action Item:** Run this query and include results in your analysis.
+
+---
+
+## Proposed Solution: Strategy C (Threshold-Based Hybrid)
+
+### Architecture Overview
+```
+┌─────────────────────────────────────────────────────────────┐
+│ Decomposition Pipeline (Current)                            │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│ TechnicalSpec ──> Architect Service ──> Work Orders ──> DB  │
+│                        │                                     │
+│                        └──> Batched Service (if >20 WOs)    │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│ Proposed Pipeline (Strategy C)                              │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│ TechnicalSpec ──> Architect Service ──> Work Orders         │
+│                        │                     │               │
+│                        │                     v               │
+│                        │              Complexity Scanner     │
+│                        │                     │               │
+│                        │                     v               │
+│                        │              Decision Gate          │
+│                        │                     │               │
+│                        │          ┌──────────┴──────────┐   │
+│                        │          v                      v   │
+│                        │     <15% issues           15-30%    │
+│                        │     Accept w/              issues   │
+│                        │     warnings               │        │
+│                        │                            v        │
+│                        └──────────────> Selective Refinement│
+│                                                     │        │
+│                                                     v        │
+│                                              Refined WOs ──> DB
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+Component Specifications
+1. WO Complexity Calculator
+New File: src/lib/architect-wo-complexity.ts
+Purpose: Calculate scope complexity score for a single WO (0.0-1.0 scale).
+Formula:
+typescriptcomplexity = (
+  (files_count / 6) * 0.30 +
+  (acceptance_criteria / 8) * 0.25 +
+  (dependencies / 4) * 0.15 +
+  (tokens / 4000) * 0.20 +
+  (risk_multiplier) * 0.10
+)
+
+where risk_multiplier: low=0.3, medium=0.6, high=1.0
+Interface:
+typescriptexport interface WOComplexitySignal {
+  score: number; // 0.0-1.0
+  signal: 'healthy' | 'review_recommended' | 'likely_oversized';
+  guidance: string;
+  factors: {
+    fileCount: number;
+    criteriaCount: number;
+    dependencyCount: number;
+    estimatedTokens: number;
+    riskLevel: number;
+  };
+}
+
+export function assessWOScope(wo: WorkOrder): WOComplexitySignal;
+Thresholds:
+
+< 0.55: healthy
+0.55-0.70: review_recommended
+> 0.70: likely_oversized
+
+Questions for Claude Code:
+Q4: Based on your query results from Q1-Q3, are these thresholds reasonable? Should they be:
+
+0.50, 0.65, 0.80? (more lenient)
+0.45, 0.60, 0.75? (stricter)
+
+Q5: Should the formula weights be adjusted? For example:
+
+Should file_count have more weight (0.40 instead of 0.30)?
+Should acceptance_criteria have less weight (0.15 instead of 0.25)?
+
+Action Item: Calculate actual complexity scores for the 20 WOs from Q1 and plot distribution. Recommend threshold adjustments.
+
+2. Complexity Scanner
+Location: Integrate into src/lib/architect-service.ts (existing file)
+Purpose: Scan all WOs after decomposition, categorize by signal, calculate problematic percentage.
+Implementation:
+typescriptinterface ScanResult {
+  total: number;
+  healthy: number;
+  review_recommended: number;
+  likely_oversized: number;
+  problematicPercent: number; // (review_recommended + likely_oversized) / total
+  problematicWOs: Array<{
+    index: number;
+    wo: WorkOrder;
+    signal: WOComplexitySignal;
+  }>;
+}
+
+function scanComplexity(workOrders: WorkOrder[]): ScanResult {
+  const signals = workOrders.map((wo, idx) => ({
+    index: idx,
+    wo,
+    signal: assessWOScope(wo)
+  }));
+  
+  const categorized = {
+    healthy: signals.filter(s => s.signal.signal === 'healthy'),
+    review_recommended: signals.filter(s => s.signal.signal === 'review_recommended'),
+    likely_oversized: signals.filter(s => s.signal.signal === 'likely_oversized')
+  };
+  
+  const problematic = [
+    ...categorized.review_recommended,
+    ...categorized.likely_oversized
+  ];
+  
+  return {
+    total: workOrders.length,
+    healthy: categorized.healthy.length,
+    review_recommended: categorized.review_recommended.length,
+    likely_oversized: categorized.likely_oversized.length,
+    problematicPercent: problematic.length / workOrders.length,
+    problematicWOs: problematic
+  };
+}
+Questions for Claude Code:
+Q6: Where exactly should this be called in the decomposition flow?
+
+After architectService.decomposeSpec() returns? (single-pass)
+After all batches complete in batchedArchitectService? (batched)
+Both places?
+
+Q7: Look at src/lib/architect-service.ts lines where decomposition completes. What's the exact integration point?
+
+3. Decision Gate
+Location: src/lib/architect-service.ts (new function)
+Purpose: Decide whether to accept, refine, or re-decompose based on problematic percentage.
+Implementation:
+typescriptasync function applyDecisionGate(
+  spec: TechnicalSpec,
+  decomposition: DecompositionOutput,
+  scanResult: ScanResult
+): Promise<DecompositionOutput> {
+  
+  // Threshold configuration
+  const ACCEPT_THRESHOLD = 0.15;  // <15% problematic → Accept with warnings
+  const REFINE_THRESHOLD = 0.30;  // 15-30% → Selective refinement
+  // >30% → Full re-decomposition
+  
+  // Log scan results
+  console.log(`\n📊 Complexity Scan: ${scanResult.problematicPercent.toFixed(1)}% problematic`);
+  console.log(`   Healthy: ${scanResult.healthy}`);
+  console.log(`   Review recommended: ${scanResult.review_recommended}`);
+  console.log(`   Likely oversized: ${scanResult.likely_oversized}`);
+  
+  // Decision logic
+  if (scanResult.problematicPercent === 0) {
+    console.log('✅ All WOs appropriately scoped\n');
+    return decomposition;
+  }
+  
+  if (scanResult.problematicPercent < ACCEPT_THRESHOLD) {
+    console.warn(`⚠️  ${scanResult.problematicWOs.length} WOs flagged but below threshold`);
+    console.warn('   Accepting with warnings - will monitor proposer performance\n');
+    
+    // Log warnings for monitoring
+    scanResult.problematicWOs.forEach(({ index, signal }) => {
+      console.warn(`   WO-${index}: ${signal.guidance} (score: ${signal.score.toFixed(2)})`);
+    });
+    
+    return decomposition;
+  }
+  
+  if (scanResult.problematicPercent < REFINE_THRESHOLD) {
+    console.log(`🔍 ${scanResult.problematicWOs.length} WOs need refinement`);
+    console.log('   Performing selective refinement...\n');
+    
+    return await refineProblematicWOs(spec, decomposition, scanResult);
+  }
+  
+  // >30% problematic: Systemic issue
+  console.error(`❌ ${(scanResult.problematicPercent * 100).toFixed(0)}% problematic - systemic decomposition issue`);
+  console.error('   Re-decomposing with stricter guidance...\n');
+  
+  return await redecomposeWithStricterRules(spec);
+}
+Questions for Claude Code:
+Q8: Are these thresholds realistic based on actual decomposition quality?
+
+Run scan on last 10 decompositions
+What % would fall into each bucket?
+Should thresholds be adjusted?
+
+Q9: What's the cost/benefit of each action?
+
+Accepting with warnings: $0 cost, but proposer might fail later
+Selective refinement: +$X cost, +Y seconds
+Full re-decomposition: +$Z cost, +W seconds
+Calculate X, Y, Z, W based on actual API costs
+
+
+4. Selective Refinement
+Location: src/lib/architect-service.ts (new function)
+Purpose: Ask Claude to review and split only the problematic WOs while preserving architectural coherence.
+Implementation:
+typescriptasync function refineProblematicWOs(
+  spec: TechnicalSpec,
+  decomposition: DecompositionOutput,
+  scanResult: ScanResult
+): Promise<DecompositionOutput> {
+  
+  // Build architectural context summary
+  const contextSummary = buildArchitecturalContext(decomposition.work_orders);
+  
+  // Build refinement prompt
+  const refinePrompt = `You previously decomposed this specification into ${decomposition.work_orders.length} work orders.
+
+**ARCHITECTURAL CONTEXT (preserve this structure):**
+
+Overall organization:
+${contextSummary.structure}
+
+Dependency flow:
+${contextSummary.dependencies}
+
+**WORK ORDERS THAT NEED REFINEMENT:**
+
+${scanResult.problematicWOs.map(({ index, wo, signal }) => `
+═══════════════════════════════════════
+WO-${index}: ${wo.title}
+───────────────────────────────────────
+Complexity Score: ${signal.score.toFixed(2)}
+Issue: ${signal.guidance}
+
+Current Scope:
+- Files (${wo.files_in_scope.length}): ${wo.files_in_scope.join(', ')}
+- Acceptance Criteria (${wo.acceptance_criteria.length}):
+${wo.acceptance_criteria.map((c, i) => `  ${i + 1}. ${c}`).join('\n')}
+
+Context:
+- Depends on: ${wo.dependencies.length > 0 ? wo.dependencies.map(d => `WO-${d}`).join(', ') : 'None'}
+- Depended on by: ${findDependents(decomposition.work_orders, index).join(', ') || 'None'}
+
+Adjacent WOs:
+${index > 0 ? `- Previous: WO-${index - 1} (${decomposition.work_orders[index - 1].title})` : ''}
+${index < decomposition.work_orders.length - 1 ? `- Next: WO-${index + 1} (${decomposition.work_orders[index + 1].title})` : ''}
+`).join('\n')}
+
+**YOUR TASK:**
+
+For each problematic WO above, determine:
+
+1. **Should it be split?** 
+   - Are there natural boundaries between logical units?
+   - Would splitting improve focus without breaking coherence?
+
+2. **If yes, where to split?**
+   - What are the logical boundaries? (e.g., one page per WO, not all pages)
+   - How should files be distributed?
+   - How should acceptance criteria be distributed?
+
+3. **How to maintain dependencies?**
+   - If WO-11 becomes WO-11a, WO-11b, WO-11c, how do dependencies update?
+   - Which new WOs should earlier WOs depend on?
+   - Which new WOs should later WOs depend on?
+
+**OUTPUT FORMAT:**
+
+Return ONLY the work orders that replace the problematic ones. Use this format:
+
+\`\`\`json
+{
+  "refinements": [
+    {
+      "original_index": 11,
+      "original_title": "Implement Route Structure and Page Scaffolding",
+      "should_split": true,
+      "reasoning": "Combines routing logic + 5 separate pages. Natural boundaries exist per page.",
+      "new_work_orders": [
+        {
+          "title": "Implement Route Configuration and 404 Page",
+          "description": "...",
+          "acceptance_criteria": [...],
+          "files_in_scope": ["routes.tsx", "NotFoundPage.tsx", "routes.test.tsx"],
+          "context_budget_estimate": 1200,
+          "risk_level": "low",
+          "dependencies": ["9"]
+        },
+        {
+          "title": "Implement Home Page Scaffold",
+          "description": "...",
+          "acceptance_criteria": [...],
+          "files_in_scope": ["HomePage.tsx", "HomePage.test.tsx"],
+          "context_budget_estimate": 800,
+          "risk_level": "low",
+          "dependencies": ["9"]
+        }
+        // ... more new WOs
+      ]
+    }
+  ]
+}
+\`\`\`
+
+If a WO should NOT be split despite the complexity score, explain why:
+
+\`\`\`json
+{
+  "refinements": [
+    {
+      "original_index": 15,
+      "original_title": "...",
+      "should_split": false,
+      "reasoning": "High file count is due to test fixtures (6 of 8 files). Core logic is cohesive."
+    }
+  ]
+}
+\`\`\`
+
+Analyze the problematic work orders now:`;
+
+  // Call Claude for review
+  const response = await this.anthropic.messages.create({
+    model: 'claude-sonnet-4-5-20250929',
+    max_tokens: 8000, // Need room for multiple WO rewrites
+    messages: [{ role: 'user', content: refinePrompt }]
+  });
+  
+  const refinements = parseRefinementResponse(response);
+  
+  // Merge refinements back into decomposition
+  return mergeRefinements(decomposition, refinements);
+}
+
+function buildArchitecturalContext(workOrders: WorkOrder[]): {
+  structure: string;
+  dependencies: string;
+} {
+  // Group WOs by phase/area
+  const grouped = groupByPhase(workOrders);
+  
+  const structure = Object.entries(grouped)
+    .map(([phase, wos]) => `${phase}: WO-${wos[0].index} to WO-${wos[wos.length - 1].index}`)
+    .join('\n');
+  
+  // Build dependency graph
+  const dependencies = workOrders
+    .filter(wo => wo.dependencies.length > 0)
+    .map(wo => `WO-${wo.index} depends on: ${wo.dependencies.map(d => `WO-${d}`).join(', ')}`)
+    .join('\n');
+  
+  return { structure, dependencies };
+}
+
+function mergeRefinements(
+  original: DecompositionOutput,
+  refinements: RefinementResponse
+): DecompositionOutput {
+  const newWOs: WorkOrder[] = [];
+  let currentIndex = 0;
+  
+  for (let i = 0; i < original.work_orders.length; i++) {
+    const refinement = refinements.refinements.find(r => r.original_index === i);
+    
+    if (!refinement || !refinement.should_split) {
+      // Keep original WO, update dependencies if needed
+      newWOs.push(updateDependencies(original.work_orders[i], refinements, currentIndex));
+      currentIndex++;
+    } else {
+      // Replace with refined WOs
+      for (const newWO of refinement.new_work_orders) {
+        newWOs.push({
+          ...newWO,
+          dependencies: updateDependencyReferences(newWO.dependencies, refinements)
+        });
+        currentIndex++;
+      }
+    }
+  }
+  
+  return {
+    ...original,
+    work_orders: newWOs,
+    decomposition_doc: original.decomposition_doc + `\n\n## Refinement Applied\n\n` +
+      `${refinements.refinements.filter(r => r.should_split).length} work orders were split for improved scope.`
+  };
+}
+Questions for Claude Code:
+Q10: Review the existing batchedArchitectService.buildContextSummary() function. Can we reuse that logic for buildArchitecturalContext()?
+Q11: Look at the actual structure of DecompositionOutput and WorkOrder types in @/types/architect. Are there any schema changes needed?
+Q12: The mergeRefinements() function needs to handle dependency renumbering. Is there existing code that does this? Check dependency-validator.ts.
+Q13: What's the expected token count for this refinement prompt?
+
+Estimate based on: 3 problematic WOs × 500 tokens each + context
+Will this fit in 8K max_tokens?
+Should we batch if >5 problematic WOs?
+
+
+5. Configuration & Monitoring
+Location: src/lib/architect-decomposition-rules.ts (existing file)
+Add configuration:
+typescriptexport const WO_SCOPE_CONFIG = {
+  // Enable/disable refinement pipeline
+  ENABLE_REFINEMENT: true,
+  
+  // Thresholds
+  ACCEPT_THRESHOLD: 0.15,  // Accept with warnings if <15% problematic
+  REFINE_THRESHOLD: 0.30,  // Selective refinement if 15-30%
+  // >30% triggers full re-decomposition
+  
+  // Complexity signal thresholds
+  HEALTHY_MAX: 0.55,
+  REVIEW_RECOMMENDED_MAX: 0.70,
+  
+  // Refinement limits
+  MAX_REFINEMENT_ATTEMPTS: 1,  // Prevent infinite loops
+  MAX_WOES_PER_REFINEMENT: 10  // Batch if more than this
+};
+Add telemetry:
+typescriptinterface ComplexityScanTelemetry {
+  decomposition_id: string;
+  total_wos: number;
+  healthy_count: number;
+  review_recommended_count: number;
+  likely_oversized_count: number;
+  problematic_percent: number;
+  action_taken: 'accepted' | 'refined' | 'redecomposed';
+  refinement_time_ms?: number;
+  refinement_cost_usd?: number;
+  timestamp: Date;
+}
+
+async function logComplexityScan(data: ComplexityScanTelemetry): Promise<void> {
+  await supabase.from('complexity_scans').insert(data);
+}
+Questions for Claude Code:
+Q14: Does the complexity_scans table need to be created? Check current schema.
+Q15: Should this telemetry integrate with existing cost_tracking table instead?
+Q16: Look at how architect-service.ts currently logs decomposition metadata. Where should complexity scan results be stored?
+
+Integration Points
+1. Single-Pass Decomposition
+File: src/lib/architect-service.ts
+Current flow:
+typescriptasync decomposeSpec(spec: TechnicalSpec, options?: DecomposeOptions) {
+  const prompt = buildArchitectPrompt(spec);
+  const response = await this.anthropic.messages.create(...);
+  const decomposition = JSON.parse(cleanContent);
+  
+  // Validations
+  validateWorkOrderCount(decomposition.work_orders.length);
+  validateDependencies(decomposition.work_orders);
+  validateTokenBudgets(decomposition.work_orders);
+  
+  return decomposition;
+}
+Proposed flow:
+typescriptasync decomposeSpec(spec: TechnicalSpec, options?: DecomposeOptions) {
+  const prompt = buildArchitectPrompt(spec);
+  const response = await this.anthropic.messages.create(...);
+  const decomposition = JSON.parse(cleanContent);
+  
+  // Existing validations
+  validateWorkOrderCount(decomposition.work_orders.length);
+  validateDependencies(decomposition.work_orders);
+  validateTokenBudgets(decomposition.work_orders);
+  
+  // NEW: Complexity scan & refinement
+  if (WO_SCOPE_CONFIG.ENABLE_REFINEMENT) {
+    const scanResult = scanComplexity(decomposition.work_orders);
+    decomposition = await applyDecisionGate(spec, decomposition, scanResult);
+    
+    // Log telemetry
+    await logComplexityScan({
+      decomposition_id: decomposition.id,
+      ...scanResult,
+      action_taken: /* determined by gate */
+    });
+  }
+  
+  return decomposition;
+}
+Questions for Claude Code:
+Q17: Is this the right place to add the refinement loop? Or should it be in a wrapper function?
+Q18: Check if there are any transaction/rollback concerns. If refinement fails, should we return the original decomposition or throw?
+
+2. Batched Decomposition
+File: src/lib/batched-architect-service.ts
+Current flow:
+typescriptasync decomposeInBatches(spec, estimate, options) {
+  for (let i = 0; i < batches.length; i++) {
+    const batchResult = await this.generateBatch(...);
+    allWorkOrders.push(...batchResult.work_orders);
+  }
+  
+  // Validate dependencies
+  const validation = await dependencyValidator.validate(allWorkOrders);
+  
+  return { work_orders: allWorkOrders, ... };
+}
+Proposed flow:
+typescriptasync decomposeInBatches(spec, estimate, options) {
+  // Generate all batches (unchanged)
+  for (let i = 0; i < batches.length; i++) {
+    const batchResult = await this.generateBatch(...);
+    allWorkOrders.push(...batchResult.work_orders);
+  }
+  
+  // Validate dependencies (unchanged)
+  const validation = await dependencyValidator.validate(allWorkOrders);
+  
+  // NEW: Scan all WOs for complexity
+  if (WO_SCOPE_CONFIG.ENABLE_REFINEMENT) {
+    const scanResult = scanComplexity(allWorkOrders);
+    
+    // Apply decision gate
+    const refinedDecomposition = await applyDecisionGate(
+      spec,
+      { work_orders: allWorkOrders, ... },
+      scanResult
+    );
+    
+    allWorkOrders = refinedDecomposition.work_orders;
+  }
+  
+  return { work_orders: allWorkOrders, ... };
+}
+Questions for Claude Code:
+Q19: Should batched decomposition scan after EACH batch or after ALL batches?
+
+Option A: After each batch (early detection, but might refine unnecessarily)
+Option B: After all batches (see full picture, but late detection)
+
+Q20: If we refine after all batches, does that invalidate the dependency validation? Should we re-run dependencyValidator.validate() after refinement?
+
+Evaluation Criteria
+Data Collection Tasks for Claude Code
+Task 1: Historical Analysis
+sql-- Pull last 30 days of work orders
+-- Calculate complexity scores retroactively
+-- Categorize as healthy/review/oversized
+
+WITH scored_wos AS (
+  SELECT 
+    id,
+    title,
+    array_length(files_in_scope, 1) as files,
+    array_length(acceptance_criteria, 1) as criteria,
+    array_length(dependencies, 1) as deps,
+    context_budget_estimate as tokens,
+    risk_level,
+    acceptance_result->>'acceptance_score' as final_score,
+    acceptance_result->>'todo_count' as todos,
+    
+    -- Calculate complexity score (replicate formula)
+    (
+      (COALESCE(array_length(files_in_scope, 1), 1)::float / 6) * 0.30 +
+      (COALESCE(array_length(acceptance_criteria, 1), 1)::float / 8) * 0.25 +
+      (COALESCE(array_length(dependencies, 1), 0)::float / 4) * 0.15 +
+      (COALESCE(context_budget_estimate, 1000)::float / 4000) * 0.20 +
+      (CASE risk_level WHEN 'low' THEN 0.3 WHEN 'medium' THEN 0.6 WHEN 'high' THEN 1.0 ELSE 0.5 END) * 0.10
+    ) as calculated_complexity
+    
+  FROM work_orders
+  WHERE created_at > NOW() - INTERVAL '30 days'
+    AND status = 'completed'
+)
+SELECT 
+  CASE 
+    WHEN calculated_complexity < 0.55 THEN 'healthy'
+    WHEN calculated_complexity < 0.70 THEN 'review_recommended'
+    ELSE 'likely_oversized'
+  END as category,
+  COUNT(*) as count,
+  AVG(final_score::float) as avg_acceptance_score,
+  AVG(todos::int) as avg_todos,
+  AVG(files) as avg_files,
+  AVG(criteria) as avg_criteria
+FROM scored_wos
+GROUP BY category;
+```
+
+**Expected output:**
+```
+category              | count | avg_acceptance_score | avg_todos | avg_files | avg_criteria
+----------------------|-------|----------------------|-----------|-----------|-------------
+healthy               | 145   | 7.8                  | 0.3       | 3.2       | 4.1
+review_recommended    | 23    | 6.4                  | 1.8       | 5.8       | 7.2
+likely_oversized      | 8     | 4.2                  | 3.5       | 8.1       | 10.3
+Analysis questions:
+
+Is there a correlation between complexity category and acceptance score?
+Do "likely_oversized" WOs have significantly more todos/issues?
+What percentage of WOs fall into each category?
+
+Task 2: Cost/Benefit Analysis
+Calculate refinement costs:
+typescript// Estimate API costs
+const REFINEMENT_COST = {
+  review_call: 0.03,  // 2K tokens in, 1K tokens out
+  refine_call: 0.20,  // 8K tokens in, 4K tokens out
+  time_overhead: 60   // seconds
+};
+
+// Calculate potential savings
+const PROPOSER_REFINEMENT_COST = {
+  per_cycle: 0.10,    // Cost to refine a failed proposal
+  avg_cycles: 2.5     // Average refinement cycles for oversized WOs
+};
+
+// Break-even calculation
+const breakEven = REFINEMENT_COST.review_call + REFINEMENT_COST.refine_call;
+const savings = PROPOSER_REFINEMENT_COST.per_cycle * PROPOSER_REFINEMENT_COST.avg_cycles;
+
+if (savings > breakEven) {
+  console.log(`ROI positive: Save $${savings - breakEven} per oversized WO`);
+}
+Questions:
+
+What's the actual failure rate for oversized WOs?
+How many refinement cycles do they require on average?
+At what threshold does refinement pay for itself?
+
+Task 3: Threshold Tuning
+Run simulations:
+typescript// Test different thresholds
+const THRESHOLD_SCENARIOS = [
+  { healthy: 0.45, review: 0.60 },
+  { healthy: 0.50, review: 0.65 },
+  { healthy: 0.55, review: 0.70 },  // Proposed
+  { healthy: 0.60, review: 0.75 }
+];
+
+for (const thresholds of THRESHOLD_SCENARIOS) {
+  const results = simulateWithThresholds(historicalWOs, thresholds);
+  console.log(`Thresholds ${thresholds.healthy}/${thresholds.review}:`);
+  console.log(`  Would refine: ${results.refinedCount} WOs`);
+  console.log(`  Missed issues: ${results.missedIssues}`);
+  console.log(`  False positives: ${results.falsePositives}`);
+}
+Pick thresholds that maximize:
+
+Catching actual problems (high recall)
+Minimizing false positives (high precision)
+
+
+Implementation Phases
+Phase 1: Measurement (No Changes)
+Goal: Validate the problem exists and is worth solving.
+Tasks:
+
+Run historical analysis query
+Calculate complexity scores for existing WOs
+Correlate with proposer success rates
+Determine if problem is significant
+
+Deliverable: Data-driven problem statement with evidence
+Decision Gate: If <10% of WOs are oversized OR oversized WOs don't correlate with proposer failures, STOP HERE.
+
+Phase 2: Build Components (No Integration)
+Goal: Create the refinement infrastructure without affecting production.
+Tasks:
+
+Implement architect-wo-complexity.ts (calculator)
+Add scanComplexity() function
+Add applyDecisionGate() function
+Add refineProblematicWOs() function
+Write unit tests for each
+
+Deliverable: Tested components ready for integration
+Decision Gate: Components pass unit tests and correctly identify oversized WOs in test data.
+
+Phase 3: Shadow Mode (Read-Only)
+Goal: Run refinement pipeline alongside production without affecting output.
+Tasks:
+
+Integrate scanner into decomposition flow
+Log what WOULD happen (accept/refine/redo) but don't act
+Collect telemetry for 1 week
+Analyze: How often would refinement trigger? What's the cost?
+
+Deliverable: Real-world performance data
+Decision Gate: If refinement would trigger >50% of the time, thresholds need tuning. If <5%, not worth the complexity.
+
+Phase 4: Production (Write Enabled)
+Goal: Enable refinement in production with kill switch.
+Tasks:
+
+Set ENABLE_REFINEMENT: true
+Monitor for 1 week
+Compare proposer success rates before/after
+Measure cost impact
+
+Deliverable: Production-validated system
+Success Criteria:
+
+Proposer success rate increases ≥10%
+Cost increase <25%
+No regressions in decomposition quality
+
+
+Questions for Claude Code to Answer
+Critical Questions (Must Answer)
+
+Does the problem exist?
+
+Run the historical analysis query
+What % of WOs are oversized?
+Do oversized WOs correlate with proposer failures?
+
+
+Are the thresholds reasonable?
+
+Plot complexity distribution
+Where should healthy/review/oversized boundaries be?
+
+
+What are the real costs?
+
+API cost per refinement call
+Time overhead per refinement
+Cost/benefit at different problematic %
+
+
+Where exactly to integrate?
+
+Show the exact line numbers in architect-service.ts
+Show the exact line numbers in batched-architect-service.ts
+Are there any existing hooks/events to use?
+
+
+
+Strategic Questions (Should Answer)
+
+Is Strategy C the right approach?
+
+Could we achieve similar results with better prompts? (cheaper)
+Should we refine per-batch instead of after-all-batches?
+Is there a simpler solution we're missing?
+
+
+What's the ROI?
+
+How much does an oversized WO cost downstream?
+How much does refinement save?
+At what scale does this pay for itself?
+
+
+What are the risks?
+
+Can refinement introduce new bugs (broken dependencies, inconsistent naming)?
+What happens if refinement fails? Fallback strategy?
+Could this make decomposition slower/worse in some cases?
+
+
+
+Implementation Questions (Nice to Answer)
+
+Can we reuse existing code?
+
+Complexity formulas from complexity-analyzer.ts?
+Context building from batched-architect-service.ts?
+Dependency handling from dependency-validator.ts?
+
+
+What changes are needed to types?
+
+Does WorkOrder type need new fields?
+Does DecompositionOutput need new fields?
+Any breaking changes to existing interfaces?
+
+
+How to test this?
+
+Unit tests for complexity calculator?
+Integration tests for refinement flow?
+How to mock Claude API calls in tests?
+
+
+
+
+Deliverables from Claude Code
+Primary Deliverable: Recommendation Document
+Include:
+
+Problem validation: Evidence that oversized WOs are a real issue
+Threshold recommendations: Data-driven thresholds for healthy/review/oversized
+ROI analysis: Cost/benefit calculation with real numbers
+Integration plan: Exact code locations and changes needed
+Risk assessment: What could go wrong and how to mitigate
+Go/No-Go recommendation: Should we implement this? If yes, what phase to start with?
+
+Supporting Deliverables:
+
+Query results (complexity distribution, correlation analysis)
+Cost calculations (refinement cost vs downstream savings)
+Code snippets (integration points, proposed changes)
+Test plan (how to validate this works)
+
+
+Success Metrics
+If we implement this, measure:
+
+Quality improvement:
+
+% of WOs with 6+ files (should decrease)
+Average proposer acceptance score (should increase)
+Average TODO count per WO (should decrease)
+
+
+Cost impact:
+
+Decomposition cost per spec (will increase)
+Proposer refinement cycles per WO (should decrease)
+Total cost per feature (should decrease or stay flat)
+
+
+Time impact:
+
+Decomposition time per spec (will increase)
+Time to first successful proposal (should decrease)
+Total time to completion (should decrease or stay flat)
+
+
+Operational:
+
+Refinement trigger rate (should be 10-20%)
+False positive rate (WOs refined unnecessarily, <10%)
+False negative rate (oversized WOs missed, <5%)
+
+
+
+
+Notes for Claude Code
+Remember:
+
+This is a proposal, not a mandate
+Your job is to validate (or invalidate) with data
+If you find problems with Strategy C, propose alternatives
+If you find the problem isn't significant, recommend not implementing
+Focus on real-world evidence, not theoretical benefits
+
+Access you have:
+
+Full codebase (src/lib/architect-*.ts, types, etc.)
+Database with historical work orders
+Cost tracking data
+Acceptance results
+
+Access you need:
+
+Run SQL queries against production database
+Analyze work order JSON
+Calculate complexity scores
+Estimate API costs
+
+If you need additional information, ask specific questions.
+End of specification. Begin your analysis.RetryCDoes this discussion include ongoing monitoring and fail fast and provide detailed feedback for fixing and improvement?Identified critical gaps in monitoring, fail-safe mechanisms, and feedback loops.The user is asking a critical question about the proposed Strategy C specification: Does it include mechanisms for:
+
+Ongoing monitoring (observability)
+Fail-fast mechanisms (quick detection of issues)
+Detailed feedback loops (actionable information for improvement)
+
+Looking back at the specification I wrote for Claude Code, let me assess what's there:
+What's included:
+
+Telemetry logging (ComplexityScanTelemetry)
+Success metrics defined
+Historical analysis queries
+Shadow mode for testing
+
+What's missing or weak:
+
+No real-time alerting when things go wrong
+No circuit breaker if refinement consistently fails
+No feedback mechanism to improve thresholds over time
+No detailed logging of WHY refinements fail
+No automatic rollback if quality degrades
+No dashboards/visibility for operators
+No feedback to the prompt engineering (learning loop)
+
+This is a significant gap. The user is right to call this out. A production system needs:
+
+Fail-fast mechanisms:
+
+Detect when refinement makes things worse
+Automatic rollback/escalation
+Circuit breakers to prevent cascading failures
+
+
+Detailed feedback:
+
+Log every decision with reasoning
+Track refinement success/failure with details
+Make it debuggable
+
+
+Ongoing monitoring:
+
+Real-time dashboards
+Alerting on anomalies
+Trend analysis
+
+
+Improvement loops:
+
+Use failure data to tune thresholds
+Use success patterns to improve prompts
+A/B testing for threshold changes
+
+
+
+I should add a comprehensive section on this.You're absolutely right - this is a critical gap in the specification.
+The proposal has telemetry collection but lacks:
+
+Fail-fast detection - How do we know refinement made things worse?
+Detailed feedback loops - What data do we capture to improve the system?
+Ongoing monitoring - How do operators see what's happening?
+Automatic recovery - What happens when refinement consistently fails?
+
+Let me add a comprehensive monitoring & feedback section:
+
+ADDENDUM: Monitoring, Fail-Fast, and Feedback Loops
+Section 6: Observability & Control Systems
+6.1 Real-Time Quality Gates
+Purpose: Detect immediately if refinement degrades quality instead of improving it.
+Pre-Refinement Baseline
+typescriptinterface DecompositionBaseline {
+  wo_count: number;
+  avg_complexity: number;
+  complexity_distribution: {
+    healthy: number;
+    review_recommended: number;
+    likely_oversized: number;
+  };
+  dependency_graph_valid: boolean;
+  avg_files_per_wo: number;
+  avg_criteria_per_wo: number;
+}
+
+function captureBaseline(decomposition: DecompositionOutput): DecompositionBaseline {
+  const signals = decomposition.work_orders.map(wo => assessWOScope(wo));
+  
+  return {
+    wo_count: decomposition.work_orders.length,
+    avg_complexity: signals.reduce((sum, s) => sum + s.score, 0) / signals.length,
+    complexity_distribution: {
+      healthy: signals.filter(s => s.signal === 'healthy').length,
+      review_recommended: signals.filter(s => s.signal === 'review_recommended').length,
+      likely_oversized: signals.filter(s => s.signal === 'likely_oversized').length
+    },
+    dependency_graph_valid: validateDependencies(decomposition.work_orders).valid,
+    avg_files_per_wo: decomposition.work_orders.reduce((sum, wo) => sum + wo.files_in_scope.length, 0) / decomposition.work_orders.length,
+    avg_criteria_per_wo: decomposition.work_orders.reduce((sum, wo) => sum + wo.acceptance_criteria.length, 0) / decomposition.work_orders.length
+  };
+}
+Post-Refinement Quality Check
+typescriptinterface RefinementQualityCheck {
+  passed: boolean;
+  issues: string[];
+  metrics: {
+    complexity_improved: boolean;
+    dependencies_valid: boolean;
+    wo_count_reasonable: boolean;
+    no_regressions: boolean;
+  };
+  recommendation: 'accept' | 'reject_use_original' | 'escalate_to_human';
+}
+
+async function validateRefinement(
+  original: DecompositionOutput,
+  refined: DecompositionOutput,
+  baseline: DecompositionBaseline
+): Promise<RefinementQualityCheck> {
+  
+  const refinedSignals = refined.work_orders.map(wo => assessWOScope(wo));
+  const refinedAvgComplexity = refinedSignals.reduce((sum, s) => sum + s.score, 0) / refinedSignals.length;
+  
+  const issues: string[] = [];
+  
+  // Check 1: Did complexity actually improve?
+  const complexity_improved = refinedAvgComplexity < baseline.avg_complexity;
+  if (!complexity_improved) {
+    issues.push(
+      `Complexity did not improve: ${baseline.avg_complexity.toFixed(2)} → ${refinedAvgComplexity.toFixed(2)}`
+    );
+  }
+  
+  // Check 2: Are dependencies still valid?
+  const depValidation = validateDependencies(refined.work_orders);
+  if (!depValidation.valid) {
+    issues.push(`Dependency validation failed: ${depValidation.issues.join(', ')}`);
+  }
+  
+  // Check 3: Did WO count explode?
+  const wo_count_reasonable = refined.work_orders.length <= baseline.wo_count * 2.5;
+  if (!wo_count_reasonable) {
+    issues.push(
+      `WO count exploded: ${baseline.wo_count} → ${refined.work_orders.length} (>2.5x)`
+    );
+  }
+  
+  // Check 4: Did we introduce NEW oversized WOs?
+  const newOversized = refinedSignals.filter(s => s.signal === 'likely_oversized').length;
+  const originalOversized = baseline.complexity_distribution.likely_oversized;
+  const no_regressions = newOversized <= originalOversized;
+  if (!no_regressions) {
+    issues.push(
+      `Refinement created NEW oversized WOs: ${originalOversized} → ${newOversized}`
+    );
+  }
+  
+  // Check 5: Are file paths still consistent?
+  const filePathConsistency = checkFilePathConsistency(original, refined);
+  if (!filePathConsistency.consistent) {
+    issues.push(
+      `File naming inconsistency detected: ${filePathConsistency.issues.join(', ')}`
+    );
+  }
+  
+  // Decision logic
+  let recommendation: 'accept' | 'reject_use_original' | 'escalate_to_human';
+  
+  if (issues.length === 0) {
+    recommendation = 'accept';
+  } else if (issues.length <= 2 && complexity_improved && depValidation.valid) {
+    // Minor issues but overall improvement
+    recommendation = 'accept';
+  } else if (issues.length > 3 || !depValidation.valid) {
+    // Major issues - use original
+    recommendation = 'reject_use_original';
+  } else {
+    // Uncertain - escalate
+    recommendation = 'escalate_to_human';
+  }
+  
+  return {
+    passed: issues.length === 0,
+    issues,
+    metrics: {
+      complexity_improved,
+      dependencies_valid: depValidation.valid,
+      wo_count_reasonable,
+      no_regressions
+    },
+    recommendation
+  };
+}
+Fail-Fast Implementation
+typescriptasync function applyDecisionGateWithFailFast(
+  spec: TechnicalSpec,
+  decomposition: DecompositionOutput,
+  scanResult: ScanResult
+): Promise<DecompositionOutput> {
+  
+  // Capture baseline before refinement
+  const baseline = captureBaseline(decomposition);
+  
+  // [... existing decision gate logic ...]
+  
+  if (scanResult.problematicPercent >= 0.15 && scanResult.problematicPercent < 0.30) {
+    console.log('🔍 Performing selective refinement with quality gates...\n');
+    
+    try {
+      const refined = await refineProblematicWOs(spec, decomposition, scanResult);
+      
+      // CRITICAL: Validate refinement didn't make things worse
+      const qualityCheck = await validateRefinement(decomposition, refined, baseline);
+      
+      console.log(`\n📋 Refinement Quality Check: ${qualityCheck.recommendation.toUpperCase()}`);
+      
+      if (qualityCheck.issues.length > 0) {
+        console.warn('Issues detected:');
+        qualityCheck.issues.forEach(issue => console.warn(`  - ${issue}`));
+      }
+      
+      // Log detailed metrics
+      await logRefinementQuality({
+        spec_id: spec.id,
+        baseline,
+        refined_metrics: {
+          wo_count: refined.work_orders.length,
+          avg_complexity: refined.work_orders.reduce((sum, wo) => 
+            sum + assessWOScope(wo).score, 0) / refined.work_orders.length
+        },
+        quality_check: qualityCheck,
+        timestamp: new Date()
+      });
+      
+      // Fail-fast decision
+      if (qualityCheck.recommendation === 'reject_use_original') {
+        console.error('❌ Refinement failed quality check - reverting to original\n');
+        return decomposition; // Use original
+      }
+      
+      if (qualityCheck.recommendation === 'escalate_to_human') {
+        console.warn('⚠️  Refinement needs human review - using original for now\n');
+        // Queue for human review
+        await queueForHumanReview({
+          type: 'refinement_uncertain',
+          spec_id: spec.id,
+          original: decomposition,
+          refined,
+          quality_check: qualityCheck
+        });
+        return decomposition; // Use original, human will review
+      }
+      
+      console.log('✅ Refinement quality check passed\n');
+      return refined;
+      
+    } catch (error: any) {
+      console.error(`❌ Refinement failed with error: ${error.message}`);
+      console.error('   Falling back to original decomposition\n');
+      
+      // Log failure
+      await logRefinementFailure({
+        spec_id: spec.id,
+        error: error.message,
+        stack: error.stack,
+        baseline,
+        timestamp: new Date()
+      });
+      
+      return decomposition; // Always have fallback
+    }
+  }
+  
+  // [... rest of decision gate ...]
+}
+
+6.2 Circuit Breaker Pattern
+Purpose: Prevent cascading failures if refinement consistently degrades quality.
+typescriptinterface CircuitBreakerState {
+  failures_in_window: number;
+  successes_in_window: number;
+  window_start: Date;
+  state: 'closed' | 'open' | 'half_open';
+  last_failure: Date | null;
+}
+
+class RefinementCircuitBreaker {
+  private state: CircuitBreakerState = {
+    failures_in_window: 0,
+    successes_in_window: 0,
+    window_start: new Date(),
+    state: 'closed',
+    last_failure: null
+  };
+  
+  private readonly FAILURE_THRESHOLD = 3; // Open after 3 failures
+  private readonly WINDOW_SIZE_MS = 3600000; // 1 hour
+  private readonly RECOVERY_TIMEOUT_MS = 1800000; // 30 min before retry
+  
+  async execute<T>(
+    fn: () => Promise<T>,
+    fallback: () => T
+  ): Promise<T> {
+    
+    // Check if circuit is open
+    if (this.state.state === 'open') {
+      const timeSinceFailure = Date.now() - (this.state.last_failure?.getTime() || 0);
+      
+      if (timeSinceFailure > this.RECOVERY_TIMEOUT_MS) {
+        console.log('🔄 Circuit breaker entering half-open state (testing recovery)');
+        this.state.state = 'half_open';
+      } else {
+        console.warn('⛔ Circuit breaker OPEN - using fallback (refinement disabled)');
+        return fallback();
+      }
+    }
+    
+    // Try to execute
+    try {
+      const result = await fn();
+      this.recordSuccess();
+      return result;
+    } catch (error) {
+      this.recordFailure();
+      
+      if (this.state.state === 'half_open') {
+        console.error('❌ Recovery attempt failed - circuit breaker reopening');
+        this.state.state = 'open';
+      }
+      
+      console.warn('⚠️  Using fallback due to circuit breaker');
+      return fallback();
+    }
+  }
+  
+  private recordSuccess(): void {
+    this.resetWindowIfNeeded();
+    this.state.successes_in_window++;
+    
+    if (this.state.state === 'half_open' && this.state.successes_in_window >= 2) {
+      console.log('✅ Circuit breaker CLOSED - refinement restored');
+      this.state.state = 'closed';
+      this.state.failures_in_window = 0;
+    }
+  }
+  
+  private recordFailure(): void {
+    this.resetWindowIfNeeded();
+    this.state.failures_in_window++;
+    this.state.last_failure = new Date();
+    
+    if (this.state.failures_in_window >= this.FAILURE_THRESHOLD) {
+      console.error(`🚨 Circuit breaker OPEN - ${this.state.failures_in_window} failures in ${this.WINDOW_SIZE_MS / 60000}min`);
+      this.state.state = 'open';
+      
+      // Alert operators
+      this.sendAlert({
+        severity: 'high',
+        message: 'Refinement circuit breaker opened - automatic refinement disabled',
+        failures: this.state.failures_in_window,
+        window_minutes: this.WINDOW_SIZE_MS / 60000
+      });
+    }
+  }
+  
+  private resetWindowIfNeeded(): void {
+    const windowAge = Date.now() - this.state.window_start.getTime();
+    if (windowAge > this.WINDOW_SIZE_MS) {
+      this.state.failures_in_window = 0;
+      this.state.successes_in_window = 0;
+      this.state.window_start = new Date();
+    }
+  }
+  
+  private async sendAlert(alert: {
+    severity: string;
+    message: string;
+    failures: number;
+    window_minutes: number;
+  }): Promise<void> {
+    // Integrate with alerting system (Slack, email, PagerDuty, etc.)
+    console.error('\n🚨 ALERT:', JSON.stringify(alert, null, 2), '\n');
+    
+    // Log to database
+    await supabase.from('system_alerts').insert({
+      type: 'circuit_breaker_open',
+      severity: alert.severity,
+      message: alert.message,
+      metadata: alert,
+      timestamp: new Date()
+    });
+  }
+  
+  getState(): CircuitBreakerState {
+    return { ...this.state };
+  }
+}
+
+const refinementCircuitBreaker = new RefinementCircuitBreaker();
+Integration:
+typescriptasync function applyDecisionGateWithCircuitBreaker(
+  spec: TechnicalSpec,
+  decomposition: DecompositionOutput,
+  scanResult: ScanResult
+): Promise<DecompositionOutput> {
+  
+  if (scanResult.problematicPercent >= 0.15) {
+    return await refinementCircuitBreaker.execute(
+      // Try refinement
+      async () => {
+        const refined = await refineProblematicWOs(spec, decomposition, scanResult);
+        const qualityCheck = await validateRefinement(decomposition, refined, baseline);
+        
+        if (qualityCheck.recommendation === 'reject_use_original') {
+          throw new Error('Refinement failed quality check');
+        }
+        
+        return refined;
+      },
+      // Fallback: use original
+      () => {
+        console.warn('⚠️  Circuit breaker forced fallback to original decomposition');
+        return decomposition;
+      }
+    );
+  }
+  
+  return decomposition;
+}
+
+6.3 Detailed Feedback Capture
+Purpose: Capture rich context for every refinement to enable debugging and improvement.
+typescriptinterface RefinementAttemptLog {
+  id: string;
+  spec_id: string;
+  timestamp: Date;
+  
+  // Input state
+  baseline: DecompositionBaseline;
+  problematic_wos: Array<{
+    index: number;
+    title: string;
+    complexity_score: number;
+    files_count: number;
+    criteria_count: number;
+  }>;
+  
+  // Refinement prompt (for debugging)
+  prompt_sent: string;
+  prompt_tokens: number;
+  
+  // Claude response
+  response_received: string;
+  response_tokens: number;
+  model_used: string;
+  
+  // Output state
+  refined_wo_count: number;
+  refined_avg_complexity: number;
+  
+  // Quality check
+  quality_check: RefinementQualityCheck;
+  
+  // Outcome
+  outcome: 'accepted' | 'rejected' | 'escalated' | 'error';
+  outcome_reason: string;
+  
+  // Performance
+  duration_ms: number;
+  api_cost_usd: number;
+  
+  // Metadata for analysis
+  tags: string[]; // e.g., ['wo_count_exploded', 'dependency_broken', 'naming_inconsistent']
+}
+
+async function logRefinementAttempt(log: RefinementAttemptLog): Promise<void> {
+  await supabase.from('refinement_attempts').insert(log);
+  
+  // Also log to file for offline analysis
+  await appendToLogFile('refinement_attempts.jsonl', JSON.stringify(log));
+}
+Usage in refinement flow:
+typescriptasync function refineProblematicWOs(
+  spec: TechnicalSpec,
+  decomposition: DecompositionOutput,
+  scanResult: ScanResult
+): Promise<DecompositionOutput> {
+  
+  const attemptId = generateUUID();
+  const startTime = Date.now();
+  const baseline = captureBaseline(decomposition);
+  
+  // Build refinement prompt
+  const refinePrompt = buildRefinementPrompt(spec, decomposition, scanResult);
+  
+  try {
+    // Call Claude
+    const response = await this.anthropic.messages.create({
+      model: 'claude-sonnet-4-5-20250929',
+      max_tokens: 8000,
+      messages: [{ role: 'user', content: refinePrompt }]
+    });
+    
+    const refined = parseRefinementResponse(response);
+    
+    // Validate quality
+    const qualityCheck = await validateRefinement(decomposition, refined, baseline);
+    
+    // Log everything
+    await logRefinementAttempt({
+      id: attemptId,
+      spec_id: spec.id,
+      timestamp: new Date(),
+      baseline,
+      problematic_wos: scanResult.problematicWOs.map(p => ({
+        index: p.index,
+        title: p.wo.title,
+        complexity_score: p.signal.score,
+        files_count: p.wo.files_in_scope.length,
+        criteria_count: p.wo.acceptance_criteria.length
+      })),
+      prompt_sent: refinePrompt,
+      prompt_tokens: estimateTokens(refinePrompt),
+      response_received: JSON.stringify(refined, null, 2),
+      response_tokens: response.usage.output_tokens,
+      model_used: 'claude-sonnet-4-5-20250929',
+      refined_wo_count: refined.work_orders.length,
+      refined_avg_complexity: refined.work_orders.reduce((sum, wo) =>
+        sum + assessWOScope(wo).score, 0) / refined.work_orders.length,
+      quality_check: qualityCheck,
+      outcome: qualityCheck.recommendation === 'accept' ? 'accepted' : 
+               qualityCheck.recommendation === 'reject_use_original' ? 'rejected' : 'escalated',
+      outcome_reason: qualityCheck.issues.join('; '),
+      duration_ms: Date.now() - startTime,
+      api_cost_usd: calculateAPICost(response.usage),
+      tags: generateTags(qualityCheck)
+    });
+    
+    return refined;
+    
+  } catch (error: any) {
+    // Log error case
+    await logRefinementAttempt({
+      id: attemptId,
+      spec_id: spec.id,
+      timestamp: new Date(),
+      baseline,
+      problematic_wos: scanResult.problematicWOs.map(p => ({
+        index: p.index,
+        title: p.wo.title,
+        complexity_score: p.signal.score,
+        files_count: p.wo.files_in_scope.length,
+        criteria_count: p.wo.acceptance_criteria.length
+      })),
+      prompt_sent: refinePrompt,
+      prompt_tokens: estimateTokens(refinePrompt),
+      response_received: '',
+      response_tokens: 0,
+      model_used: 'claude-sonnet-4-5-20250929',
+      refined_wo_count: 0,
+      refined_avg_complexity: 0,
+      quality_check: null as any,
+      outcome: 'error',
+      outcome_reason: error.message,
+      duration_ms: Date.now() - startTime,
+      api_cost_usd: 0,
+      tags: ['error', error.name]
+    });
+    
+    throw error;
+  }
+}
+
+function generateTags(qualityCheck: RefinementQualityCheck): string[] {
+  const tags: string[] = [];
+  
+  if (!qualityCheck.metrics.complexity_improved) tags.push('no_complexity_improvement');
+  if (!qualityCheck.metrics.dependencies_valid) tags.push('broken_dependencies');
+  if (!qualityCheck.metrics.wo_count_reasonable) tags.push('wo_count_explosion');
+  if (!qualityCheck.metrics.no_regressions) tags.push('new_oversized_wos');
+  if (qualityCheck.recommendation === 'accept') tags.push('success');
+  if (qualityCheck.recommendation === 'reject_use_original') tags.push('failed');
+  if (qualityCheck.recommendation === 'escalate_to_human') tags.push('uncertain');
+  
+  return tags;
+}
+
+6.4 Real-Time Dashboard & Monitoring
+Purpose: Give operators visibility into refinement performance.
+Database Schema
+sqlCREATE TABLE refinement_attempts (
+  id UUID PRIMARY KEY,
+  spec_id UUID NOT NULL REFERENCES technical_specs(id),
+  timestamp TIMESTAMPTZ NOT NULL,
+  
+  -- Input
+  baseline JSONB NOT NULL,
+  problematic_wos JSONB NOT NULL,
+  
+  -- Process
+  prompt_tokens INTEGER NOT NULL,
+  response_tokens INTEGER NOT NULL,
+  model_used TEXT NOT NULL,
+  
+  -- Output
+  refined_wo_count INTEGER NOT NULL,
+  refined_avg_complexity FLOAT NOT NULL,
+  quality_check JSONB,
+  
+  -- Outcome
+  outcome TEXT NOT NULL CHECK (outcome IN ('accepted', 'rejected', 'escalated', 'error')),
+  outcome_reason TEXT,
+  
+  -- Performance
+  duration_ms INTEGER NOT NULL,
+  api_cost_usd FLOAT NOT NULL,
+  
+  -- Metadata
+  tags TEXT[] NOT NULL
+);
+
+CREATE INDEX idx_refinement_timestamp ON refinement_attempts(timestamp DESC);
+CREATE INDEX idx_refinement_outcome ON refinement_attempts(outcome);
+CREATE INDEX idx_refinement_tags ON refinement_attempts USING GIN(tags);
+
+CREATE TABLE circuit_breaker_state (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  state TEXT NOT NULL CHECK (state IN ('closed', 'open', 'half_open')),
+  failures_in_window INTEGER NOT NULL,
+  successes_in_window INTEGER NOT NULL,
+  window_start TIMESTAMPTZ NOT NULL
+);
+Monitoring Queries
+sql-- Real-time refinement health
+CREATE VIEW refinement_health AS
+SELECT 
+  DATE_TRUNC('hour', timestamp) as hour,
+  COUNT(*) as total_attempts,
+  SUM(CASE WHEN outcome = 'accepted' THEN 1 ELSE 0 END) as accepted,
+  SUM(CASE WHEN outcome = 'rejected' THEN 1 ELSE 0 END) as rejected,
+  SUM(CASE WHEN outcome = 'error' THEN 1 ELSE 0 END) as errors,
+  AVG(duration_ms) as avg_duration_ms,
+  SUM(api_cost_usd) as total_cost_usd,
+  AVG(refined_avg_complexity) as avg_final_complexity
+FROM refinement_attempts
+WHERE timestamp > NOW() - INTERVAL '24 hours'
+GROUP BY hour
+ORDER BY hour DESC;
+
+-- Problem patterns (last 7 days)
+CREATE VIEW refinement_problem_patterns AS
+SELECT 
+  unnest(tags) as problem_tag,
+  COUNT(*) as occurrences,
+  AVG(duration_ms) as avg_duration_ms,
+  STRING_AGG(DISTINCT outcome, ', ') as outcomes
+FROM refinement_attempts
+WHERE timestamp > NOW() - INTERVAL '7 days'
+  AND outcome != 'accepted'
+GROUP BY problem_tag
+ORDER BY occurrences DESC;
+
+-- Success rate by complexity range
+CREATE VIEW refinement_success_by_complexity AS
+SELECT 
+  CASE 
+    WHEN (baseline->>'avg_complexity')::float < 0.6 THEN 'low'
+    WHEN (baseline->>'avg_complexity')::float < 0.7 THEN 'medium'
+    ELSE 'high'
+  END as complexity_range,
+  COUNT(*) as attempts,
+  SUM(CASE WHEN outcome = 'accepted' THEN 1 ELSE 0 END) * 100.0 / COUNT(*) as success_rate,
+  AVG(duration_ms) as avg_duration_ms
+FROM refinement_attempts
+WHERE timestamp > NOW() - INTERVAL '30 days'
+GROUP BY complexity_range;
+Alert Rules
+typescriptinterface AlertRule {
+  name: string;
+  condition: (metrics: any) => boolean;
+  severity: 'info' | 'warning' | 'critical';
+  message: string;
+}
+
+const ALERT_RULES: AlertRule[] = [
+  {
+    name: 'high_rejection_rate',
+    condition: (m) => m.rejection_rate > 0.30,
+    severity: 'warning',
+    message: 'Refinement rejection rate >30% in last hour'
+  },
+  {
+    name: 'circuit_breaker_open',
+    condition: (m) => m.circuit_breaker_state === 'open',
+    severity: 'critical',
+    message: 'Refinement circuit breaker is OPEN - automatic refinement disabled'
+  },
+  {
+    name: 'slow_refinement',
+    condition: (m) => m.avg_duration_ms > 120000,
+    severity: 'warning',
+    message: 'Average refinement taking >2 minutes'
+  },
+  {
+    name: 'cost_spike',
+    condition: (m) => m.hourly_cost > 5.0,
+    severity: 'warning',
+    message: 'Refinement costs >$5/hour'
+  },
+  {
+    name: 'dependency_break_pattern',
+    condition: (m) => m.broken_dependency_count > 3,
+    severity: 'critical',
+    message: 'Multiple refinements breaking dependencies - prompt issue likely'
+  }
+];
+
+async function monitoringLoop(): Promise<void> {
+  setInterval(async () => {
+    const metrics = await collectMetrics();
+    
+    for (const rule of ALERT_RULES) {
+      if (rule.condition(metrics)) {
+        await sendAlert({
+          rule: rule.name,
+          severity: rule.severity,
+          message: rule.message,
+          metrics,
+          timestamp: new Date()
+        });
+      }
+    }
+  }, 300000); // Every 5 minutes
+}
+
+async function collectMetrics(): Promise<any> {
+  const { data: healthData } = await supabase
+    .from('refinement_health')
+    .select('*')
+    .order('hour', { ascending: false })
+    .limit(1)
+    .single();
+  
+  const { data: cbState } = await supabase
+    .from('circuit_breaker_state')
+    .select('*')
+    .order('timestamp', { ascending: false })
+    .limit(1)
+    .single();
+  
+  const { data: problems } = await supabase
+    .from('refinement_problem_patterns')
+    .select('*');
+  
+  return {
+    rejection_rate: healthData?.rejected / healthData?.total_attempts || 0,
+    circuit_breaker_state: cbState?.state || 'closed',
+    avg_duration_ms: healthData?.avg_duration_ms || 0,
+    hourly_cost: healthData?.total_cost_usd || 0,
+    broken_dependency_count: problems?.find(p => p.problem_tag === 'broken_dependencies')?.occurrences || 0
+  };
+}
+
+6.5 Continuous Improvement Loop
+Purpose: Use failure data to improve thresholds, prompts, and strategy.
+Weekly Analysis Script
+typescriptasync function weeklyRefinementAnalysis(): Promise<void> {
+  console.log('📊 Running weekly refinement analysis...\n');
+  
+  // 1. Analyze success patterns
+  const { data: successfulRefinements } = await supabase
+    .from('refinement_attempts')
+    .select('*')
+    .eq('outcome', 'accepted')
+    .gte('timestamp', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000));
+  
+  console.log(`✅ ${successfulRefinements?.length || 0} successful refinements`);
+  
+  // What complexity ranges work well?
+  const successByComplexity = groupBy(successfulRefinements || [], r => {
+    const baselineComplexity = r.baseline.avg_complexity;
+    if (baselineComplexity < 0.6) return 'low';
+    if (baselineComplexity < 0.7) return 'medium';
+    return 'high';
+  });
+  
+  console.log('Success by complexity:');
+  Object.entries(successByComplexity).forEach(([range, attempts]) => {
+    console.log(`  ${range}: ${attempts.length} attempts`);
+  });
+  
+  // 2. Analyze failure patterns
+  const { data: failedRefinements } = await supabase
+    .from('refinement_attempts')
+    .select('*')
+    .in('outcome', ['rejected', 'error'])
+    .gte('timestamp', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000));
+  
+  console.log(`\n❌ ${failedRefinements?.length || 0} failed refinements`);
+  
+  // Most common failure reasons
+  const failureReasons = countBy(failedRefinements || [], 'outcome_reason');
+  console.log('\nTop failure reasons:');
+  Object.entries(failureReasons)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .forEach(([reason, count]) => {
+      console.log(`  ${reason}: ${count} times`);
+    });
+  
+  // 3. Threshold recommendations
+  const allAttempts = [...(successfulRefinements || []), ...(failedRefinements || [])];
+  const complexityScores = allAttempts.map(a => a.baseline.avg_complexity);
+  
+  const currentThresholds = {
+    healthy: 0.55,
+    review: 0.70
+  };
+  
+  console.log('\n📈 Threshold analysis:');
+  console.log(`Current thresholds: healthy=${currentThresholds.healthy}, review=${currentThresholds.review}`);
+  
+  // Analyze false positives/negatives
+  const shouldHaveRefined = allAttempts.filter(a => 
+    a.baseline.avg_complexity < currentThresholds.healthy && a.outcome === 'rejected'
+  );
+  
+  const shouldNotHaveRefined = allAttempts.filter(a =>
+    a.baseline.avg_complexity >= currentThresholds.review && a.outcome === 'accepted'
+  );
+  
+  console.log(`False negatives (missed issues): ${shouldHaveRefined.length}`);
+  console.log(`False positives (unnecessary refinement): ${shouldNotHaveRefined.length}`);
+  
+  // 4. Cost-benefit analysis
+  const totalRefinementCost = allAttempts.reduce((sum, a) => sum + a.api_cost_usd, 0);
+  
+  // Query downstream proposer costs
+  const { data: proposerData } = await supabase.rpc('calculate_proposer_costs_for_refined_wos', {
+    start_date: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+  });
+  
+  console.log('\n💰 Cost-benefit:');
+  console.log(`Total refinement cost: $${totalRefinementCost.toFixed(2)}`);
+  console.log(`Proposer costs for refined WOs: $${proposerData?.total_cost || 0}`);
+  console.log(`Average refinement cycles: ${proposerData?.avg_refinement_cycles || 0}`);
+  
+  // 5. Generate recommendations
+  const recommendations = generateRecommendations({
+    successRate: (successfulRefinements?.length || 0) / allAttempts.length,
+    avgDuration: mean(allAttempts.map(a => a.duration_ms)),
+    falsePositiveRate: shouldNotHaveRefined.length / allAttempts.length,
+    falseNegativeRate: shouldHaveRefined.length / allAttempts.length,
+    costBenefitRatio: (proposerData?.total_cost || 0) / totalRefinementCost
+  });
+  
+  console.log('\n💡 Recommendations:');
+  recommendations.forEach(rec => console.log(`  - ${rec}`));
+  
+  // Save report
+  await supabase.from('weekly_refinement_reports').insert({
+    week_start: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+    metrics: {
+      success_rate: (successfulRefinements?.length || 0) / allAttempts.length,
+      total_refinement_cost: totalRefinementCost,
+      avg_duration_ms: mean(allAttempts.map(a => a.duration_ms)),
+      false_positive_rate: shouldNotHaveRefined.length / allAttempts.length,
+      false_negative_rate: shouldHaveRefined.length / allAttempts.length
+    },
+    recommendations,
+    timestamp: new Date()
+  });
+}
+
+function generateRecommendations(metrics: any): string[] {
+  const recs: string[] = [];
+  
+  if (metrics.successRate < 0.70) {
+    recs.push('❌ Success rate below 70% - consider stricter quality gates or improved prompts');
+  }
+  
+  if (metrics.falsePositiveRate > 0.20) {
+    recs.push('⚠️  High false positive rate - consider raising healthy_max threshold to 0.60');
+  }
+  
+  if (metrics.falseNegativeRate > 0.15) {
+    recs.push('⚠️  High false negative rate - consider lowering healthy_max threshold to 0.50');
+  }
+  
+  if (metrics.avgDuration > 90000) {
+    recs.push('🐌 Average refinement >90s - consider reducing max_tokens or batching large refinements');
+  }
+  
+  if (metrics.costBenefitRatio < 0.5) {
+    recs.push('💸 Refinement costs exceed savings - evaluate if this feature should be enabled');
+  } else if (metrics.costBenefitRatio > 2.0) {
+    recs.push('💰 Strong ROI - refinement saving 2x its cost - consider lowering accept threshold');
+  }
+  
+  if (recs.length === 0) {
+    recs.push('✅ All metrics within acceptable ranges - no changes recommended');
+  }
+  
+  return recs;
+}
+
+6.6 Human-in-the-Loop Interface
+Purpose: Enable operators to review uncertain refinements and provide feedback.
+typescriptinterface RefinementReviewQueue {
+  id: string;
+  spec_id: string;
+  original_decomposition: DecompositionOutput;
+  refined_decomposition: DecompositionOutput;
+  quality_check: RefinementQualityCheck;
+  timestamp: Date;
+  status: 'pending' | 'approved' | 'rejected' | 'revised';
+}
+
+async function queueForHumanReview(item: {
+  type: string;
+  spec_id: string;
+  original: DecompositionOutput;
+  refined: DecompositionOutput;
+  quality_check: RefinementQualityCheck;
+}): Promise<void> {
+  
+  await supabase.from('refinement_review_queue').insert({
+    spec_id: item.spec_id,
+    original_decomposition: item.original,
+    refined_decomposition: item.refined,
+    quality_check: item.quality_check,
+    status: 'pending',
+    timestamp: new Date()
+  });
+  
+  // Notify operators (Slack, email, dashboard)
+  await notifyOperators({
+    message: `Refinement needs review: ${item.spec_id}`,
+    url: `https://dashboard.example.com/refinement-review/${item.spec_id}`,
+    priority: 'medium'
+  });
+}
+
+// API endpoint for operators
+async function handleReviewDecision(
+  reviewId: string,
+  decision: 'approve' | 'reject' | 'revise',
+  feedback?: string
+): Promise<void> {
+  
+  const { data: review } = await supabase
+    .from('refinement_review_queue')
+    .select('*')
+    .eq('id', reviewId)
+    .single();
+  
+  if (!review) throw new Error('Review not found');
+  
+  // Update review status
+  await supabase
+    .from('refinement_review_queue')
+    .update({ status: decision })
+    .eq('id', reviewId);
+  
+  // Learn from human decision
+  await supabase.from('human_feedback').insert({
+    review_id: reviewId,
+    decision,
+    feedback,
+    timestamp: new Date()
+  });
+  
+  // If rejected, analyze WHY
+  if (decision === 'reject' && feedback) {
+    console.log(`📝 Human rejected refinement: ${feedback}`);
+    
+    // Tag patterns for future improvement
+    const tags = extractTagsFromFeedback(feedback);
+    await supabase
+      .from('refinement_attempts')
+      .update({ 
+        tags: supabase.rpc('array_append', { array: review.quality_check.tags, element: tags })
+      })
+      .eq('spec_id', review.spec_id);
+  }
+}
+
+Questions for Claude Code (Updated)
+Q17: How should monitoring be deployed?
+
+Should monitoringLoop() run as a separate service?
+Should it integrate with existing cron jobs?
+What infrastructure exists for alerting (Slack webhooks, email, etc.)?
+
+Q18: What's the current observability stack?
+
+Do you use Grafana/Prometheus/Datadog?
+Are there existing dashboards to integrate with?
+How are other alerts currently sent?
+
+Q19: Review queue implementation:
+
+Does a review UI exist or need to be built?
+Where should the review queue live (database table, Redis, etc.)?
+How should operators be notified?
+
+Q20: Fail-fast validation:
+
+Are the quality checks (dependency validation, file path consistency) robust enough?
+What other checks should be added?
+Should there be a "confidence score" threshold for auto-accept?
+
+
+Success Metrics (Updated)
+Add to previous metrics:
+Monitoring & Feedback:
+
+Circuit breaker trips per week (target: <2)
+Average time to detect refinement issues (target: <5 min)
+Human review queue size (target: <10 pending)
+Alert false positive rate (target: <10%)
+
+Improvement Loop:
+
+Threshold adjustments made per month (based on data)
+Success rate trend (should improve over time)
+Cost-benefit ratio trend (should improve or stay stable)
+False positive/negative rates (should decrease over time)
+
+
+Does this address your concerns about monitoring, fail-fast, and feedback loops?

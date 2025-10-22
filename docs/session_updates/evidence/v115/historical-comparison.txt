@@ -1,0 +1,51 @@
+📊 COMPARING HISTORICAL vs CURRENT ACCEPTANCE SCORING
+
+================================================================================
+
+Historical WOs (from analysis doc):
+
+Configure Redux Toolkit Store Foundation with TypeScript
+   Created: 2025-10-10T09:14:47.978592+00:00
+   Expected: 58/100 (from analysis)
+   Actual:   27/100
+   Delta:    -31
+   Structure:
+      Has dimension_scores: true
+      Has metrics: false
+      Dimensions: readability, architecture, completeness, build_success, test_coverage
+
+Build Clipboard-WebView Coordination Layer
+   Created: 2025-10-10T09:14:47.978592+00:00
+   Expected: 44/100 (from analysis)
+   Actual:   27/100
+   Delta:    -17
+   Structure:
+      Has dimension_scores: true
+      Has metrics: false
+      Dimensions: readability, architecture, completeness, build_success, test_coverage
+
+Validation and Testing Suite
+   Created: 2025-10-10T10:05:52.580335+00:00
+   Expected: 78/100 (from analysis)
+   Actual:   33/100
+   Delta:    -45
+   Structure:
+      Has dimension_scores: true
+      Has metrics: false
+      Dimensions: readability, architecture, completeness, build_success, test_coverage
+
+================================================================================
+
+🔍 ANALYSIS
+
+Scoring format detected:
+   Old scoring (0-100): ❌ NOT FOUND
+   New scoring (0-10):  ✅ FOUND
+
+⚠️  DISCREPANCY: Analysis doc shows scores out of 100
+   but database shows scores out of 10
+   
+Possible causes:
+   1. Acceptance validator was updated to use 0-10 scale
+   2. Historical scores were from different validation method
+   3. Historical scores were manually entered/estimated

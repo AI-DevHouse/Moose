@@ -1,0 +1,69 @@
+📊 CORRELATION ANALYSIS: Complexity Score vs Acceptance Score
+
+================================================================================
+
+Configure Redux Toolkit Store Foundation with TypeScript...
+   ID: 0170420d-9562-4326-95a8-d70f675421a0
+   Complexity: 0.44 (healthy)
+   Status: in_progress
+   PR: ✅
+   ✅ Acceptance Score: 2.7/10
+
+Implement Discussion View Container with Real-Time State Man...
+   ID: 4e4c7480-6116-48ba-9fe8-9541cadec68e
+   Complexity: 0.68 (review)
+   Status: in_progress
+   PR: ✅
+   ✅ Acceptance Score: 2.7/10
+
+Complete Documentation, Build Configuration, and Production ...
+   ID: ca68150a-813a-43b4-8eea-c44eb18efc22
+   Complexity: 1.15 (oversized)
+   Status: in_progress
+   PR: ✅
+   ✅ Acceptance Score: 3.3/10
+
+Configure Comprehensive Testing Infrastructure with Jest and...
+   ID: eaf3596e-9e76-4a0a-8b5b-a929e26188dd
+   Complexity: 1.13 (oversized)
+   Status: in_progress
+   PR: ✅
+   ✅ Acceptance Score: 3.3/10
+
+Implement Claude Provider Adapter...
+   ID: f491b9c5-4960-4c07-9ee4-1b271115d5cf
+   Complexity: 0.61 (review)
+   Status: in_progress
+   PR: ✅
+   ✅ Acceptance Score: 2.7/10
+
+================================================================================
+
+📈 RESULTS: 5 / 5 WOs with acceptance scores
+
+Data Points (Complexity → Acceptance):
+   0.44 (healthy   ) → 2.7/10
+   0.61 (review    ) → 2.7/10
+   0.68 (review    ) → 2.7/10
+   1.13 (oversized ) → 3.3/10
+   1.15 (oversized ) → 3.3/10
+
+================================================================================
+
+📊 CORRELATION ANALYSIS:
+   Pearson Correlation Coefficient (r): 0.962
+   Sample Size: 5
+
+   Interpretation:
+   ❌ NO meaningful negative correlation (r > -0.30)
+      Formula is not predictive
+
+================================================================================
+
+🎯 DECISION GATE (V114 Task 2):
+   Target: r < -0.80 AND accuracy > 75%
+   Current: r = 0.962
+   ❌ STOP: Weak/no correlation - formula needs rework
+      → Revisit complexity calculation weights
+
+================================================================================

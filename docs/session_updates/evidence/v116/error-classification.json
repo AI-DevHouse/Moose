@@ -1,0 +1,215 @@
+{
+  "analysis_date": "2025-10-22",
+  "session": "v116",
+  "total_prs_analyzed": 5,
+  "project": "multi-llm-discussion-v1",
+  "baseline_status": "EMPTY - no src/ directory on main branch",
+
+  "pr_246": {
+    "id": "0170420d-9562-4326-95a8-d70f675421a0",
+    "title": "Configure Redux Toolkit Store Foundation with TypeScript",
+    "complexity": 0.44,
+    "acceptance_score": 2.7,
+    "changes": {
+      "additions": 48,
+      "files_changed": 4,
+      "files": [
+        "src/renderer/store/appSlice.ts",
+        "src/renderer/store/index.ts",
+        "src/renderer/store/store.ts",
+        "src/renderer/store/types.ts"
+      ]
+    },
+    "errors": {
+      "total": 10,
+      "by_category": {
+        "import_errors": 3,
+        "type_errors": 7
+      },
+      "details": [
+        {"type": "import", "message": "Cannot find module '@reduxjs/toolkit'", "files": ["appSlice.ts", "store.ts"]},
+        {"type": "import", "message": "Cannot find module 'redux'", "files": ["index.ts"]},
+        {"type": "type", "message": "Parameter 'state' implicitly has an 'any' type", "files": ["appSlice.ts", "store.ts"]},
+        {"type": "type", "message": "'getDefaultMiddleware' is declared but its value is never read", "files": ["store.ts"]},
+        {"type": "type", "message": "Cannot find name 'rootReducer'", "files": ["types.ts"]},
+        {"type": "type", "message": "Cannot find name 'store'", "files": ["types.ts"]},
+        {"type": "type", "message": "Cannot find name 'ThunkAction'", "files": ["types.ts"]},
+        {"type": "type", "message": "Cannot find name 'Action'", "files": ["types.ts"]}
+      ]
+    },
+    "root_cause": "Missing dependencies (@reduxjs/toolkit, redux not in package.json) + strict TypeScript mode catches type issues"
+  },
+
+  "pr_247": {
+    "id": "ca68150a-813a-43b4-8eea-c44eb18efc22",
+    "title": "Complete Documentation, Build Configuration, and Production Packaging",
+    "complexity": 1.15,
+    "acceptance_score": 3.3,
+    "changes": {
+      "additions": 209,
+      "files_changed": 14,
+      "files": [
+        ".github/workflows/release.yml",
+        "API.md",
+        "ARCHITECTURE.md",
+        "README.md",
+        "USER_MANUAL.md",
+        "docs/deployment-guide.md",
+        "docs/troubleshooting.md",
+        "electron-builder.config.js",
+        "npm install",
+        "npm run build",
+        "npm start",
+        "scripts/generate-docs.ts",
+        "scripts/package.ts",
+        "webpack.prod.config.js"
+      ]
+    },
+    "errors": {
+      "total": 1,
+      "by_category": {
+        "config_errors": 1
+      },
+      "details": [
+        {"type": "config", "message": "No inputs were found in config file - no TS files match include pattern", "reason": "All files added are docs/config, excluded from compilation"}
+      ]
+    },
+    "root_cause": "WO adds only documentation and config files (no src/ files), so TypeScript has nothing to compile"
+  },
+
+  "pr_248": {
+    "id": "eaf3596e-9e76-4a0a-8b5b-a929e26188dd",
+    "title": "Configure Comprehensive Testing Infrastructure with Jest and Testing Libraries",
+    "complexity": 1.13,
+    "acceptance_score": 3.3,
+    "changes": {
+      "additions": 114,
+      "deletions": 11,
+      "files_changed": 12,
+      "files": [
+        "docs/TESTING.md",
+        "jest.config.js",
+        "jest.config.main.js",
+        "jest.config.renderer.js",
+        "test/__mocks__/electron.ts",
+        "test/__mocks__/electronStore.ts",
+        "test/setup/electronMocks.ts",
+        "test/setup/setupTests.ts",
+        "test/utils/ipcTestHelpers.ts",
+        "test/utils/mockFactories.ts",
+        "test/utils/storeTestHelpers.ts",
+        "test/utils/testUtils.tsx"
+      ]
+    },
+    "errors": {
+      "total": 1,
+      "by_category": {
+        "config_errors": 1
+      },
+      "details": [
+        {"type": "config", "message": "No inputs were found - test files excluded by tsconfig.json", "reason": "tsconfig excludes 'tests/**' and '**/*.test.ts'"}
+      ]
+    },
+    "root_cause": "WO adds only test infrastructure files which are explicitly excluded from TypeScript compilation"
+  },
+
+  "pr_249": {
+    "id": "4e4c7480-6116-48ba-9fe8-9541cadec68e",
+    "title": "Implement Discussion View Container with Real-Time State Management",
+    "complexity": 0.68,
+    "acceptance_score": 2.7,
+    "changes": {
+      "additions": 169,
+      "files_changed": 4,
+      "files": [
+        "src/hooks/useDiscussionState.ts",
+        "src/renderer/components/discussion/DiscussionView.module.css",
+        "src/renderer/components/discussion/DiscussionView.tsx",
+        "src/types/discussion.ts"
+      ]
+    },
+    "errors": {
+      "total": 24,
+      "by_category": {
+        "import_errors": 6,
+        "type_errors": 5,
+        "config_errors": 13
+      },
+      "details": [
+        {"type": "import", "message": "Cannot find module '@reduxjs/toolkit'", "files": ["useDiscussionState.ts"]},
+        {"type": "import", "message": "Cannot find module '@/types/discussion'", "files": ["useDiscussionState.ts"]},
+        {"type": "import", "message": "Cannot find module 'react-redux'", "files": ["DiscussionView.tsx"]},
+        {"type": "import", "message": "Cannot find module '@/store'", "files": ["DiscussionView.tsx"]},
+        {"type": "import", "message": "Cannot find module '@/redux/discussionSlice'", "files": ["DiscussionView.tsx"]},
+        {"type": "import", "message": "Cannot find module './DiscussionView.module.css'", "files": ["DiscussionView.tsx"]},
+        {"type": "type", "message": "Parameter implicitly has an 'any' type", "files": ["useDiscussionState.ts"], "count": 4},
+        {"type": "type", "message": "Declared but never read", "files": ["useDiscussionState.ts", "DiscussionView.tsx"]},
+        {"type": "config", "message": "Cannot use JSX unless the '--jsx' flag is provided", "files": ["DiscussionView.tsx"], "count": 13}
+      ]
+    },
+    "root_cause": "Missing dependencies (react-redux, @reduxjs/toolkit) + tsconfig.json missing JSX configuration + path aliases (@/) not configured"
+  },
+
+  "pr_250": {
+    "id": "f491b9c5-4960-4c07-9ee4-1b271115d5cf",
+    "title": "Implement Claude Provider Adapter",
+    "complexity": 0.61,
+    "acceptance_score": 2.7,
+    "changes": {
+      "additions": 151,
+      "files_changed": 4,
+      "files": [
+        "src/main/services/providers/ClaudeAdapter.ts",
+        "src/main/services/providers/adapters/ClaudeSelectors.ts",
+        "src/main/services/providers/parsers/ClaudeParser.ts",
+        "tests/unit/providers/ClaudeAdapter.test.ts"
+      ]
+    },
+    "errors": {
+      "total": 9,
+      "by_category": {
+        "import_errors": 1,
+        "type_errors": 8
+      },
+      "details": [
+        {"type": "import", "message": "Cannot find module '@/services/providers/IProviderAdapter'", "files": ["ClaudeAdapter.ts"]},
+        {"type": "type", "message": "Import declaration conflicts with local declaration", "files": ["ClaudeAdapter.ts"], "count": 3},
+        {"type": "type", "message": "Individual declarations in merged declaration must be all exported or all local", "files": ["ClaudeAdapter.ts"], "count": 4},
+        {"type": "type", "message": "Argument type mismatch", "files": ["ClaudeAdapter.ts"]}
+      ]
+    },
+    "root_cause": "Path aliases (@/) not configured + proposer created circular/conflicting imports between files + type errors from strict mode"
+  },
+
+  "aggregate_statistics": {
+    "total_errors": 45,
+    "error_distribution": {
+      "import_errors": 10,
+      "type_errors": 20,
+      "config_errors": 15
+    },
+    "error_distribution_pct": {
+      "import_errors": "22%",
+      "type_errors": "44%",
+      "config_errors": "33%"
+    },
+    "errors_by_complexity": [
+      {"complexity": 0.44, "errors": 10, "pr": 246},
+      {"complexity": 0.61, "errors": 9, "pr": 250},
+      {"complexity": 0.68, "errors": 24, "pr": 249},
+      {"complexity": 1.13, "errors": 1, "pr": 248},
+      {"complexity": 1.15, "errors": 1, "pr": 247}
+    ],
+    "complexity_correlation": "WEAK - mid-complexity PR #249 has most errors (24); high-complexity PRs #247-248 have fewest (1 each) but only because they add no compilable code"
+  },
+
+  "proposer_failures_identified": [
+    "Does NOT update package.json to add required dependencies before creating code that imports them",
+    "Does NOT configure tsconfig.json for JSX when creating .tsx files",
+    "Does NOT configure path aliases (@/) in tsconfig.json before using them in imports",
+    "Creates circular/conflicting imports between files it generates",
+    "Generates code that violates strict TypeScript mode (implicit any, unused variables)",
+    "Does NOT ensure project infrastructure (build config) exists before adding feature code",
+    "Treats greenfield project same as established project - no bootstrap phase"
+  ]
+}

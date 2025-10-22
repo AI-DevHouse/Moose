@@ -1,0 +1,79 @@
+Why do the AI coders make TS errors?  They strike me as a basic think that it should be excellent at avoiding.
+
+
+Diagnosed root causes: formatting conflicts, context degradation, extraction issues.
+20s
+
+
+
+
+Great question! You're absolutely right to be puzzled. These ARE basic errors that should be trivial. Looking at your logs more carefully, I think the issue isn't really TypeScript knowledge - it's format extraction and context problems. Here's what I see:
+
+The Real Culprits:
+1. Markdown Code Fence Collision
+Your sanitizer keeps fixing: "Nested backticks collapsed"
+
+This is a huge clue! The AI is probably outputting code like this:
+
+markdown
+Here's the solution:
+```typescript
+const template = `Hello ${name}`; // <-- inner backticks!
+```
+```
+
+When you extract the code from markdown, those nested backticks create havoc with TypeScript template literals.
+
+### 2. **Line 1 Errors Everywhere**
+Almost every failure shows: `Line 1: TS1005 - ';' expected`
+
+This suggests the **extraction process** is mangling the first line. Maybe:
+- Leaving markdown artifacts
+- Cutting off the first statement
+- Including explanatory text that shouldn't be there
+
+### 3. **Refinement Cycles Make Things WORSE**
+Look at this from your logs:
+```
+TS Result: 157 → 178 errors (added 21)
+TS Result: 74 → 28 errors (fixed 46) [then]
+TS Result: 28 → 29 errors (added 1)
+The AI isn't "bad at TypeScript" - it's fighting with the extraction process and probably receiving corrupted context in the refinement loops.
+
+4. The Sanitizer is Doing Heavy Lifting
+Every cycle shows: "Auto-fixed 2-3 issue(s)"
+
+The AI is generating code that needs sanitization, which means there's a systematic formatting problem between generation and parsing.
+
+Root Causes:
+AI generates markdown-wrapped code (natural for chat interfaces)
+Extraction process struggles with edge cases
+Refinement context gets polluted with partial/malformed code
+The AI sees broken code and tries to "fix" it, but doesn't realize the breakage happened AFTER it wrote the code
+Solutions:
+Short-term:
+typescript
+// Better extraction
+- Strip ALL markdown before validation
+- Add code fence detection
+- Validate extraction before sending to TypeScript compiler
+
+// Better refinement context
+- Show the AI exactly what got extracted (not what it generated)
+- Include the ACTUAL lines with errors, not just error messages
+Medium-term:
+typescript
+// Change the prompt
+"Output ONLY raw TypeScript code. No markdown, no explanations, 
+no code fences. Start directly with import/export statements."
+
+// Or use structured output
+- Use function calling / tool use to get code
+- Avoid the markdown extraction problem entirely
+Long-term:
+typescript
+// Use a different proposer for syntax cleanup
+- Use a smaller, faster model (Claude Haiku?) specifically 
+  for "format this code correctly" after generation
+- Separate "thinking/planning" from "code output"
+The AI probably does know TypeScript perfectly. The problem is the impedance mismatch between chat-style output (markdown with explanations) and code execution (raw TypeScript). Your sanitizer is evidence this is the issue!

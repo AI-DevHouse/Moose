@@ -1,0 +1,437 @@
+{
+  "project_id": "f73e8c9f-1d78-4251-8fb6-a070fd857951",
+  "scan_timestamp": "2025-10-22T09:47:46.377Z",
+  "scan_result": {
+    "total": 49,
+    "healthy": 5,
+    "review_recommended": 10,
+    "likely_oversized": 34,
+    "problematic_percent": 0.8979591836734694
+  },
+  "quality_assessment": {
+    "quality": "high_risk",
+    "recommendation": "High percentage of oversized WOs - consider refining decomposition"
+  },
+  "selected_wos": [
+    {
+      "index": 1,
+      "wo_id": "0170420d-9562-4326-95a8-d70f675421a0",
+      "title": "Configure Redux Toolkit Store Foundation with TypeScript",
+      "score": 0.44,
+      "signal": "healthy",
+      "factors": {
+        "fileCount": 3,
+        "criteriaCount": 6,
+        "dependencyCount": 0,
+        "estimatedTokens": 1200,
+        "riskLevel": 0.3
+      },
+      "guidance": "WO scope is appropriate - proceed with confidence"
+    },
+    {
+      "index": 0,
+      "wo_id": "f491b9c5-4960-4c07-9ee4-1b271115d5cf",
+      "title": "Implement Claude Provider Adapter",
+      "score": 0.61,
+      "signal": "review_recommended",
+      "factors": {
+        "fileCount": 4,
+        "criteriaCount": 7,
+        "dependencyCount": 0,
+        "estimatedTokens": 2600,
+        "riskLevel": 0.6
+      },
+      "guidance": "Consider simplifying this WO or adding more specific acceptance criteria"
+    },
+    {
+      "index": 8,
+      "wo_id": "4e4c7480-6116-48ba-9fe8-9541cadec68e",
+      "title": "Implement Discussion View Container with Real-Time State Management",
+      "score": 0.68,
+      "signal": "review_recommended",
+      "factors": {
+        "fileCount": 4,
+        "criteriaCount": 9,
+        "dependencyCount": 0,
+        "estimatedTokens": 2800,
+        "riskLevel": 0.6
+      },
+      "guidance": "Consider simplifying this WO or adding more specific acceptance criteria"
+    },
+    {
+      "index": 2,
+      "wo_id": "eaf3596e-9e76-4a0a-8b5b-a929e26188dd",
+      "title": "Configure Comprehensive Testing Infrastructure with Jest and Testing Libraries",
+      "score": 1.13,
+      "signal": "likely_oversized",
+      "factors": {
+        "fileCount": 12,
+        "criteriaCount": 8,
+        "dependencyCount": 0,
+        "estimatedTokens": 3200,
+        "riskLevel": 0.6
+      },
+      "guidance": "WO is likely too large - strong candidate for splitting into smaller WOs"
+    },
+    {
+      "index": 3,
+      "wo_id": "ca68150a-813a-43b4-8eea-c44eb18efc22",
+      "title": "Complete Documentation, Build Configuration, and Production Packaging",
+      "score": 1.15,
+      "signal": "likely_oversized",
+      "factors": {
+        "fileCount": 11,
+        "criteriaCount": 11,
+        "dependencyCount": 0,
+        "estimatedTokens": 3500,
+        "riskLevel": 0.3
+      },
+      "guidance": "WO is likely too large - strong candidate for splitting into smaller WOs"
+    }
+  ],
+  "all_wo_scores": [
+    {
+      "index": 0,
+      "wo_id": "f491b9c5-4960-4c07-9ee4-1b271115d5cf",
+      "title": "Implement Claude Provider Adapter",
+      "score": 0.61,
+      "signal": "review_recommended"
+    },
+    {
+      "index": 1,
+      "wo_id": "0170420d-9562-4326-95a8-d70f675421a0",
+      "title": "Configure Redux Toolkit Store Foundation with TypeScript",
+      "score": 0.44,
+      "signal": "healthy"
+    },
+    {
+      "index": 2,
+      "wo_id": "eaf3596e-9e76-4a0a-8b5b-a929e26188dd",
+      "title": "Configure Comprehensive Testing Infrastructure with Jest and Testing Libraries",
+      "score": 1.13,
+      "signal": "likely_oversized"
+    },
+    {
+      "index": 3,
+      "wo_id": "ca68150a-813a-43b4-8eea-c44eb18efc22",
+      "title": "Complete Documentation, Build Configuration, and Production Packaging",
+      "score": 1.15,
+      "signal": "likely_oversized"
+    },
+    {
+      "index": 4,
+      "wo_id": "3df5b68b-4002-4304-8788-d56b91b7c20b",
+      "title": "Implement LLM Provider Configuration and UI State Slices",
+      "score": 0.88,
+      "signal": "likely_oversized"
+    },
+    {
+      "index": 5,
+      "wo_id": "826a8b13-ed35-4624-9112-2ad95c867464",
+      "title": "Implement Integration and E2E Test Suites for Critical User Flows (15% + 5% Coverage)",
+      "score": 1.31,
+      "signal": "likely_oversized"
+    },
+    {
+      "index": 6,
+      "wo_id": "da5376da-ec6c-46d8-a1d6-4678190f65c1",
+      "title": "Implement Unified Response Detection and Extraction Service",
+      "score": 0.8,
+      "signal": "likely_oversized"
+    },
+    {
+      "index": 7,
+      "wo_id": "c87e4ee8-0054-44d8-bcfc-58729e0fdb4e",
+      "title": "Establish Testing Infrastructure and Security Baseline",
+      "score": 1.19,
+      "signal": "likely_oversized"
+    },
+    {
+      "index": 8,
+      "wo_id": "4e4c7480-6116-48ba-9fe8-9541cadec68e",
+      "title": "Implement Discussion View Container with Real-Time State Management",
+      "score": 0.68,
+      "signal": "review_recommended"
+    },
+    {
+      "index": 9,
+      "wo_id": "88432539-4110-4ebe-8170-b028f98307ac",
+      "title": "Create Turn Coordination Engine with Multi-Provider Orchestration",
+      "score": 0.7,
+      "signal": "likely_oversized"
+    },
+    {
+      "index": 10,
+      "wo_id": "5c5f1b13-3fb2-462f-9547-8fd76362fe98",
+      "title": "Set Up Build System and Development Tooling",
+      "score": 0.94,
+      "signal": "likely_oversized"
+    },
+    {
+      "index": 11,
+      "wo_id": "de8738b4-e24f-4441-a42a-55a6a0fc524e",
+      "title": "Configure Redux-Persist for State Persistence with Electron Storage",
+      "score": 0.85,
+      "signal": "likely_oversized"
+    },
+    {
+      "index": 12,
+      "wo_id": "fb95216c-5f7c-4541-a295-8ae6cdbe932d",
+      "title": "Create Renderer Process IPC Client with Promise-Based API",
+      "score": 0.66,
+      "signal": "review_recommended"
+    },
+    {
+      "index": 13,
+      "wo_id": "501edce0-b877-455c-a976-6570da1e2ada",
+      "title": "Implement Route Structure and Page Scaffolding for Core Features",
+      "score": 0.99,
+      "signal": "likely_oversized"
+    },
+    {
+      "index": 14,
+      "wo_id": "0e11d4c2-adb8-42c9-893b-8e55fca8409c",
+      "title": "Configure Electron Multi-Process Architecture and IPC Foundation",
+      "score": 0.78,
+      "signal": "likely_oversized"
+    },
+    {
+      "index": 15,
+      "wo_id": "72a89eaf-41e1-49c1-9bfa-508a465d98fa",
+      "title": "Implement OpenAI API Integration for Alignment Evaluation",
+      "score": 0.78,
+      "signal": "likely_oversized"
+    },
+    {
+      "index": 16,
+      "wo_id": "8bfcedb8-0236-49f9-bd00-15e8fe6f7263",
+      "title": "Implement ChatGPT Provider Adapter",
+      "score": 0.6,
+      "signal": "review_recommended"
+    },
+    {
+      "index": 17,
+      "wo_id": "a97e01e0-b661-4396-9aa8-7cfafadd6be0",
+      "title": "Build Provider Panel Components with WebView Integration and Status Display",
+      "score": 1,
+      "signal": "likely_oversized"
+    },
+    {
+      "index": 18,
+      "wo_id": "787c6dd1-e0c4-490a-95af-a851e07996b1",
+      "title": "Build Clipboard-WebView Coordination Layer",
+      "score": 0.89,
+      "signal": "likely_oversized"
+    },
+    {
+      "index": 19,
+      "wo_id": "b9b0d63b-ca9d-4770-b748-21bc8f0feb3c",
+      "title": "Define LLM Provider Interface and Type System",
+      "score": 0.55,
+      "signal": "review_recommended"
+    },
+    {
+      "index": 20,
+      "wo_id": "91bf4271-c675-451c-ba90-b967592e7067",
+      "title": "Implement Discussion Synchronization and Consistency Service",
+      "score": 0.64,
+      "signal": "review_recommended"
+    },
+    {
+      "index": 21,
+      "wo_id": "2f15659f-556d-44f7-8f3b-efb65fe0e121",
+      "title": "Implement Core Application State Slices (Sessions, Discussions, Messages)",
+      "score": 0.84,
+      "signal": "likely_oversized"
+    },
+    {
+      "index": 22,
+      "wo_id": "267ad27b-1c31-4ca0-ba01-82415da2db29",
+      "title": "Implement Message List Component with Real-Time Rendering and Alignment Annotations",
+      "score": 0.92,
+      "signal": "likely_oversized"
+    },
+    {
+      "index": 23,
+      "wo_id": "1fbd385f-affc-454d-9766-accb4ba07c9b",
+      "title": "Implement Clipboard Monitoring Service with Native API Integration",
+      "score": 0.69,
+      "signal": "review_recommended"
+    },
+    {
+      "index": 24,
+      "wo_id": "6d553caf-e56c-407c-9b20-af2fd1b855c1",
+      "title": "Create Paste Automation Engine with Timing Coordination",
+      "score": 0.88,
+      "signal": "likely_oversized"
+    },
+    {
+      "index": 25,
+      "wo_id": "a14242af-0055-4cb1-ac57-25f3b6fe870d",
+      "title": "Build Alignment Scoring Algorithm and Normalization Engine",
+      "score": 0.85,
+      "signal": "likely_oversized"
+    },
+    {
+      "index": 26,
+      "wo_id": "54e49c81-9308-42f2-9c41-4ec7cfb6671f",
+      "title": "Implement WebView Injection System for DOM Interaction",
+      "score": 0.87,
+      "signal": "likely_oversized"
+    },
+    {
+      "index": 27,
+      "wo_id": "2c76df9f-4087-43ec-93c5-6a57473b3f07",
+      "title": "Implement Error Recovery and Retry Strategy for Clipboard Operations",
+      "score": 0.88,
+      "signal": "likely_oversized"
+    },
+    {
+      "index": 28,
+      "wo_id": "d4915ccc-6acd-4948-83db-d1358abc7889",
+      "title": "Create Discussion Control Panel with Turn Management and Alignment Display",
+      "score": 0.88,
+      "signal": "likely_oversized"
+    },
+    {
+      "index": 29,
+      "wo_id": "89d11e3c-0c71-4a8a-9429-c6874ca7bd96",
+      "title": "Implement Unit Test Suites for Core Services and State Management (80% Coverage Target)",
+      "score": 1.78,
+      "signal": "likely_oversized"
+    },
+    {
+      "index": 30,
+      "wo_id": "d8b748fd-38b9-4c57-a65d-0b9775fb7599",
+      "title": "Build Status Indicator System with Real-Time Activity and Error Notifications",
+      "score": 0.93,
+      "signal": "likely_oversized"
+    },
+    {
+      "index": 31,
+      "wo_id": "73c43c90-b53f-4bd0-b0ce-d9d0aa555d59",
+      "title": "Implement Component Library Foundation with Shared UI Primitives",
+      "score": 0.99,
+      "signal": "likely_oversized"
+    },
+    {
+      "index": 32,
+      "wo_id": "170b9fd2-932a-4163-ac6c-c5291b28f0d1",
+      "title": "Build Discussion Error Handling and Recovery System",
+      "score": 0.78,
+      "signal": "likely_oversized"
+    },
+    {
+      "index": 33,
+      "wo_id": "91259028-7b39-4e14-b03e-c98de3dab86c",
+      "title": "Define IPC Channel Architecture and Type Definitions",
+      "score": 0.5,
+      "signal": "healthy"
+    },
+    {
+      "index": 34,
+      "wo_id": "a2acb099-7750-482e-895f-052af3148376",
+      "title": "Initialize Electron + TypeScript Project Structure",
+      "score": 0.96,
+      "signal": "likely_oversized"
+    },
+    {
+      "index": 35,
+      "wo_id": "3e1922cb-e548-40b3-a59c-1ddcdda85320",
+      "title": "Implement Redux Middleware for IPC Synchronization and Action Logging",
+      "score": 0.88,
+      "signal": "likely_oversized"
+    },
+    {
+      "index": 36,
+      "wo_id": "666660fb-b52c-4ed8-8c9f-89a6f6d660fd",
+      "title": "Implement Gemini and Grok Provider Adapters",
+      "score": 0.99,
+      "signal": "likely_oversized"
+    },
+    {
+      "index": 37,
+      "wo_id": "ef072952-757d-44d5-91e8-24b8eadeced4",
+      "title": "Implement Alignment Cache System with Redis-like In-Memory Storage",
+      "score": 0.75,
+      "signal": "likely_oversized"
+    },
+    {
+      "index": 38,
+      "wo_id": "f0fd1bf2-c2ba-48fa-bc89-1bfa24868a85",
+      "title": "Implement Discussion State Machine and Lifecycle Manager",
+      "score": 0.66,
+      "signal": "review_recommended"
+    },
+    {
+      "index": 39,
+      "wo_id": "a0d99bcd-e6a9-45f4-9b87-234976a61fa4",
+      "title": "Build Application Layout System with Navigation and Provider Management UI",
+      "score": 0.94,
+      "signal": "likely_oversized"
+    },
+    {
+      "index": 40,
+      "wo_id": "ca89cf28-daa6-4327-b3df-7942e5afea2e",
+      "title": "Enhance Error Handling, User Feedback, and Recovery Mechanisms",
+      "score": 0.85,
+      "signal": "likely_oversized"
+    },
+    {
+      "index": 41,
+      "wo_id": "64ec1d98-ff70-4613-b9c5-f5ee22fdb934",
+      "title": "Implement IPC Error Handling and Monitoring System",
+      "score": 0.82,
+      "signal": "likely_oversized"
+    },
+    {
+      "index": 42,
+      "wo_id": "d7a71749-beba-4a78-8735-60188adf04a2",
+      "title": "Initialize Express Server for Alignment Service with TypeScript Configuration",
+      "score": 0.68,
+      "signal": "review_recommended"
+    },
+    {
+      "index": 43,
+      "wo_id": "036f0989-70d4-4c6c-8e1d-b1995c46f500",
+      "title": "Initialize React Application with TypeScript and Routing Foundation",
+      "score": 0.58,
+      "signal": "review_recommended"
+    },
+    {
+      "index": 44,
+      "wo_id": "e3ad2838-233c-4585-8e37-b5ae991edb5d",
+      "title": "Implement Main Process IPC Handlers with Security Validation",
+      "score": 0.86,
+      "signal": "likely_oversized"
+    },
+    {
+      "index": 45,
+      "wo_id": "d8d41cd4-7025-4bb9-831e-2535666c8342",
+      "title": "Implement Performance Optimization and Resource Management System",
+      "score": 0.84,
+      "signal": "likely_oversized"
+    },
+    {
+      "index": 46,
+      "wo_id": "24f96d7f-ea9a-479c-ab25-609ac1dc7d9c",
+      "title": "Document Termination Marker Implementation",
+      "score": 0.29,
+      "signal": "healthy"
+    },
+    {
+      "index": 47,
+      "wo_id": "a7bb6c49-822b-42bb-a958-03d80e074a5f",
+      "title": "Parser Recognition Logic",
+      "score": 0.38,
+      "signal": "healthy"
+    },
+    {
+      "index": 48,
+      "wo_id": "92a9c7c1-064c-40df-a4df-fe3c4d68d476",
+      "title": "Validation and Testing Suite",
+      "score": 0.36,
+      "signal": "healthy"
+    }
+  ]
+}

@@ -1,0 +1,86 @@
+📊 DETAILED DIMENSIONAL ANALYSIS: 5 Test WOs
+
+================================================================================
+
+1. Configure Redux Toolkit Store Foundation with TypeScript...
+   Complexity: 0.44 (healthy)
+   PR: https://github.com/AI-DevHouse/multi-llm-discussion-v1/pull/246
+   Overall Acceptance: 2.7/10
+
+   📊 Dimensional Scores:
+      readability         : 6/10
+      architecture        : 5/10
+      completeness        : 2/10
+      build_success       : 0/10
+      test_coverage       : 0/10
+
+2. Implement Discussion View Container with Real-Time State Man...
+   Complexity: 0.68 (review)
+   PR: https://github.com/AI-DevHouse/multi-llm-discussion-v1/pull/249
+   Overall Acceptance: 2.7/10
+
+   📊 Dimensional Scores:
+      readability         : 6/10
+      architecture        : 5/10
+      completeness        : 2/10
+      build_success       : 0/10
+      test_coverage       : 0/10
+
+3. Complete Documentation, Build Configuration, and Production ...
+   Complexity: 1.15 (oversized)
+   PR: https://github.com/AI-DevHouse/multi-llm-discussion-v1/pull/247
+   Overall Acceptance: 3.3/10
+
+   📊 Dimensional Scores:
+      readability         : 10/10
+      architecture        : 5/10
+      completeness        : 2/10
+      build_success       : 0/10
+      test_coverage       : 0/10
+
+4. Configure Comprehensive Testing Infrastructure with Jest and...
+   Complexity: 1.13 (oversized)
+   PR: https://github.com/AI-DevHouse/multi-llm-discussion-v1/pull/248
+   Overall Acceptance: 3.3/10
+
+   📊 Dimensional Scores:
+      readability         : 10/10
+      architecture        : 5/10
+      completeness        : 2/10
+      build_success       : 0/10
+      test_coverage       : 0/10
+
+5. Implement Claude Provider Adapter...
+   Complexity: 0.61 (review)
+   PR: https://github.com/AI-DevHouse/multi-llm-discussion-v1/pull/250
+   Overall Acceptance: 2.7/10
+
+   📊 Dimensional Scores:
+      readability         : 6/10
+      architecture        : 5/10
+      completeness        : 2/10
+      build_success       : 0/10
+      test_coverage       : 0/10
+
+================================================================================
+
+📈 DIMENSIONAL AVERAGES & CORRELATION
+
+readability         : avg 7.6/10, r=0.962 ❌ Positive
+architecture        : avg 5.0/10, r=0.000 ⚠️  Weak
+completeness        : avg 2.0/10, r=0.000 ⚠️  Weak
+build_success       : avg 0.0/10, r=0.000 ⚠️  Weak
+test_coverage       : avg 0.0/10, r=0.000 ⚠️  Weak
+
+================================================================================
+
+🔍 KEY INSIGHTS
+
+Consistently failing dimensions (avg < 5/10):
+   - completeness
+   - build_success
+   - test_coverage
+
+📊 Metrics Patterns:
+   All builds failed: ❌ NO
+   All zero coverage: ✅ YES

@@ -1,0 +1,186 @@
+{
+  "selected_project": {
+    "project_id": "f73e8c9f-1d78-4251-8fb6-a070fd857951",
+    "project_name": "multi-llm-discussion-v1",
+    "wo_count": 49,
+    "pending_count": 49,
+    "sample_wos": [
+      {
+        "id": "fb95216c-5f7c-4541-a295-8ae6cdbe932d",
+        "title": "Create Renderer Process IPC Client with Promise-Based API",
+        "files_count": 4,
+        "criteria_count": 9,
+        "risk_level": "medium",
+        "status": "pending"
+      },
+      {
+        "id": "0170420d-9562-4326-95a8-d70f675421a0",
+        "title": "Configure Redux Toolkit Store Foundation with TypeScript",
+        "files_count": 3,
+        "criteria_count": 6,
+        "risk_level": "low",
+        "status": "pending"
+      },
+      {
+        "id": "eaf3596e-9e76-4a0a-8b5b-a929e26188dd",
+        "title": "Configure Comprehensive Testing Infrastructure with Jest and Testing Libraries",
+        "files_count": 12,
+        "criteria_count": 8,
+        "risk_level": "medium",
+        "status": "pending"
+      },
+      {
+        "id": "ca68150a-813a-43b4-8eea-c44eb18efc22",
+        "title": "Complete Documentation, Build Configuration, and Production Packaging",
+        "files_count": 11,
+        "criteria_count": 11,
+        "risk_level": "low",
+        "status": "pending"
+      },
+      {
+        "id": "3df5b68b-4002-4304-8788-d56b91b7c20b",
+        "title": "Implement LLM Provider Configuration and UI State Slices",
+        "files_count": 8,
+        "criteria_count": 8,
+        "risk_level": "medium",
+        "status": "pending"
+      },
+      {
+        "id": "826a8b13-ed35-4624-9112-2ad95c867464",
+        "title": "Implement Integration and E2E Test Suites for Critical User Flows (15% + 5% Coverage)",
+        "files_count": 12,
+        "criteria_count": 12,
+        "risk_level": "high",
+        "status": "pending"
+      },
+      {
+        "id": "da5376da-ec6c-46d8-a1d6-4678190f65c1",
+        "title": "Implement Unified Response Detection and Extraction Service",
+        "files_count": 6,
+        "criteria_count": 8,
+        "risk_level": "high",
+        "status": "pending"
+      },
+      {
+        "id": "c87e4ee8-0054-44d8-bcfc-58729e0fdb4e",
+        "title": "Establish Testing Infrastructure and Security Baseline",
+        "files_count": 12,
+        "criteria_count": 10,
+        "risk_level": "medium",
+        "status": "pending"
+      },
+      {
+        "id": "4e4c7480-6116-48ba-9fe8-9541cadec68e",
+        "title": "Implement Discussion View Container with Real-Time State Management",
+        "files_count": 4,
+        "criteria_count": 9,
+        "risk_level": "medium",
+        "status": "pending"
+      },
+      {
+        "id": "88432539-4110-4ebe-8170-b028f98307ac",
+        "title": "Create Turn Coordination Engine with Multi-Provider Orchestration",
+        "files_count": 4,
+        "criteria_count": 8,
+        "risk_level": "high",
+        "status": "pending"
+      }
+    ]
+  },
+  "all_candidates": [
+    {
+      "project_id": "f73e8c9f-1d78-4251-8fb6-a070fd857951",
+      "project_name": "multi-llm-discussion-v1",
+      "wo_count": 49,
+      "pending_count": 49,
+      "sample_wos": [
+        {
+          "id": "fb95216c-5f7c-4541-a295-8ae6cdbe932d",
+          "title": "Create Renderer Process IPC Client with Promise-Based API",
+          "files_count": 4,
+          "criteria_count": 9,
+          "risk_level": "medium",
+          "status": "pending"
+        },
+        {
+          "id": "0170420d-9562-4326-95a8-d70f675421a0",
+          "title": "Configure Redux Toolkit Store Foundation with TypeScript",
+          "files_count": 3,
+          "criteria_count": 6,
+          "risk_level": "low",
+          "status": "pending"
+        },
+        {
+          "id": "eaf3596e-9e76-4a0a-8b5b-a929e26188dd",
+          "title": "Configure Comprehensive Testing Infrastructure with Jest and Testing Libraries",
+          "files_count": 12,
+          "criteria_count": 8,
+          "risk_level": "medium",
+          "status": "pending"
+        },
+        {
+          "id": "ca68150a-813a-43b4-8eea-c44eb18efc22",
+          "title": "Complete Documentation, Build Configuration, and Production Packaging",
+          "files_count": 11,
+          "criteria_count": 11,
+          "risk_level": "low",
+          "status": "pending"
+        },
+        {
+          "id": "3df5b68b-4002-4304-8788-d56b91b7c20b",
+          "title": "Implement LLM Provider Configuration and UI State Slices",
+          "files_count": 8,
+          "criteria_count": 8,
+          "risk_level": "medium",
+          "status": "pending"
+        },
+        {
+          "id": "826a8b13-ed35-4624-9112-2ad95c867464",
+          "title": "Implement Integration and E2E Test Suites for Critical User Flows (15% + 5% Coverage)",
+          "files_count": 12,
+          "criteria_count": 12,
+          "risk_level": "high",
+          "status": "pending"
+        },
+        {
+          "id": "da5376da-ec6c-46d8-a1d6-4678190f65c1",
+          "title": "Implement Unified Response Detection and Extraction Service",
+          "files_count": 6,
+          "criteria_count": 8,
+          "risk_level": "high",
+          "status": "pending"
+        },
+        {
+          "id": "c87e4ee8-0054-44d8-bcfc-58729e0fdb4e",
+          "title": "Establish Testing Infrastructure and Security Baseline",
+          "files_count": 12,
+          "criteria_count": 10,
+          "risk_level": "medium",
+          "status": "pending"
+        },
+        {
+          "id": "4e4c7480-6116-48ba-9fe8-9541cadec68e",
+          "title": "Implement Discussion View Container with Real-Time State Management",
+          "files_count": 4,
+          "criteria_count": 9,
+          "risk_level": "medium",
+          "status": "pending"
+        },
+        {
+          "id": "88432539-4110-4ebe-8170-b028f98307ac",
+          "title": "Create Turn Coordination Engine with Multi-Provider Orchestration",
+          "files_count": 4,
+          "criteria_count": 8,
+          "risk_level": "high",
+          "status": "pending"
+        }
+      ]
+    }
+  ],
+  "selection_criteria": {
+    "ideal_wo_count": "10-20",
+    "minimum_pending": 5,
+    "selected_reason": "Closest to ideal count of 15 WOs"
+  },
+  "timestamp": "2025-10-22T09:44:44.056Z"
+}

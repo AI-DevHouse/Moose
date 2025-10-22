@@ -1,0 +1,2129 @@
+# Autonomous Code Generation System: Implementation Guide for Claude Code
+
+**Version:** 2.0  
+**Target Timeline:** 2 weeks (10 working days)  
+**Objective:** Increase mid-complexity work order quality from 66/100 to 80-85/100 through deterministic validation and structured refinement
+
+---
+
+## Executive Summary
+
+This document provides implementation instructions for upgrading an AI code generation orchestrator to achieve production-ready quality (≥75/100) on mid-complexity work orders. You (Claude Code) will implement a three-layer quality system:
+
+1. **Decomposition Layer** - Routes high-complexity work orders to sub-task processing
+2. **Validation Layer** - Programmatically detects quality issues
+3. **Refinement Layer** - Iteratively improves code based on validation feedback
+
+**Current State:**
+- Orchestrator: Functional (routes to gpt-4o-mini or Claude 4.5)
+- Decomposer: Built but not integrated
+- Validator: Does not exist (you will build this)
+- Refinement: Basic (syntax errors only)
+
+**Target State:**
+- Mid-complexity quality: 66/100 → 80-85/100
+- Test generation rate: 0% → 80%+
+- Autonomous success rate: 50% → 85%+
+
+**Success Metrics:**
+- Correction rate: ≥70% of validation errors fixed within 3 refinement cycles
+- Convergence rate: ≥60% of work orders pass validation within 3 cycles
+- Zero-delta rate: <20% of refinement cycles change <10% of code
+- Cost per work order: ≤$0.12 (gpt-4o-mini with 3 refinement cycles)
+
+---
+
+## Phase Structure
+
+```
+Week 1: Foundation (Days 1-6)
+├─ Day 1: Integration & Minimal Validator
+├─ Day 2-3: Refinement Loop Validation Experiment
+├─ Day 4: DECISION GATE → Full Validator Build
+└─ Day 5-6: Pilot Testing (10 work orders)
+
+Week 2: Production (Days 7-10)
+├─ Day 7-8: Template Enhancement & Tuning
+├─ Day 9: Production Configuration
+└─ Day 10: Gradual Rollout & Monitoring
+```
+
+---
+
+## Phase 0: Pre-Implementation Checklist
+
+Before starting Day 1, gather this information:
+
+### Current System State Assessment
+
+**Task:** Document the current orchestrator architecture
+
+**Questions to answer:**
+1. Where is the main orchestration entry point? (file path)
+2. Does a decomposition system exist? If yes, where?
+3. Does a refinement loop exist? If yes, where and what does it currently check?
+4. Where are work orders stored/retrieved?
+5. What database/storage system is used for telemetry?
+6. What models are currently available (gpt-4o-mini, Claude 4.5, others)?
+
+**Deliverable:** `CURRENT_SYSTEM_STATE.md` with architecture diagram and answers
+
+---
+
+## Week 1: Foundation Layer
+
+### Day 1: Integration & Minimal Validator (6-8 hours)
+
+#### Task 1.1: Decomposition Integration
+
+**Objective:** Ensure high-complexity work orders (>0.7) are automatically decomposed into manageable sub-tasks
+
+**Current situation:** Ask the human operator where the decomposition system currently lives and whether it's integrated
+
+**What to implement:**
+
+```typescript
+// Location: src/lib/orchestrator/work-order-processor.ts
+
+interface ProcessingDecision {
+  strategy: 'direct' | 'decomposed' | 'escalate'
+  reason: string
+  subWOs?: WorkOrder[]
+}
+
+async function decideProcessingStrategy(wo: WorkOrder): ProcessingDecision {
+  // Decision logic:
+  // - If complexity > 0.7 → decompose
+  // - If complexity 0.5-0.7 → direct processing
+  // - If complexity < 0.5 → direct processing
+  
+  // Validate decomposition quality:
+  // - All sub-WOs must have complexity < 0.6
+  // - Sub-WOs must have clear dependencies
+  // - Must be able to merge results
+  
+  // If decomposition fails quality check → escalate
+}
+```
+
+**Specifications:**
+
+1. **Complexity threshold:** 0.7 (configurable)
+2. **Sub-WO quality check:** Max sub-WO complexity must be <0.6
+3. **Escalation:** If decomposition produces sub-WOs ≥0.6, escalate to human
+4. **Logging:** Log all decomposition decisions to database
+
+**Database schema needed:**
+
+```typescript
+interface DecompositionLog {
+  wo_id: string
+  original_complexity: number
+  strategy: 'decomposed' | 'direct' | 'escalated'
+  sub_wo_ids?: string[]
+  sub_wo_complexities?: number[]
+  timestamp: Date
+}
+```
+
+**Deliverable:** 
+- Decomposition integrated into main orchestrator flow
+- Database schema created
+- Integration tests passing
+
+---
+
+#### Task 1.2: Build Minimal Validator (Test Assertions Only)
+
+**Objective:** Create a validator that checks for test file existence and assertion count
+
+**Why start minimal:** We need to validate that the refinement loop works before building the full validator. This minimal version tests the critical unknown: "Can models fix validation errors through refinement?"
+
+**What to implement:**
+
+Create `src/lib/validators/test-assertion-validator.ts`
+
+**Specifications:**
+
+```typescript
+interface ValidationResult {
+  isValid: boolean
+  score: number  // 0-10 scale (soft scoring)
+  errors: ValidationError[]
+  metadata: {
+    validator_version: string
+    timestamp: Date
+  }
+}
+
+interface ValidationError {
+  severity: 'critical' | 'high' | 'medium' | 'low'
+  rule: string
+  message: string
+  suggestion: string  // Explicit fix guidance with example
+  file?: string
+  line?: number
+}
+
+class TestAssertionValidator {
+  validate(files: Map<string, string>): ValidationResult {
+    // Check 1: Test file exists
+    // Check 2: Test file has assertions (count expect() calls)
+    // Check 3: No trivial assertions (expect(true).toBe(true))
+    // Check 4: Tests import component being tested
+  }
+}
+```
+
+**Validation rules:**
+
+**Rule 1: Test file must exist**
+```
+Pattern: *.test.ts, *.test.tsx, *.spec.ts, *.spec.tsx
+Error if: No files match pattern
+Severity: critical
+Message: "No test file found. Acceptance criteria require tests."
+Suggestion: "Create [component-name].test.ts with at least 3 test cases. Each test should have at least 3 assertions using expect()."
+Example: [Provide a 15-line example test]
+```
+
+**Rule 2: Minimum assertion count**
+```
+Pattern: expect(...).toBe(...), expect(...).toEqual(...), etc.
+Count: Total assertions across all tests
+Error if: Count < 3
+Severity: high
+Message: "Test file has only {count} assertions. Need at least 3."
+Suggestion: "Add more expect() statements to verify behavior. Each test should check multiple aspects of functionality."
+Example: [Show 3 different assertion types]
+```
+
+**Rule 3: No trivial assertions**
+```
+Pattern: expect(true).toBe(true), expect(1).toBe(1), expect('a').toBe('a')
+Error if: Pattern found
+Severity: high
+Message: "Tests contain trivial assertions that don't verify actual behavior."
+Suggestion: "Replace trivial assertions with meaningful checks. Test should verify the component's actual functionality."
+```
+
+**Rule 4: Test imports component**
+```
+Extract: import statements from test file
+Check: Does test import the component being tested?
+Error if: No imports found or wrong imports
+Severity: medium
+Message: "Test doesn't import the component it's supposed to test."
+Suggestion: "Add import statement for {component_name} from {expected_path}"
+```
+
+**Scoring formula:**
+
+```typescript
+function calculateScore(checks: CheckResult[]): number {
+  if (!checks.testFileExists) return 0
+  
+  let score = 10
+  
+  if (checks.assertionCount < 3) score -= 5
+  else if (checks.assertionCount < 6) score -= 2
+  
+  if (checks.hasTrivialAssertions) score -= 3
+  if (!checks.importsComponent) score -= 2
+  
+  return Math.max(0, score)
+}
+```
+
+**Key requirement: Explicit, actionable feedback**
+
+Every error message must include:
+1. What's wrong
+2. Why it matters
+3. How to fix it (with specific example code)
+
+**Example of good feedback:**
+
+```
+CRITICAL: No test file found
+
+Why this matters:
+Acceptance criteria require testing store initialization. 
+Tests prevent regressions and document expected behavior.
+
+How to fix:
+Create src/renderer/store/store.test.ts with this structure:
+
+import { store } from './store'
+
+describe('Redux Store', () => {
+  it('should initialize with empty state', () => {
+    const state = store.getState()
+    expect(state).toBeDefined()
+    expect(Object.keys(state)).toHaveLength(0)
+  })
+  
+  it('should have correct TypeScript types', () => {
+    type TestRootState = ReturnType<typeof store.getState>
+    const state: TestRootState = store.getState()
+    expect(state).toBeDefined()
+  })
+  
+  it('should have DevTools enabled in development', () => {
+    expect(store).toHaveProperty('dispatch')
+    expect(store).toHaveProperty('getState')
+  })
+})
+```
+
+**Deliverable:**
+- `src/lib/validators/test-assertion-validator.ts`
+- `src/lib/validators/test-assertion-validator.test.ts` (test the validator itself)
+- Unit tests covering all 4 validation rules
+- Documentation in file header
+
+---
+
+#### Task 1.3: Integrate Validator with Refinement Loop
+
+**Objective:** Connect validator to existing refinement loop so validation errors trigger refinement
+
+**What to implement:**
+
+Modify the existing refinement loop to:
+
+```typescript
+async function refineWithValidation(
+  code: CodeMap,
+  wo: WorkOrder,
+  attemptNum: number = 1
+): Promise<RefinementResult> {
+  
+  // Run validator BEFORE syntax check
+  const validation = await testValidator.validate(code)
+  
+  // Track metrics
+  await telemetry.trackValidation({
+    wo_id: wo.id,
+    attempt_num: attemptNum,
+    score: validation.score,
+    errors: validation.errors,
+    timestamp: new Date()
+  })
+  
+  // Check if passed
+  if (validation.isValid) {
+    return {
+      status: 'passed',
+      code,
+      validation,
+      attempts: attemptNum
+    }
+  }
+  
+  // Check refinement limit
+  const MAX_ATTEMPTS = 3
+  if (attemptNum >= MAX_ATTEMPTS) {
+    return {
+      status: 'escalated',
+      reason: `Failed validation after ${attemptNum} attempts`,
+      code,
+      lastValidation: validation,
+      attempts: attemptNum
+    }
+  }
+  
+  // Calculate token diff (for zero-delta detection)
+  if (attemptNum > 1) {
+    const prevCode = await telemetry.getPreviousCode(wo.id)
+    const diff = calculateTokenDiff(prevCode, code)
+    
+    // Zero-delta detection
+    if (diff.percentageChanged < 10) {
+      return {
+        status: 'escalated',
+        reason: 'Zero-delta iteration - model not making meaningful changes',
+        code,
+        lastValidation: validation,
+        attempts: attemptNum,
+        diff
+      }
+    }
+    
+    await telemetry.trackDiff(wo.id, attemptNum, diff)
+  }
+  
+  // Format feedback with graduated detail
+  const feedback = formatValidationFeedback(validation.errors, attemptNum)
+  
+  // Refine and recurse
+  const refined = await proposer.refine(code, feedback)
+  return refineWithValidation(refined, wo, attemptNum + 1)
+}
+```
+
+**Graduated feedback detail:**
+
+```typescript
+function formatValidationFeedback(
+  errors: ValidationError[],
+  attemptNum: number
+): string {
+  
+  if (attemptNum === 1) {
+    // Attempt 1: Concise list
+    return errors
+      .map(e => `${e.severity.toUpperCase()}: ${e.message}`)
+      .join('\n\n')
+  }
+  
+  if (attemptNum === 2) {
+    // Attempt 2: Add suggestions
+    return errors
+      .map(e => 
+        `${e.severity.toUpperCase()}: ${e.message}\n\n` +
+        `How to fix:\n${e.suggestion}`
+      )
+      .join('\n\n')
+  }
+  
+  // Attempt 3: Maximum detail
+  return errors
+    .map(e =>
+      `${e.severity.toUpperCase()}: ${e.message}\n\n` +
+      `${e.file ? `File: ${e.file}` : ''}\n` +
+      `${e.line ? `Line: ${e.line}` : ''}\n\n` +
+      `How to fix:\n${e.suggestion}`
+    )
+    .join('\n\n')
+}
+```
+
+**Token diff calculation:**
+
+```typescript
+interface DiffMetrics {
+  linesAdded: number
+  linesRemoved: number
+  linesChanged: number
+  filesModified: number
+  percentageChanged: number
+}
+
+function calculateTokenDiff(
+  oldCode: CodeMap,
+  newCode: CodeMap
+): DiffMetrics {
+  // Use a diff library (e.g., diff-match-patch or fast-diff)
+  // Calculate:
+  // - Lines added/removed/changed
+  // - Files modified
+  // - Percentage of total code changed
+  
+  // Return metrics for telemetry
+}
+```
+
+**Database schema for telemetry:**
+
+```sql
+CREATE TABLE validation_attempts (
+  id UUID PRIMARY KEY,
+  wo_id TEXT NOT NULL,
+  attempt_num INTEGER NOT NULL,
+  score INTEGER NOT NULL,
+  errors JSONB NOT NULL,
+  timestamp TIMESTAMPTZ NOT NULL,
+  
+  -- Diff metrics (null for attempt 1)
+  lines_changed INTEGER,
+  files_modified INTEGER,
+  percentage_changed FLOAT,
+  
+  -- Outcome
+  passed BOOLEAN NOT NULL,
+  escalated BOOLEAN NOT NULL,
+  escalation_reason TEXT
+)
+
+CREATE INDEX idx_validation_wo_id ON validation_attempts(wo_id)
+CREATE INDEX idx_validation_timestamp ON validation_attempts(timestamp)
+```
+
+**Deliverable:**
+- Refinement loop updated with validator integration
+- Telemetry collection implemented
+- Database schema created
+- Token diff calculation working
+- Tests for refinement logic
+
+---
+
+### Days 2-3: Refinement Loop Validation Experiment (12-16 hours)
+
+**CRITICAL: This is the GO/NO-GO decision gate for the entire project**
+
+#### Task 2.1: Experiment Design
+
+**Objective:** Prove that models can autonomously fix validation errors through refinement
+
+**Why this matters:** Your data shows both gpt-4o-mini and Claude 4.5 failed at test generation (0/10) in automated mode. If refinement doesn't work, the entire validator approach is non-viable.
+
+**What to do:**
+
+1. **Select 5 mid-complexity work orders** (complexity 0.5-0.65)
+   - Prioritize work orders that historically failed test generation
+   - Include Redux store work order (known 0/10 baseline)
+   - Ensure variety (components, stores, utilities, tests)
+
+2. **Run each through the validation pipeline:**
+   ```
+   WO → Proposer (generate code) → Validator → Refinement (if needed) → Track metrics
+   ```
+
+3. **Collect data using this template:**
+
+```typescript
+interface ExperimentData {
+  wo_id: string
+  complexity: number
+  model: 'gpt-4o-mini' | 'claude-4.5'
+  
+  initial_validation: {
+    score: number
+    errors: ValidationError[]
+  }
+  
+  refinement_cycles: Array<{
+    cycle_num: number
+    errors_addressed: string[]  // Which errors were fixed
+    errors_remaining: string[]  // Which errors still present
+    new_errors_introduced: string[]  // New problems created
+    token_diff: DiffMetrics
+    time_elapsed_seconds: number
+  }>
+  
+  final_outcome: {
+    status: 'passed' | 'escalated'
+    final_score: number
+    cycles_used: number
+    total_time_seconds: number
+  }
+  
+  qualitative_notes: string  // What patterns did you observe?
+}
+```
+
+**Deliverable:** 
+- `evidence/phase1/refinement-experiment-data.json` with all 5 work orders
+- `evidence/phase1/refinement-experiment-analysis.md` with calculations
+
+---
+
+#### Task 2.2: Metric Calculation
+
+**Objective:** Calculate the key metrics that determine GO/NO-GO
+
+Calculate these metrics from your experiment data:
+
+**Metric 1: Correction Rate**
+```
+Formula: (Errors fixed in any cycle / Total errors found initially) × 100%
+Target: ≥70%
+Example: 15 errors fixed / 20 total errors = 75% ✅
+```
+
+**Metric 2: Convergence Rate**
+```
+Formula: (WOs that passed within 3 cycles / Total WOs) × 100%
+Target: ≥60%
+Example: 3 WOs passed / 5 total = 60% ✅
+```
+
+**Metric 3: Zero-Delta Rate**
+```
+Formula: (Cycles with <10% code change / Total cycles) × 100%
+Target: <20%
+Example: 2 zero-delta cycles / 12 total cycles = 17% ✅
+```
+
+**Metric 4: Error Type Effectiveness**
+
+For each error type (missing tests, trivial assertions, missing imports, etc.):
+```
+Formula: (Times this error was fixed / Times this error appeared) × 100%
+```
+
+This tells you WHICH validations work well in refinement.
+
+**Metric 5: Average Cycles to Pass**
+```
+Formula: Sum of cycles for passed WOs / Number of passed WOs
+Target: ≤2.5
+Example: (2 + 3 + 1) cycles / 3 passed WOs = 2.0 ✅
+```
+
+**Create a summary table:**
+
+```markdown
+## Refinement Loop Experiment Results
+
+| Metric | Formula | Target | Actual | Status |
+|--------|---------|--------|--------|--------|
+| Correction Rate | Errors fixed / Total errors | ≥70% | [X]% | [✅/❌] |
+| Convergence Rate | Passed / Total WOs | ≥60% | [X]% | [✅/❌] |
+| Zero-Delta Rate | Zero-delta / Total cycles | <20% | [X]% | [✅/❌] |
+| Avg Cycles | Cycles / Passed WOs | ≤2.5 | [X] | [✅/❌] |
+
+**Overall Assessment:** [PASS/MARGINAL/FAIL]
+
+### Error Type Breakdown
+
+| Error Type | Appeared | Fixed | Success Rate |
+|------------|----------|-------|--------------|
+| Missing test file | 5 | 4 | 80% ✅ |
+| Low assertion count | 4 | 3 | 75% ✅ |
+| Trivial assertions | 3 | 1 | 33% ❌ |
+| Missing imports | 2 | 2 | 100% ✅ |
+```
+
+**Deliverable:**
+- Metrics calculated and documented
+- Summary table created
+- Qualitative observations noted
+
+---
+
+#### Task 2.3: Decision Gate Analysis
+
+**Based on your metrics, make a GO/NO-GO decision:**
+
+**PASS (Proceed to Day 4): If ≥3 of 4 metrics meet targets**
+```
+✅ Correction rate ≥70%
+✅ Convergence rate ≥60%  
+✅ Zero-delta rate <20%
+✅ Average cycles ≤2.5
+
+Action: Build full validator (Day 4)
+Expected outcome: 66/100 → 80-85/100
+```
+
+**MARGINAL (Test with Claude): If 2 of 4 metrics meet targets**
+```
+⚠️ Some metrics pass, some fail
+⚠️ gpt-4o-mini refinement unreliable
+
+Action: Re-run experiment with Claude 4.5 model
+Cost implication: $0.05/WO → $1.05/WO
+If Claude performs better: Consider hybrid routing
+```
+
+**FAIL (Pivot strategy): If <2 of 4 metrics meet targets**
+```
+❌ Correction rate <70%
+❌ Convergence rate <60%
+❌ Refinement loop doesn't work
+
+Action: STOP validator build, pivot to alternative:
+  Option A: Hybrid approach (validator + human escalation)
+  Option B: Scope reduction (low complexity only, <0.5)
+  Option C: Research alternative approaches (4-6 weeks)
+```
+
+**Deliverable:**
+- `evidence/phase1/GO-NO-GO-DECISION.md` with:
+  - Metrics summary
+  - Decision (PASS/MARGINAL/FAIL)
+  - Recommended next steps
+  - Risk assessment
+
+**Present this to human operator for approval before proceeding**
+
+---
+
+### Day 4: Full Validator Build (8-10 hours)
+
+**Prerequisites:** Phase 1 experiment must show PASS or MARGINAL (with human approval to proceed)
+
+#### Task 4.1: Expand Validator to All 5 Checks
+
+**Objective:** Build complete Tier 3 Validator with all quality checks
+
+Create `src/lib/validators/tier3-validator.ts`
+
+**Architecture:**
+
+```typescript
+class Tier3Validator {
+  private checks: ValidationCheck[]
+  private config: ValidatorConfig
+  
+  constructor(config: ValidatorConfig) {
+    this.checks = [
+      new TestAssertionCheck(),      // Already built on Day 1
+      new PlaceholderDetectionCheck(),
+      new ImportValidationCheck(),
+      new ErrorHandlingCheck(),
+      new TypeSafetyCheck()
+    ]
+  }
+  
+  async validate(
+    code: CodeMap,
+    context: ValidationContext
+  ): Promise<ValidationResult> {
+    // Run all checks in parallel
+    const results = await Promise.all(
+      this.checks.map(check => check.run(code, context))
+    )
+    
+    // Apply graduated strictness based on attempt number
+    const strictness = this.getStrictnessLevel(context.attemptNum)
+    
+    // Aggregate scores
+    return this.aggregateResults(results, strictness)
+  }
+  
+  private getStrictnessLevel(attemptNum: number): StrictnessLevel {
+    if (attemptNum === 1) return 'lenient'   // Warnings only
+    if (attemptNum === 2) return 'moderate'  // Critical errors only
+    return 'strict'                          // All errors
+  }
+}
+```
+
+**Implementation instructions for each check:**
+
+---
+
+**Check 1: Test Assertions (Already built on Day 1)**
+- Use existing implementation
+- No changes needed
+
+---
+
+**Check 2: Placeholder Detection**
+
+**What to detect:**
+
+```typescript
+const PLACEHOLDER_PATTERNS = [
+  {
+    pattern: /\{\s*\/\/\s*[\w\s]+\s*\}/g,
+    description: 'Comment-only block',
+    example: '{ // TODO: implementation }'
+  },
+  {
+    pattern: /\/\/\s*TODO/gi,
+    description: 'TODO marker',
+    example: '// TODO: add error handling'
+  },
+  {
+    pattern: /\/\/\s*FIXME/gi,
+    description: 'FIXME marker',
+    example: '// FIXME: this is broken'
+  },
+  {
+    pattern: /throw new Error\(['"]Not implemented['"]\)/g,
+    description: 'Not implemented stub',
+    example: 'throw new Error("Not implemented")'
+  },
+  {
+    pattern: /function\s+\w+\([^)]*\)\s*\{\s*\}/g,
+    description: 'Empty function body',
+    example: 'function doSomething() { }'
+  },
+  {
+    pattern: /async\s+function\s+\w+\([^)]*\)\s*\{\s*\}/g,
+    description: 'Empty async function',
+    example: 'async function fetchData() { }'
+  }
+]
+```
+
+**Scoring:**
+```
+0 placeholders: 10/10
+1-2 placeholders: 7/10 (warning)
+3-5 placeholders: 4/10 (error)
+6+ placeholders: 0/10 (critical)
+```
+
+**Error message template:**
+```
+HIGH: Found {count} placeholder implementations
+
+Files with placeholders:
+- {file1}:{line} function {name}
+  Current: { // preparation logic }
+  
+  Fix: Implement actual logic. Example:
+  async prepareClipboard(data: { content: string }) {
+    try {
+      await clipboard.writeText(data.content)
+      this.emit('prepared', data)
+    } catch (error) {
+      console.error('Clipboard preparation failed:', error)
+      throw error
+    }
+  }
+
+All functions must be fully implemented. No TODO, FIXME, or comment-only bodies.
+```
+
+---
+
+**Check 3: Import Validation**
+
+**What to validate:**
+
+```typescript
+interface ImportStatement {
+  source: string      // e.g., './store'
+  specifiers: string[] // e.g., ['store', 'RootState']
+  line: number
+  resolvedPath: string // Absolute path to file
+}
+
+async function validateImports(
+  code: CodeMap,
+  projectStructure: ProjectStructure
+): Promise<CheckResult> {
+  
+  for (const [filePath, content] of code.entries()) {
+    const imports = extractImports(content)
+    
+    for (const imp of imports) {
+      const resolved = resolveImportPath(imp.source, filePath)
+      
+      // Check if file exists in:
+      // 1. This PR (code map)
+      // 2. Project (file system)
+      // 3. node_modules (external package)
+      
+      const existsInPR = code.has(resolved)
+      const existsInProject = await fileExists(resolved)
+      const isNodeModule = imp.source.startsWith('@') || !imp.source.startsWith('.')
+      
+      if (!existsInPR && !existsInProject && !isNodeModule) {
+        errors.push({
+          severity: 'critical',
+          file: filePath,
+          line: imp.line,
+          message: `Import references non-existent file: ${imp.source}`,
+          suggestion: `Either:
+            1. Create ${resolved} in this PR, OR
+            2. Change import to reference existing file, OR
+            3. Remove this import if unused
+            
+            Available files in this context:
+            ${listAvailableFiles(code, filePath)}`
+        })
+      }
+    }
+  }
+}
+```
+
+**Key feature:** Provide context about what files ARE available
+
+**Scoring:**
+```
+0 broken imports: 10/10
+1 broken import: 7/10
+2-3 broken imports: 4/10
+4+ broken imports: 0/10
+```
+
+---
+
+**Check 4: Error Handling Coverage**
+
+**What to detect:**
+
+```typescript
+const RISKY_OPERATIONS = [
+  {
+    pattern: /fs\.(readFile|writeFile|readdir|mkdir|stat)/g,
+    type: 'File I/O',
+    riskLevel: 'high'
+  },
+  {
+    pattern: /fetch\(/g,
+    type: 'Network request',
+    riskLevel: 'high'
+  },
+  {
+    pattern: /JSON\.parse\(/g,
+    type: 'JSON parsing',
+    riskLevel: 'medium'
+  },
+  {
+    pattern: /\.fromId\(/g,
+    type: 'Electron IPC',
+    riskLevel: 'medium'
+  },
+  {
+    pattern: /require\(/g,
+    type: 'Dynamic require',
+    riskLevel: 'low'
+  }
+]
+
+function hasErrorHandling(code: string, operationLine: number): boolean {
+  // Check if operation is inside:
+  // 1. try-catch block
+  // 2. .catch() handler
+  // 3. .then(_, errorHandler)
+  
+  // Use AST parsing for accuracy (e.g., @babel/parser)
+  // Walk up the AST from operation node
+  // Look for TryStatement, CallExpression with .catch, etc.
+}
+```
+
+**Scoring:**
+```
+100% operations have error handling: 10/10
+80-99% coverage: 7/10
+60-79% coverage: 4/10
+<60% coverage: 2/10
+```
+
+**Error message template:**
+```
+HIGH: {count} operations need error handling
+
+Unhandled operations:
+- {file}:{line} - fs.readFile()
+  Risk: File might not exist, causing crash
+  
+  Fix: Wrap in try-catch:
+  try {
+    const data = await fs.readFile(path, 'utf8')
+    // Process data
+  } catch (error) {
+    console.error('Failed to read file:', error)
+    // Handle error appropriately
+  }
+
+- {file2}:{line2} - JSON.parse()
+  Risk: Invalid JSON causes crash
+  
+  Fix: Wrap in try-catch:
+  try {
+    const parsed = JSON.parse(jsonString)
+    return parsed
+  } catch (error) {
+    console.error('Invalid JSON:', error)
+    return null // or default value
+  }
+
+All I/O operations and external calls must have error handling.
+```
+
+---
+
+**Check 5: Type Safety**
+
+**What to detect:**
+
+```typescript
+const TYPE_ISSUES = [
+  {
+    pattern: /:\s*any\b/g,
+    severity: 'medium',
+    message: 'Uses `any` type - defeats TypeScript benefits',
+    suggestion: 'Replace with specific type or generic'
+  },
+  {
+    pattern: /@ts-ignore/g,
+    severity: 'high',
+    message: 'Uses @ts-ignore - suppresses type checking',
+    suggestion: 'Fix the type error instead of ignoring it'
+  },
+  {
+    pattern: /@ts-expect-error/g,
+    severity: 'low',
+    message: 'Uses @ts-expect-error without justification',
+    suggestion: 'Add comment explaining why error is expected'
+  }
+]
+
+async function checkTypeErrors(code: CodeMap): Promise<TypeScriptError[]> {
+  // Use TypeScript compiler API
+  // Create virtual file system
+  // Run type checker
+  // Return diagnostics
+  
+  // This is optional - may be expensive
+  // Consider making this configurable
+}
+```
+
+**Scoring:**
+```
+0 `any` types, 0 TS errors: 10/10
+1-2 `any` types: 8/10
+3-5 `any` types or minor TS errors: 6/10
+6+ `any` types or major TS errors: 3/10
+```
+
+---
+
+#### Task 4.2: Implement Graduated Strictness
+
+**Concept:** Be lenient on first attempt, strict on third attempt
+
+```typescript
+interface StrictnessConfig {
+  level: 'lenient' | 'moderate' | 'strict'
+  
+  // Which severities block passing?
+  blockingErrors: Set<'critical' | 'high' | 'medium' | 'low'>
+  
+  // Minimum score to pass
+  minimumScore: number
+}
+
+function getStrictnessConfig(attemptNum: number): StrictnessConfig {
+  if (attemptNum === 1) {
+    return {
+      level: 'lenient',
+      blockingErrors: new Set(['critical']),  // Only critical blocks
+      minimumScore: 5  // 50% score needed
+    }
+  }
+  
+  if (attemptNum === 2) {
+    return {
+      level: 'moderate',
+      blockingErrors: new Set(['critical', 'high']),  // Critical + high block
+      minimumScore: 7  // 70% score needed
+    }
+  }
+  
+  return {
+    level: 'strict',
+    blockingErrors: new Set(['critical', 'high', 'medium']),  // All but low
+    minimumScore: 8  // 80% score needed
+  }
+}
+```
+
+**Why graduated strictness:**
+- Give model chance to address critical issues first
+- Avoid overwhelming with many errors at once
+- Allow iterative improvement
+
+---
+
+#### Task 4.3: Versioned Rule Storage
+
+**Objective:** Track which validator version was used for each work order
+
+Create `config/validator-rules.v1.json`:
+
+```json
+{
+  "version": "1.0.0",
+  "lastModified": "2025-10-21",
+  "changelog": [
+    "Initial release with 5 checks"
+  ],
+  "rules": {
+    "testAssertions": {
+      "enabled": true,
+      "minAssertions": 3,
+      "detectTrivial": true,
+      "checkImports": true
+    },
+    "placeholders": {
+      "enabled": true,
+      "maxAllowed": 0,
+      "patterns": ["TODO", "FIXME", "Not implemented"]
+    },
+    "imports": {
+      "enabled": true,
+      "checkNodeModules": false,
+      "suggestAvailableFiles": true
+    },
+    "errorHandling": {
+      "enabled": true,
+      "minimumCoverage": 0.8,
+      "checkAsyncOperations": true
+    },
+    "typeSafety": {
+      "enabled": true,
+      "allowAny": false,
+      "runTypeChecker": false
+    }
+  },
+  "strictness": {
+    "attempt1": "lenient",
+    "attempt2": "moderate",
+    "attempt3": "strict"
+  }
+}
+```
+
+**Load and version-stamp results:**
+
+```typescript
+const rules = await loadValidatorRules('v1')
+const result = await validator.validate(code, rules)
+result.metadata.rulesVersion = rules.version
+
+await database.saveValidationResult({
+  ...result,
+  rulesVersion: rules.version,
+  timestamp: new Date()
+})
+```
+
+**Why versioning:** Allows auditing which rules were applied, enables rollback if new version has issues
+
+---
+
+**Deliverables for Day 4:**
+- `src/lib/validators/tier3-validator.ts` - Main validator class
+- `src/lib/validators/checks/` - Individual check implementations
+- `src/lib/validators/tier3-validator.test.ts` - Test suite
+- `config/validator-rules.v1.json` - Versioned configuration
+- `docs/validator-architecture.md` - Documentation
+
+---
+
+### Days 5-6: Pilot Testing (12-16 hours)
+
+#### Task 5.1: Run Comprehensive Test Suite
+
+**Objective:** Validate the full system on diverse work orders
+
+**Test suite composition:**
+
+```
+Low complexity (3 WOs, complexity <0.5):
+  - Expected: 78-85/100, 1-2 refinement cycles
+  - Purpose: Baseline validation
+
+Mid complexity (5 WOs, complexity 0.5-0.7):
+  - Expected: 75-82/100, 2-3 refinement cycles
+  - Purpose: Target use case validation
+
+High complexity (2 WOs, complexity >0.7):
+  - Expected: Decomposed into 3-4 sub-WOs, each scoring 75-82/100
+  - Purpose: Decomposition validation
+```
+
+**For each work order, collect:**
+
+```typescript
+interface PilotTestResult {
+  wo_id: string
+  complexity: number
+  strategy: 'direct' | 'decomposed'
+  
+  // If decomposed
+  sub_wos?: Array<{
+    sub_wo_id: string
+    complexity: number
+    score: number
+    cycles: number
+  }>
+  
+  // If direct
+  validation_attempts?: ValidationAttempt[]
+  
+  final_outcome: {
+    passed: boolean
+    escalated: boolean
+    final_score: number
+    cycles_used: number
+    cost_usd: number
+    time_seconds: number
+  }
+  
+  validator_effectiveness: {
+    initial_errors: number
+    errors_fixed: number
+    errors_remaining: number
+    correction_rate: number
+  }
+}
+```
+
+---
+
+#### Task 5.2: Calculate Target Metrics
+
+**Aggregate results across all 10 work orders:**
+
+```markdown
+## Pilot Test Results
+
+### Overall Performance
+
+| Metric | Target | Actual | Status |
+|--------|--------|--------|--------|
+| Mid complexity avg score | ≥75/100 | [X]/100 | [✅/❌] |
+| Low complexity avg score | ≥80/100 | [X]/100 | [✅/❌] |
+| Correction rate | ≥70% | [X]% | [✅/❌] |
+| Convergence rate | ≥60% | [X]% | [✅/❌] |
+| Zero-delta rate | <20% | [X]% | [✅/❌] |
+| Avg cycles (mid) | ≤3 | [X] | [✅/❌] |
+| Cost per WO (mid) | ≤$0.12 | $[X] | [✅/❌] |
+| Autonomous success rate | ≥85% | [X]% | [✅/❌] |
+
+### By Complexity Band
+
+| Complexity | Count | Avg Score | Avg Cycles | Success Rate |
+|------------|-------|-----------|------------|--------------|
+| Low (<0.5) | 3 | [X]/100 | [X] | [X]% |
+| Mid (0.5-0.7) | 5 | [X]/100 | [X] | [X]% |
+| High (>0.7) | 2 | [X]/100 | [X] | [X]% |
+
+### Validator Effectiveness by Error Type
+
+| Error Type | Occurrences | Fixed | Success Rate |
+|------------|-------------|-------|--------------|
+| Missing tests | [X] | [X] | [X]% |
+| Low assertion count | [X] | [X] | [X]% |
+| Placeholders | [X] | [X] | [X]% |
+| Broken imports | [X] | [X] | [X]% |
+| Missing error handling | [X] | [X] | [X]% |
+| Type safety issues | [X] | [X] | [X]% |
+```
+
+---
+
+#### Task 5.3: Decision Gate Analysis
+
+**Based on pilot results, make deployment decision:**
+
+**PROCEED TO PRODUCTION: If ≥6 of 8 targets met**
+```
+✅ Primary targets (must meet all 3):
+  - Mid complexity ≥75/100
+  - Correction rate ≥70%
+  - Convergence rate ≥60%
+
+✅ Secondary targets (must meet ≥3 of 5):
+  - Low complexity ≥80/100
+  - Zero-delta rate <20%
+  - Avg cycles ≤3
+  - Cost ≤$0.12
+  - Success rate ≥85%
+
+Action: Proceed to Week 2 (templates + production)
+```
+
+**TUNE AND RE-TEST: If 4-5 of 8 targets met**
+```
+⚠️ Close but not quite there
+⚠️ Specific validator rules may need adjustment
+
+Action:
+1. Analyze which error types have low success rates
+2. Improve feedback messages for those errors
+3. Adjust strictness thresholds
+4. Re-test on 5 additional WOs
+5. Re-evaluate
+```
+
+**ESCALATE/PIVOT: If <4 of 8 targets met**
+```
+❌ System not achieving targets
+❌ May need fundamental changes
+
+Action:
+1. Analyze failure patterns
+2. Present findings to human operator
+3. Options:
+   - Extend timeline (2 more weeks tuning)
+   - Reduce scope (low complexity only)
+   - Hybrid approach (validator + human review)
+```
+
+**Deliverable:**
+- `evidence/phase1/pilot-test-report.md` with full results
+- `evidence/phase1/deployment-decision.md` with recommendation
+- Present to human operator for approval
+
+---
+
+## Week 2: Production Deployment
+
+**Prerequisites:** Pilot testing must meet deployment criteria
+
+### Day 7: Template Enhancement (6-8 hours)
+
+#### Task 7.1: Generate Enhanced Work Order Templates
+
+**Objective:** Create structured templates that reduce cognitive load and prevent common failures
+
+**What to generate:**
+
+Create 5 work order templates for common task types:
+1. Redux/state management setup
+2. React component creation
+3. API integration
+4. Utility function/module
+5. Test suite creation
+
+**Template structure (all templates follow this pattern):**
+
+```markdown
+# Work Order: [Task Name]
+
+## CRITICAL SUCCESS CRITERIA (Process These FIRST)
+
+### 1. ✅ Tests REQUIRED
+**File:** `[exact path to test file]`
+
+**Minimum requirements:**
+- 3 test cases (describe blocks)
+- Each test has 3+ assertions (expect statements)
+- Tests cover all acceptance criteria below
+
+**Example test structure:**
+```typescript
+import { [component] } from '[path]'
+
+describe('[Component Name]', () => {
+  it('should [behavior 1]', () => {
+    // Setup
+    const [input] = [test data]
+    
+    // Execute
+    const result = [component].[method]([input])
+    
+    // Assert (minimum 3)
+    expect(result).toBeDefined()
+    expect(result.[property]).toBe([expected])
+    expect([side effect]).toHaveBeenCalled()
+  })
+  
+  // Add 2 more test cases
+})
+```
+
+### 2. ✅ Zero Placeholders
+- All functions fully implemented
+- No TODO, FIXME, or "Not implemented" markers
+- No comment-only method bodies
+
+### 3. ✅ Error Handling Required
+- All file I/O wrapped in try-catch
+- All network requests have .catch() or try-catch
+- All JSON parsing has error handling
+
+## File Structure
+
+Create EXACTLY these files:
+
+```
+[directory structure showing all files to create]
+```
+
+**Files that should already exist (do NOT create):**
+- [list any dependencies that must exist]
+
+## Context
+
+**Technology stack:** [Electron/React/Node/etc.]
+**Environment:** [main process/renderer/shared]
+
+**Existing patterns to follow:**
+- [Reference file 1] - [what pattern to learn]
+- [Reference file 2] - [what pattern to learn]
+
+## Requirements
+
+### Requirement 1: [Name] (Priority: CRITICAL)
+
+**Description:** [What to build]
+
+**Example implementation:**
+```typescript
+// Show 20-30 lines of example code
+// Use realistic patterns
+// Include comments
+```
+
+**Acceptance criteria:**
+- [ ] [Specific measurable criterion 1]
+- [ ] [Specific measurable criterion 2]
+- [ ] [Specific measurable criterion 3]
+
+### Requirement 2: [Name] (Priority: HIGH)
+[...]
+
+## Success Checklist (Review Before Submission)
+
+- [ ] All files in "File Structure" section are created
+- [ ] Test file exists at specified path
+- [ ] Each test has at least 3 assertions
+- [ ] No TODO, FIXME, or placeholder comments
+- [ ] All imports reference files that exist or are being created
+- [ ] All I/O operations have try-catch blocks
+- [ ] No `any` types used
+- [ ] JSDoc comments on all exports
+
+## Acceptance Criteria
+
+1. [Criterion from original WO]
+2. [Criterion from original WO]
+[...]
+```
+
+**Key features of templates:**
+
+1. **Tests FIRST** - Before any other requirements
+2. **Explicit file paths** - No ambiguity about what to create
+3. **Code examples** - Show don't tell
+4. **Success checklist** - Model can self-verify
+5. **Context references** - Point to existing patterns
+
+**Token budget management:**
+
+Each template should be:
+- Maximum 6000 tokens (leaves room for proposer response)
+- If over 6000: Remove examples or collapse repetitive sections
+- Track token count and document in template header
+
+---
+
+#### Task 7.2: Template Integration
+
+**Update the decomposition system to use templates:**
+
+```typescript
+async function enrichWorkOrder(wo: WorkOrder): Promise<EnrichedWorkOrder> {
+  // Determine template type based on WO content
+  const templateType = classifyWorkOrder(wo)
+  
+  // Load appropriate template
+  const template = await loadTemplate(templateType)
+  
+  // Merge template structure with original WO
+  return {
+    ...wo,
+    description: mergeTemplateWithWO(template, wo.description),
+    templateUsed: templateType,
+    templateVersion: '1.0'
+  }
+}
+```
+
+**Deliverables:**
+- 5 template files in `config/wo-templates/v1/`
+- Template selection logic
+- Token counting for each template
+- Documentation on when to use each template
+
+---
+
+### Day 8: System Tuning (6-8 hours)
+
+#### Task 8.1: Analyze Pilot Failures
+
+**For each work order that failed or escalated in pilot:**
+
+1. **Examine validation errors:**
+   - Which errors remained after 3 cycles?
+   - Which errors oscillated (fixed then re-appeared)?
+   - Which errors had low correction rates?
+
+2. **Review feedback quality:**
+   - Was feedback message clear?
+   - Were examples helpful?
+   - Did model understand what to fix?
+
+3. **Identify patterns:**
+   - Do certain error types consistently fail?
+   - Do certain proposers (gpt-4o-mini vs Claude) struggle differently?
+   - Are there work order characteristics that predict failure?
+
+**Deliverable:** `evidence/phase2/failure-analysis.md`
+
+---
+
+#### Task 8.2: Tune Validator Thresholds
+
+**Based on failure analysis, adjust:**
+
+**Scoring thresholds:**
+```typescript
+// Example adjustments based on data
+
+// Before tuning:
+minAssertions: 3  // Too strict? Causes many refinement cycles?
+
+// After tuning:
+minAssertions: 2  // More lenient, but still catches missing tests
+```
+
+**Strictness levels:**
+```typescript
+// Before tuning:
+if (attemptNum === 1) blockingErrors = ['critical']
+
+// After tuning:
+if (attemptNum === 1) blockingErrors = []  // Don't block on first attempt, just warn
+```
+
+**Error message improvements:**
+```typescript
+// Before: Generic message
+"Test file has low assertion count"
+
+// After: Specific guidance
+"Test file has only 1 assertion. Add at least 2 more expect() statements. 
+For example:
+- expect(result.value).toBe(expectedValue)
+- expect(result.status).toBe('success')
+- expect(mockFunction).toHaveBeenCalledTimes(1)"
+```
+
+**Create version 1.1 of validator rules:**
+
+`config/validator-rules.v1.1.json` with tuned thresholds
+
+---
+
+#### Task 8.3: Build Telemetry Dashboard
+
+**Objective:** Create queries/views for monitoring system health
+
+**Database views to create:**
+
+```sql
+-- View: Daily quality metrics
+CREATE VIEW daily_quality_metrics AS
+SELECT
+  DATE(timestamp) as date,
+  COUNT(*) as total_wos,
+  AVG(final_score) as avg_score,
+  AVG(cycles_used) as avg_cycles,
+  SUM(CASE WHEN passed THEN 1 ELSE 0 END) * 100.0 / COUNT(*) as success_rate,
+  AVG(cost_usd) as avg_cost
+FROM work_order_completions
+GROUP BY DATE(timestamp)
+ORDER BY date DESC
+
+-- View: Error type effectiveness
+CREATE VIEW error_type_effectiveness AS
+SELECT
+  error_type,
+  COUNT(*) as occurrences,
+  SUM(CASE WHEN fixed THEN 1 ELSE 0 END) as fixed_count,
+  SUM(CASE WHEN fixed THEN 1 ELSE 0 END) * 100.0 / COUNT(*) as correction_rate,
+  AVG(cycles_to_fix) as avg_cycles
+FROM validation_errors
+GROUP BY error_type
+ORDER BY occurrences DESC
+
+-- View: Zero-delta detection
+CREATE VIEW zero_delta_incidents AS
+SELECT
+  wo_id,
+  attempt_num,
+  percentage_changed,
+  errors_remaining,
+  timestamp
+FROM validation_attempts
+WHERE percentage_changed < 10
+ORDER BY timestamp DESC
+```
+
+**Monitoring queries to document:**
+
+```sql
+-- Alert: Success rate drops below 80%
+SELECT * FROM daily_quality_metrics
+WHERE success_rate < 80
+  AND date >= CURRENT_DATE - INTERVAL '7 days'
+
+-- Alert: Average cost exceeds budget
+SELECT * FROM daily_quality_metrics
+WHERE avg_cost > 0.12
+  AND date >= CURRENT_DATE - INTERVAL '7 days'
+
+-- Alert: Specific error type has low correction rate
+SELECT * FROM error_type_effectiveness
+WHERE correction_rate < 60
+  AND occurrences > 5
+```
+
+**Deliverable:**
+- SQL views created
+- Monitoring queries documented
+- Dashboard mockup (can use Metabase, Grafana, or simple queries)
+
+---
+
+### Day 9: Production Configuration (4-6 hours)
+
+#### Task 9.1: Environment Configuration
+
+**Create production configuration:**
+
+`config/production.json`:
+```json
+{
+  "orchestrator": {
+    "decompositionThreshold": 0.7,
+    "maxRefinementAttempts": 3,
+    "defaultModel": "gpt-4o-mini",
+    "fallbackModel": "claude-4.5"
+  },
+  
+  "validator": {
+    "rulesVersion": "v1.1",
+    "graduatedStrictness": true,
+    "trackTokenDiff": true,
+    "enableTypeChecker": false
+  },
+  
+  "telemetry": {
+    "enabled": true,
+    "sampleRate": 1.0,
+    "retentionDays": 90
+  },
+  
+  "alerts": {
+    "emailOnEscalation": true,
+    "slackWebhook": "[webhook_url]",
+    "alertThresholds": {
+      "successRate": 0.80,
+      "avgCost": 0.12,
+      "avgCycles": 3.5
+    }
+  }
+}
+```
+
+---
+
+#### Task 9.2: Operational Documentation
+
+**Create operator runbook:**
+
+`docs/RUNBOOK.md`:
+```markdown
+# Production Runbook
+
+## Starting the System
+
+[Step-by-step startup instructions]
+
+## Monitoring
+
+### Key Metrics to Watch
+- Success rate (target: ≥85%)
+- Average cycles (target: ≤3)
+- Cost per WO (target: ≤$0.12)
+- Escalation rate (target: <15%)
+
+### How to Check Metrics
+```sql
+-- Run these queries daily
+[paste monitoring queries]
+```
+
+## Common Issues
+
+### Issue: Success rate drops below 80%
+**Symptoms:** [describe]
+**Diagnosis:** [how to investigate]
+**Resolution:** [steps to fix]
+
+### Issue: Zero-delta loops increasing
+**Symptoms:** [describe]
+**Diagnosis:** [how to investigate]
+**Resolution:** [steps to fix]
+
+### Issue: Specific error type has low correction
+**Symptoms:** [describe]
+**Diagnosis:** [how to investigate]
+**Resolution:** [steps to fix]
+
+## Escalation Procedures
+
+### When to escalate to human
+- Work order failed 3 refinement cycles
+- Zero-delta detected (model not making progress)
+- Cost exceeds 2x budget ($0.24+)
+
+### How to escalate
+1. [Step-by-step process]
+2. [What information to include]
+3. [Who to notify]
+
+## Emergency Procedures
+
+### Rollback to previous validator version
+```bash
+[commands to rollback]
+```
+
+### Disable validator temporarily
+```bash
+[commands to disable]
+```
+
+### Switch models (gpt-4o-mini to Claude)
+```bash
+[commands to switch]
+```
+```
+
+---
+
+#### Task 9.3: Alerting Setup
+
+**Configure alerts for:**
+
+1. **Success rate drops:** Email/Slack when daily success rate <80%
+2. **Cost overruns:** Email when avg cost >$0.12 for 3+ consecutive WOs
+3. **Escalation spike:** Email when >3 escalations in 1 hour
+4. **Zero-delta pattern:** Email when >20% of cycles are zero-delta in a day
+5. **System errors:** Email on any uncaught exceptions
+
+**Implementation depends on your infrastructure (e.g., AWS CloudWatch, PagerDuty, etc.)**
+
+---
+
+### Day 10: Gradual Rollout (6-8 hours)
+
+#### Task 10.1: Phased Deployment
+
+**DO NOT deploy to 100% immediately**
+
+**Rollout schedule:**
+
+**Phase 1: 10% (2 hours)**
+```
+- Route 10% of new work orders through new system
+- Monitor for 2 hours
+- Check metrics every 30 minutes
+- Be ready to rollback
+
+Success criteria:
+- 0 system errors
+- Success rate ≥80%
+- No cost overruns
+```
+
+**Phase 2: 25% (2 hours)**
+```
+If Phase 1 succeeds after 2 hours:
+- Increase to 25% of work orders
+- Monitor for 2 hours
+- Compare metrics to baseline
+
+Success criteria:
+- Success rate maintained ≥80%
+- Average quality improves vs baseline
+- Cost within budget
+```
+
+**Phase 3: 50% (2 hours)**
+```
+If Phase 2 succeeds:
+- Increase to 50% of work orders
+- Monitor for 2 hours
+- Larger sample size shows true performance
+
+Success criteria:
+- All metrics stable
+- No unexpected failure patterns
+```
+
+**Phase 4: 100% (Next day)**
+```
+If all phases succeed:
+- Deploy to 100% next morning
+- Monitor closely for first 24 hours
+- Keep rollback plan ready
+```
+
+**Rollback plan:**
+```
+If any issues occur:
+1. Immediately route to old system (bypass validator)
+2. Investigate failure mode
+3. Fix issue
+4. Re-test with 10% before re-deploying
+```
+
+---
+
+#### Task 10.2: Real-Time Monitoring
+
+**During rollout, track:**
+
+```typescript
+interface RolloutMetrics {
+  timestamp: Date
+  phase: '10%' | '25%' | '50%' | '100%'
+  
+  // Performance
+  workOrdersProcessed: number
+  successRate: number
+  avgQuality: number
+  avgCycles: number
+  avgCost: number
+  
+  // Health
+  systemErrors: number
+  escalations: number
+  zeroDeltaIncidents: number
+  
+  // Comparison to baseline
+  qualityDelta: number  // vs pre-validator baseline
+  costDelta: number
+}
+```
+
+**Log these every 30 minutes during rollout**
+
+---
+
+#### Task 10.3: Post-Deployment Analysis
+
+**After 24 hours at 100%, create report:**
+
+```markdown
+## Week 1 Production Report
+
+### Overall Performance
+- Total WOs processed: [X]
+- Success rate: [X]% (target: ≥85%)
+- Average quality: [X]/100 (target: ≥75 for mid)
+- Average cycles: [X] (target: ≤3)
+- Average cost: $[X] (target: ≤$0.12)
+
+### Quality Improvement
+- Baseline (pre-validator): [X]/100
+- Current (with validator): [X]/100
+- Improvement: +[X] points
+
+### Validator Effectiveness
+- Errors detected: [X]
+- Errors fixed: [X]
+- Correction rate: [X]%
+
+### By Complexity
+| Complexity | Count | Avg Score | Success Rate |
+|------------|-------|-----------|--------------|
+| Low        | [X]   | [X]/100   | [X]%         |
+| Mid        | [X]   | [X]/100   | [X]%         |
+| High       | [X]   | [X]/100   | [X]%         |
+
+### Issues Encountered
+[List any problems and how they were resolved]
+
+### Recommendations
+[Any tuning needed based on first week]
+```
+
+---
+
+## Success Criteria Summary
+
+**System is production-ready if:**
+
+✅ **Quality targets met:**
+- Mid complexity: ≥75/100 (baseline: 66/100)
+- Low complexity: ≥80/100 (baseline: 78/100)
+
+✅ **Operational targets met:**
+- Success rate: ≥85% (≤15% escalations)
+- Correction rate: ≥70%
+- Average refinement cycles: ≤3
+
+✅ **Economic targets met:**
+- Cost per work order: ≤$0.12
+- Time per work order: ≤10 minutes
+
+✅ **Reliability targets met:**
+- Zero-delta rate: <20%
+- System errors: <1% of work orders
+- Rollback incidents: 0 in first week
+
+---
+
+## Appendix A: Configuration Reference
+
+### Validator Configuration Schema
+
+```typescript
+interface ValidatorConfig {
+  version: string
+  rules: {
+    testAssertions: TestAssertionConfig
+    placeholders: PlaceholderConfig
+    imports: ImportConfig
+    errorHandling: ErrorHandlingConfig
+    typeSafety: TypeSafetyConfig
+  }
+  strictness: StrictnessConfig
+  scoring: ScoringConfig
+}
+
+interface TestAssertionConfig {
+  enabled: boolean
+  minAssertions: number  // Per test case
+  detectTrivial: boolean
+  checkImports: boolean
+  patterns: string[]  // Assertion patterns to detect
+}
+
+// ... similar for other configs
+```
+
+### Telemetry Schema
+
+```sql
+-- Core tables
+
+CREATE TABLE work_order_completions (
+  id UUID PRIMARY KEY,
+  wo_id TEXT NOT NULL,
+  complexity FLOAT NOT NULL,
+  strategy TEXT NOT NULL,  -- 'direct' | 'decomposed'
+  
+  -- Validation
+  initial_score INTEGER,
+  final_score INTEGER,
+  cycles_used INTEGER,
+  passed BOOLEAN,
+  escalated BOOLEAN,
+  escalation_reason TEXT,
+  
+  -- Metrics
+  cost_usd FLOAT,
+  time_seconds INTEGER,
+  validator_version TEXT,
+  
+  -- Timestamps
+  created_at TIMESTAMPTZ NOT NULL,
+  completed_at TIMESTAMPTZ NOT NULL
+)
+
+CREATE TABLE validation_attempts (
+  id UUID PRIMARY KEY,
+  wo_id TEXT NOT NULL,
+  attempt_num INTEGER NOT NULL,
+  
+  -- Validation results
+  score INTEGER NOT NULL,
+  errors JSONB NOT NULL,
+  passed BOOLEAN NOT NULL,
+  
+  -- Diff metrics
+  lines_changed INTEGER,
+  files_modified INTEGER,
+  percentage_changed FLOAT,
+  
+  -- Metadata
+  validator_version TEXT NOT NULL,
+  timestamp TIMESTAMPTZ NOT NULL
+)
+
+CREATE TABLE validation_errors (
+  id UUID PRIMARY KEY,
+  validation_attempt_id UUID REFERENCES validation_attempts(id),
+  
+  -- Error details
+  error_type TEXT NOT NULL,
+  severity TEXT NOT NULL,
+  message TEXT NOT NULL,
+  file TEXT,
+  line INTEGER,
+  
+  -- Resolution
+  fixed BOOLEAN NOT NULL,
+  cycles_to_fix INTEGER,
+  
+  timestamp TIMESTAMPTZ NOT NULL
+)
+```
+
+---
+
+## Appendix B: Emergency Procedures
+
+### Procedure: Validator Producing Too Many False Positives
+
+**Symptoms:**
+- >30% of work orders escalating
+- High-quality code being rejected
+- Operator complaints about over-strictness
+
+**Diagnosis:**
+```sql
+-- Check false positive rate
+SELECT 
+  error_type,
+  COUNT(*) as total,
+  SUM(CASE WHEN fixed = false THEN 1 ELSE 0 END) as unfixed,
+  ROUND(SUM(CASE WHEN fixed = false THEN 1 ELSE 0 END) * 100.0 / COUNT(*), 2) as unfixed_rate
+FROM validation_errors
+WHERE timestamp > NOW() - INTERVAL '24 hours'
+GROUP BY error_type
+HAVING SUM(CASE WHEN fixed = false THEN 1 ELSE 0 END) * 100.0 / COUNT(*) > 50
+```
+
+**Actions:**
+1. Identify which error type has high unfixed rate
+2. Review recent examples of that error
+3. Check if rule is too strict
+4. Temporarily disable that specific rule:
+   ```typescript
+   // config/validator-rules.v1.2.json
+   {
+     "rules": {
+       "[problematic_rule]": {
+         "enabled": false  // Temporarily disable
+       }
+     }
+   }
+   ```
+5. Test with disabled rule on 10 WOs
+6. Either: (a) fix rule logic, or (b) remove permanently
+
+---
+
+### Procedure: Refinement Loop Stuck (High Zero-Delta Rate)
+
+**Symptoms:**
+- >40% of refinement cycles have <10% code change
+- Work orders timing out
+- Same errors repeating across cycles
+
+**Diagnosis:**
+```sql
+-- Find stuck work orders
+SELECT 
+  wo_id,
+  COUNT(*) as cycles,
+  AVG(percentage_changed) as avg_change,
+  STRING_AGG(DISTINCT error_type, ', ') as recurring_errors
+FROM validation_attempts va
+JOIN validation_errors ve ON ve.validation_attempt_id = va.id
+WHERE timestamp > NOW() - INTERVAL '24 hours'
+GROUP BY wo_id
+HAVING AVG(percentage_changed) < 10 AND COUNT(*) >= 2
+```
+
+**Actions:**
+1. Review feedback messages for recurring errors
+2. Check if examples in feedback are clear
+3. Improve feedback with more explicit guidance:
+   ```typescript
+   // Before: "Test file needs more assertions"
+   // After: "Test file has 1 assertion. Add 2 more. 
+   //         Copy this exact code:
+   //         expect(result.value).toBe(5)
+   //         expect(result.status).toBe('success')"
+   ```
+4. Consider reducing max attempts from 3 to 2 for faster escalation
+5. Flag specific error types for human review instead of refinement
+
+---
+
+### Procedure: Quality Regression
+
+**Symptoms:**
+- Average scores declining over time
+- Success rate dropping
+- More escalations
+
+**Diagnosis:**
+```sql
+-- Check quality trend
+SELECT 
+  DATE(timestamp) as date,
+  AVG(final_score) as avg_score,
+  COUNT(*) as total_wos,
+  SUM(CASE WHEN escalated THEN 1 ELSE 0 END) * 100.0 / COUNT(*) as escalation_rate
+FROM work_order_completions
+WHERE timestamp > NOW() - INTERVAL '7 days'
+GROUP BY DATE(timestamp)
+ORDER BY date DESC
+```
+
+**Actions:**
+1. Check for recent system changes (validator version, config, templates)
+2. Review recent work orders for new patterns
+3. Check if models have changed (API updates from providers)
+4. Verify validator rules haven't drifted from acceptance criteria
+5. Re-run historical test cases to establish new baseline
+6. Consider re-tuning entire system if persistent
+
+---
+
+## Appendix C: Cost Model
+
+### Expected Costs
+
+**Per Work Order (gpt-4o-mini):**
+
+| Component | Tokens | Cost per 1M | Cost per WO |
+|-----------|--------|-------------|-------------|
+| Initial generation | 6K input + 2K output | $0.15 / $0.60 | $0.002 |
+| Validation (3 cycles) | 3 × (2K input + 500 output) | $0.15 / $0.60 | $0.001 |
+| Refinement (avg 2.5) | 2.5 × (8K input + 2K output) | $0.15 / $0.60 | $0.033 |
+| **Total** | ~28K input, 7K output | - | **$0.07** |
+
+**Monthly (100 WOs @ 60% low, 30% mid, 10% high):**
+- Low (60 WOs × $0.05): $3.00
+- Mid (30 WOs × $0.07): $2.10
+- High (10 WOs decomposed, 4 sub-WOs each × $0.05): $2.00
+- **Total: ~$7.10/month**
+
+**ROI Calculation:**
+
+If validator reduces manual review from 30min → 5min per WO:
+- Time saved: 25 min × 100 WOs = 2,500 min/month
+- At $50/hr: $2,083 saved/month
+- Validator cost: ~$7/month
+- **Net savings: $2,076/month** or **24,912/year**
+
+---
+
+## Final Checklist
+
+Before declaring production-ready, verify:
+
+**Week 1 Deliverables:**
+- [ ] Decomposition integrated and tested
+- [ ] Minimal validator built and validated (Day 1)
+- [ ] Refinement experiment completed with GO decision (Day 2-3)
+- [ ] Full Tier 3 validator implemented (Day 4)
+- [ ] Pilot testing completed with passing metrics (Day 5-6)
+
+**Week 2 Deliverables:**
+- [ ] 5 work order templates created and integrated
+- [ ] Validator thresholds tuned based on pilot data
+- [ ] Telemetry dashboard operational
+- [ ] Production configuration finalized
+- [ ] Operational documentation complete
+- [ ] Gradual rollout successful (10% → 100%)
+- [ ] Week 1 production report generated
+
+**System Health:**
+- [ ] Success rate ≥85% over 7 days
+- [ ] No rollback incidents
+- [ ] Cost within budget (<$0.12/WO)
+- [ ] Escalation procedures tested and working
+
+---
+
+**End of Implementation Guide**
+
+**Next Steps:** Present this document to human operator, clarify current system state, begin Day 1 implementation.
