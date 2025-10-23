@@ -48,7 +48,9 @@ export function generateBootstrapWO(
 
   if (needsSrcDir) {
     tasks.push('Create src/ directory structure');
-    tasks.push('Create placeholder src/index.ts file');
+    // Use .tsx for React/JSX projects, .ts otherwise
+    const entryFileExt = arch.needs_jsx ? '.tsx' : '.ts';
+    tasks.push(`Create placeholder src/index${entryFileExt} file`);
   }
 
   // Always create .env.example for new projects (best practice)
@@ -96,15 +98,17 @@ ${requirements.map(req =>
 ## Validation:
 - Ensure package.json has valid JSON structure
 - Ensure tsconfig.json has valid JSON structure
-- Run \`npm install\` to verify dependencies can be installed
+- Run \`npm install\` to generate package-lock.json (REQUIRED for CI/CD)
+- Verify package-lock.json was created and contains dependency resolution
 - Run \`npx tsc --noEmit\` to verify TypeScript compilation succeeds
-- Commit all configuration files
+- Commit all configuration files INCLUDING package-lock.json
 
 ## Important:
 - Do NOT create feature code yet (only infrastructure)
-- Do NOT run npm install yourself (list dependencies in package.json, orchestrator will handle installation)
+- You MUST run npm install to generate package-lock.json (required for GitHub Actions CI)
 - Ensure all paths and configurations are correct before committing
 - Create minimal, valid configuration files
+- package-lock.json MUST be committed (not in .gitignore)
 `.trim();
 
   // Build acceptance criteria
@@ -121,10 +125,13 @@ ${requirements.map(req =>
   }
 
   if (needsSrcDir) {
+    const entryFileExt = arch.needs_jsx ? '.tsx' : '.ts';
     acceptanceCriteria.push('src/ directory structure exists');
-    acceptanceCriteria.push('src/index.ts created as entry point (can be empty or minimal)');
+    acceptanceCriteria.push(`src/index${entryFileExt} created as entry point (can be empty or minimal)`);
   }
 
+  acceptanceCriteria.push('npm install completed successfully');
+  acceptanceCriteria.push('package-lock.json created and committed to git');
   acceptanceCriteria.push('TypeScript compilation succeeds (npx tsc --noEmit returns no errors)');
 
   // Environment variable criteria
@@ -167,12 +174,14 @@ ${requirements.map(req =>
   }
 
   if (needsSrcDir) {
-    filesInScope.push('src/index.ts');
+    const entryFileExt = arch.needs_jsx ? '.tsx' : '.ts';
+    filesInScope.push(`src/index${entryFileExt}`);
   }
 
   // Always add .env.example (best practice for any project)
   filesInScope.push('.env.example');
   filesInScope.push('.gitignore'); // May need to update to exclude .env.local
+  filesInScope.push('package-lock.json'); // MUST be committed for CI/CD
 
   // Build context budget estimate
   // Bootstrap is typically straightforward - 500-1000 tokens

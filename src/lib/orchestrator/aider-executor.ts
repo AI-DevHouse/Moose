@@ -10,6 +10,7 @@ import { proposerRegistry } from '@/lib/proposer-registry';
 import { validateWorkOrderSafety } from './project-safety';
 import { projectService } from '@/lib/project-service';
 import { projectValidator } from '@/lib/project-validator';
+import { createSupabaseServiceClient } from '@/lib/supabase';
 import type { WorkOrder, AiderResult } from './types';
 import type { EnhancedProposerResponse } from '@/lib/enhanced-proposer-service';
 
@@ -75,11 +76,13 @@ export function createAiderInstructionFile(
  *
  * @param wo - Work Order
  * @param workingDirectory - Directory to execute git commands in
+ * @param baseBranch - Optional base branch to branch from (default: main)
  * @returns Branch name
  */
 export async function createFeatureBranch(
   wo: WorkOrder,
-  workingDirectory: string
+  workingDirectory: string,
+  baseBranch: string = 'main'
 ): Promise<string> {
   const slug = wo.title
     .toLowerCase()
@@ -118,10 +121,35 @@ export async function createFeatureBranch(
       console.log(`[AiderExecutor] No existing branch to delete or error checking branches`);
     }
 
-    // Create feature branch directly from current HEAD (which is at main's commit)
-    // Worktrees are created with --detach flag, so HEAD is already at the correct commit
-    // No need to checkout main (which would fail since main is locked by parent worktree)
-    console.log(`[AiderExecutor] Creating feature branch from current HEAD (detached at main)`);
+    // Create feature branch from base branch
+    // If baseBranch is not main, fetch and checkout the base branch first
+    if (baseBranch !== 'main') {
+      console.log(`[AiderExecutor] Branching from dependency branch: ${baseBranch}`);
+
+      // Fetch latest from remote to ensure we have the base branch
+      try {
+        execSync('git fetch origin', { cwd: workingDirectory, stdio: 'pipe' });
+        console.log(`[AiderExecutor] Fetched latest from origin`);
+      } catch (error) {
+        console.warn(`[AiderExecutor] Warning: Could not fetch from origin`, error);
+      }
+
+      // Checkout the base branch (or track it from origin if it doesn't exist locally)
+      try {
+        execSync(`git checkout ${baseBranch}`, { cwd: workingDirectory, stdio: 'pipe' });
+      } catch (error) {
+        // If base branch doesn't exist locally, try origin/baseBranch
+        console.log(`[AiderExecutor] Local branch ${baseBranch} not found, trying origin/${baseBranch}`);
+        execSync(`git checkout -b ${baseBranch} origin/${baseBranch}`, { cwd: workingDirectory, stdio: 'pipe' });
+      }
+
+      console.log(`[AiderExecutor] Checked out base branch: ${baseBranch}`);
+    } else {
+      // Worktrees are created with --detach flag, so HEAD is already at main's commit
+      // No need to checkout main (which would fail since main is locked by parent worktree)
+      console.log(`[AiderExecutor] Creating feature branch from current HEAD (detached at main)`);
+    }
+
     execSync(`git checkout -b ${branchName}`, { cwd: workingDirectory, stdio: 'pipe' });
 
     console.log(`[AiderExecutor] Feature branch created successfully`);
@@ -136,6 +164,56 @@ export async function createFeatureBranch(
       metadata: { branchName, workingDirectory }
     });
     throw new Error(`Failed to create feature branch: ${error.message}`);
+  }
+}
+
+/**
+ * Get base branch for work order (from dependencies)
+ *
+ * If the work order has dependencies, returns the github_branch of the first dependency.
+ * Otherwise returns 'main'.
+ *
+ * @param wo - Work Order
+ * @returns Base branch name (default: 'main')
+ */
+async function getBaseBranchForWorkOrder(wo: WorkOrder): Promise<string> {
+  const metadata = wo.metadata || {};
+  const dependencies = metadata.dependencies || [];
+
+  // If no dependencies, branch from main
+  if (!Array.isArray(dependencies) || dependencies.length === 0) {
+    return 'main';
+  }
+
+  // Get the first dependency's branch name
+  const dependencyId = dependencies[0];
+  console.log(`[AiderExecutor] WO ${wo.id} depends on ${dependencyId}, fetching its branch`);
+
+  try {
+    const supabase = createSupabaseServiceClient();
+    const { data, error } = await supabase
+      .from('work_orders')
+      .select('github_branch')
+      .eq('id', dependencyId)
+      .single();
+
+    if (error || !data) {
+      console.warn(`[AiderExecutor] Could not fetch dependency ${dependencyId} branch, defaulting to main`);
+      return 'main';
+    }
+
+    const dependencyBranch = data.github_branch;
+
+    if (!dependencyBranch) {
+      console.warn(`[AiderExecutor] Dependency ${dependencyId} has no github_branch set, defaulting to main`);
+      return 'main';
+    }
+
+    console.log(`[AiderExecutor] Will branch from dependency branch: ${dependencyBranch}`);
+    return dependencyBranch;
+  } catch (error) {
+    console.error(`[AiderExecutor] Error fetching dependency branch:`, error);
+    return 'main';
   }
 }
 
@@ -190,10 +268,13 @@ export async function executeAider(
   // 2. Create instruction file
   const instructionPath = createAiderInstructionFile(wo, proposerResponse);
 
-  // 3. Create feature branch
-  const branchName = await createFeatureBranch(wo, workingDirectory);
+  // 3. Determine base branch from dependencies
+  const baseBranch = await getBaseBranchForWorkOrder(wo);
 
-  // 4. Lookup Aider model from ProposerRegistry (uses model field from database)
+  // 4. Create feature branch from base branch
+  const branchName = await createFeatureBranch(wo, workingDirectory, baseBranch);
+
+  // 5. Lookup Aider model from ProposerRegistry (uses model field from database)
   await proposerRegistry.initialize();
   const proposerConfig = proposerRegistry.getProposer(selectedProposer);
 
@@ -204,7 +285,7 @@ export async function executeAider(
   const aiderModel = proposerConfig.model; // Use model identifier from database (e.g., 'claude-sonnet-4-5-20250929')
   console.log(`[AiderExecutor] Using Aider model: ${aiderModel} (from proposer: ${selectedProposer})`);
 
-  // 5. Build file list
+  // 6. Build file list
   const files = wo.files_in_scope || [];
   if (files.length === 0) {
     throw new Error('files_in_scope is empty - cannot execute Aider without target files');
@@ -212,7 +293,7 @@ export async function executeAider(
 
   console.log(`[AiderExecutor] Executing Aider with model ${aiderModel} on ${files.length} files`);
 
-  // 6. Set explicit Git environment variables for Aider (fix for Git detection in worktrees)
+  // 7. Set explicit Git environment variables for Aider (fix for Git detection in worktrees)
   // Issue: Worktrees have .git as a file (not directory) containing "gitdir: <path>"
   // Solution: Read .git file in worktrees to extract actual git directory path
   // These are standard Git environment variables that all Git tools respect
@@ -241,7 +322,7 @@ export async function executeAider(
   const normalizedWorkingDir = workingDirectory.replace(/\\/g, '/');
   console.log(`[AiderExecutor] Setting GIT_DIR=${gitDir}, GIT_WORK_TREE=${normalizedWorkingDir}`);
 
-  // 7. Spawn Aider process in project directory with Git detection retry logic
+  // 8. Spawn Aider process in project directory with Git detection retry logic
   // Note: With proper GIT_DIR resolution above, Git detection should now work reliably
   // Retry logic remains as a backup for edge cases
   return new Promise(async (resolve, reject) => {
