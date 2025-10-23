@@ -15,7 +15,7 @@
 ## 1. ORIENTATION
 Project: **Moose Mission Control**
 Background rules → [SESSION_HANDOVER_MASTER.md](C:\dev\moose-mission-control\docs\session_updates\SESSION_HANDOVER_MASTER.md)
-Current state → [session-v123-20251022-1800-handover.md](C:\dev\moose-mission-control\docs\session_updates\session-v123-20251022-1800-handover.md)
+Current state → [session-v125-20251023-0945-handover.md](C:\dev\moose-mission-control\docs\session_updates\session-v125-20251023-0945-handover.md)
 
 ---
 
@@ -28,16 +28,16 @@ Current state → [session-v123-20251022-1800-handover.md](C:\dev\moose-mission-
 ---
 
 ## 3. TODAY'S WORKFLOW
-1️⃣ Continue from v123 Next Actions.
-2️⃣ Document progress in a new `session-v124-…-handover.md`.
-3️⃣ Keep updates short (≤5 bullets); store logs under `/evidence/v124/`.
+1️⃣ Continue from v125 Next Actions.
+2️⃣ Document progress in a new `session-v126-…-handover.md`.
+3️⃣ Keep updates short (≤5 bullets); store logs under `/evidence/v126/`.
 4️⃣ If unexpected behaviour → pause and verify code/schema before changes.
 
 ---
 
 ## 4. WRAP-UP
-📝 Create v124 handover using MASTER §9 template.
-📂 Archive handovers older than v121 → `archive\`.
+📝 Create v126 handover using MASTER §9 template.
+📂 Archive handovers older than v123 → `archive\`.
 
 ---
 
@@ -45,7 +45,7 @@ Current state → [session-v123-20251022-1800-handover.md](C:\dev\moose-mission-
 | Purpose | File | Path |
 |----------|------|------|
 | Rules | MASTER | docs\session_updates\ |
-| Last Session | v123 | docs\session_updates\ |
+| Last Session | v125 | docs\session_updates\ |
 | Evidence | evidence\ | docs\session_updates\evidence\ |
 | Archive | archive\ | docs\session_updates\archive\ |
 
