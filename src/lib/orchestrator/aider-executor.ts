@@ -340,9 +340,9 @@ export async function executeAider(
     const maxRetries = 1; // Retry once if Git detection fails
     let gitDetectionFailed = false;
 
-    // Configurable timeout (default: 5 minutes)
+    // Configurable timeout (default: 10 minutes)
     // Can be increased for complex WOs via AIDER_TIMEOUT_MS env var
-    const aiderTimeoutMs = parseInt(process.env.AIDER_TIMEOUT_MS || '300000', 10);
+    const aiderTimeoutMs = parseInt(process.env.AIDER_TIMEOUT_MS || '600000', 10);
     console.log(`[AiderExecutor] Aider timeout set to ${aiderTimeoutMs}ms (${aiderTimeoutMs / 1000}s)`);
 
     const spawnAider = (): void => {
@@ -354,7 +354,8 @@ export async function executeAider(
           ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
           OPENAI_API_KEY: process.env.OPENAI_API_KEY,
           GIT_DIR: gitDir,
-          GIT_WORK_TREE: normalizedWorkingDir
+          GIT_WORK_TREE: normalizedWorkingDir,
+          PYTHONIOENCODING: 'utf-8'  // Fix Unicode encoding issues on Windows
         },
         timeout: aiderTimeoutMs
       });

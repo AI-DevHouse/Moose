@@ -156,14 +156,49 @@ export async function pushBranchAndCreatePR(
 
     // 1. Push branch to remote
     console.log(`[GitHubIntegration] Pushing branch: ${branchName}`);
-    execSync(`git push -u origin ${branchName}`, {
-      cwd: workingDirectory,
-      stdio: 'pipe'
-    });
+    try {
+      execSync(`git push -u origin ${branchName}`, {
+        cwd: workingDirectory,
+        stdio: 'pipe'
+      });
+    } catch (pushError: any) {
+      // Check if it's a non-fast-forward error (stale branch exists)
+      const errorOutput = pushError.stderr?.toString() || pushError.stdout?.toString() || '';
+      if (errorOutput.includes('non-fast-forward') || errorOutput.includes('rejected')) {
+        console.warn(`[GitHubIntegration] Push rejected due to stale remote branch. Deleting and retrying...`);
+        try {
+          // Delete the stale remote branch
+          execSync(`git push origin --delete ${branchName}`, {
+            cwd: workingDirectory,
+            stdio: 'pipe'
+          });
+          console.log(`[GitHubIntegration] Deleted stale remote branch: ${branchName}`);
+
+          // Retry the push
+          execSync(`git push -u origin ${branchName}`, {
+            cwd: workingDirectory,
+            stdio: 'pipe'
+          });
+          console.log(`[GitHubIntegration] Successfully pushed after cleanup`);
+        } catch (retryError: any) {
+          console.error(`[GitHubIntegration] Failed to recover from stale branch: ${retryError.message}`);
+          throw pushError; // Throw original error
+        }
+      } else {
+        throw pushError; // Re-throw if not a stale branch issue
+      }
+    }
 
     // 2. Build PR title and body
     const prTitle = `WO-${wo.id.substring(0, 8)}: ${wo.title}`;
-    const prBody = buildPRBody(wo, routingDecision, proposerResponse);
+    let prBody = buildPRBody(wo, routingDecision, proposerResponse);
+
+    // GitHub PR body limit is 65536 characters - truncate if needed
+    const MAX_PR_BODY_LENGTH = 65000; // Leave 536 chars buffer
+    if (prBody.length > MAX_PR_BODY_LENGTH) {
+      console.warn(`[GitHubIntegration] PR body too long (${prBody.length} chars), truncating to ${MAX_PR_BODY_LENGTH}`);
+      prBody = prBody.substring(0, MAX_PR_BODY_LENGTH) + '\n\n...\n\n*(Body truncated due to GitHub length limit)*';
+    }
 
     // 3. Write PR body to temp file (avoids shell escaping issues with complex JSON)
     const tmpDir = os.tmpdir();
