@@ -16,7 +16,7 @@
 ## 1. ORIENTATION
 Project: **Moose Mission Control**
 Background rules → [SESSION_HANDOVER_MASTER.md](C:\dev\moose-mission-control\docs\session_updates\SESSION_HANDOVER_MASTER.md)
-Current state → [session-v144-20251029-1700-handover.md](C:\dev\moose-mission-control\docs\session_updates\session-v144-20251029-1700-handover.md)
+Current state → [session-v148-20251030-2200-handover.md](C:\dev\moose-mission-control\docs\session_updates\session-v148-20251030-2200-handover.md)
 
 ---
 
@@ -29,16 +29,16 @@ Current state → [session-v144-20251029-1700-handover.md](C:\dev\moose-mission-
 ---
 
 ## 3. TODAY'S WORKFLOW
-1️⃣ Continue from v144 Next Actions.
-2️⃣ Document progress in a new `session-v145-…-handover.md`.
-3️⃣ Keep updates short (≤5 bullets); store logs under `/evidence/v145/`.
+1️⃣ Continue from v148 Next Actions.
+2️⃣ Document progress in a new `session-v149-…-handover.md`.
+3️⃣ Keep updates short (≤5 bullets); store logs under `/evidence/v149/`.
 4️⃣ If unexpected behaviour → **stop with `BLOCKED`** and list the single minimal artifact needed to proceed.
 
 ---
 
 ## 4. WRAP-UP
-📝 Create v145 handover using MASTER §9 template.
-📂 Archive handovers older than v143 → `archive\`.
+📝 Create v149 handover using MASTER §9 template.
+📂 Archive handovers older than v146 → `archive\`.
 
 ---
 
@@ -46,7 +46,7 @@ Current state → [session-v144-20251029-1700-handover.md](C:\dev\moose-mission-
 | Purpose | File | Path |
 |----------|------|------|
 | Rules | MASTER | docs\session_updates\ |
-| Last Session | v144 | docs\session_updates\ |
+| Last Session | v148 | docs\session_updates\ |
 | Evidence | evidence\ | docs\session_updates\evidence\ |
 | Archive | archive\ | docs\session_updates\archive\ |
 

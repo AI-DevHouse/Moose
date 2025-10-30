@@ -11,12 +11,14 @@ We are closing this development session.
 2) Create a new file named:
    `session-v<next>-<YYYYMMDD-HHMM>-handover.md`
 
-3) Use **MASTER §9 “Standard Handover Template”** and include only:
+3) Use **MASTER §9 "Standard Handover Template"** and include only:
    - **Result:** ✅ / ⚠️ / ❌ (one line)
    - **Δ Summary:** 3–6 bullets of changes since the prior version
    - **Next Actions:** numbered steps for the next session
    - **Watchpoints:** 3–5 bullets (stop/verify conditions, risks)
    - **References:** MASTER, QUICK, and `evidence\v<next>\`
+   - **Compliance:** N1..N7 pass/fail this session (one line, e.g., "N1 ✓ N2 ✓ N3 ✓ N4 ✓ N5 ✓ N6 ✓ N7 ✓" or list failures)
+   - **Scripts Modified/Added:** [if applicable: list with one-line purpose]
    - **Version Footer**
 
 4) Do **not** paste logs or long narratives.

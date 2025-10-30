@@ -20,7 +20,13 @@ C:\dev\moose-mission-control\docs\session_updates\
 ├── SESSION_START_QUICK.md
 ├── session-v77-20251014-1600-handover.md
 ├── archive\
-└── evidence\
+├── evidence\
+└── ../index_cards\
+    ├── BRIEF.md          # Architecture overview (~500 tokens)
+    ├── GLOSSARY.md       # Domain terms (~450 tokens)
+    ├── DB_CONTRACT.sql   # Schema definitions (~900 tokens)
+    ├── INVARIANTS.md     # Non-changing rules (~850 tokens)
+    └── SCRIPTS.md        # Script quick reference (~200 tokens)
 ```
 
 ---
@@ -51,16 +57,102 @@ C:\dev\moose-mission-control\docs\session_updates\
 
 ---
 
-### 5.1 WORKING BEHAVIOUR STANDARDS
-**Models:** You must read this section at session start and restate compliance in ≤1 sentence before performing any edit.
+### 5.1 WORKING BEHAVIOUR STANDARDS (Non-Negotiables)
+**At session start, reply must begin with:** `ACK MOOSE-SOP v3`
 
-1. **Read Before Write** – Always read relevant code, schemas, and config before proposing or generating modifications.  
-2. **Verify Before Commit** – Confirm all edits match current repo + Supabase schema.  
-3. **Preserve Ground Truth** – Never invent structure or config values.  
-4. **Use Minimal Context** – Load only what’s required for the current task.  
-5. **Request Clarification Instead of Assuming.**  
-6. **Uniform Compliance** – All LLMs and agents follow these same rules.  
-7. **Human Override** – If unsure, ask Court before continuing.
+**N1 — Read Before Write.** List the files you read and what you found (1–2 lines per file).
+
+**N2 — Verify DB State.** Show Supabase table schema + 3 sample rows for the **primary** table(s) you will modify, or declare `BLOCKED: missing <credential|query output>`.
+
+**N3 — Plan Before Edit.** Present a minimal plan + tests before generating diffs.
+
+**N4 — Output Diffs Only.** Provide unified diffs, not full files (exceptions: new files, <50 lines).
+
+**N5 — Self-Audit.** End with a compliance audit for N1–N5 (pass/fail).
+
+**N6 — Minimal Context.** Load only MASTER, QUICK, current handover, and index cards unless explicitly told otherwise.
+
+**N7 — Script Reuse.** Check `docs/index_cards/SCRIPTS.md` before writing scripts. If a suitable script exists, use/modify it. Add new scripts to the registry.
+
+---
+
+### 5.2 REPLY SCHEMA (Task-Type Variants)
+
+**For code changes (edits, refactors, new features):**
+```
+ACK MOOSE-SOP v3
+
+PRECHECK
+- Files read: <bullet list + 1-line summaries>
+- DB schema + 3 rows for primary tables (or BLOCKED)
+- Index cards loaded: <BRIEF | GLOSSARY | DB_CONTRACT | INVARIANTS | SCRIPTS>
+
+PLAN
+- Numbered steps + tests to run
+
+DIFFS
+- Unified diffs only
+
+TESTS
+- Unit/Integration/Acceptance checklist
+
+COMPLIANCE
+- N1..N7 pass/fail
+```
+
+**For script execution (run + interpret):**
+```
+ACK MOOSE-SOP v3
+
+PRECHECK
+- Script checked: <existing script name or "new script required">
+- Purpose: <one line>
+- Index cards loaded: <if relevant>
+
+SCRIPT
+- Command to run or script code
+
+OUTPUT
+- Stdout/stderr results
+
+ANALYSIS
+- Interpretation + next actions
+
+COMPLIANCE
+- N1, N6, N7 pass/fail (N2-N5 N/A for script execution)
+```
+
+**For investigation (research, discovery):**
+```
+ACK MOOSE-SOP v3
+
+PRECHECK
+- Files/areas to investigate
+- Index cards loaded: <if relevant>
+
+FINDINGS
+- Bullet list of discoveries
+
+RECOMMENDATIONS
+- Actionable next steps
+
+COMPLIANCE
+- N1, N6 pass/fail (N2-N5, N7 N/A for investigation)
+```
+
+---
+
+### 5.3 FAILURE POLICY
+
+**If PRECHECK cannot show DB evidence and DB will be edited:**
+- Respond `BLOCKED: missing <specific credential|query|connection>` and **stop**.
+- Do not proceed with guesses or cached knowledge.
+
+**If script does not exist in registry and task is trivial:**
+- Create inline script, execute, and add to registry in same session.
+
+**If script does not exist and task is complex:**
+- Flag for user: "Complex script required, not in registry. Proceed with creation?"
 
 ---
 
