@@ -17,7 +17,7 @@ import { assessProjectMaturity } from './orchestrator/project-inspector';
 import { inferArchitecture } from './bootstrap-architecture-inferrer';
 import { generateBootstrapWO } from './bootstrap-wo-generator';
 import { ProjectService } from './project-service';
-import { requirementAnalyzer } from './requirement-analyzer';
+import { requirementAnalyzer, type DetectedRequirement } from './requirement-analyzer';
 
 export interface DecomposeOptions {
   generateWireframes?: boolean;
@@ -192,7 +192,7 @@ export class ArchitectService {
 
       // Analyze spec for external service requirements
       console.log('[Architect] Analyzing spec for external service dependencies...');
-      let requirements;
+      let requirements: DetectedRequirement[];
       try {
         requirements = await requirementAnalyzer.analyzeSpec(spec);
         console.log(`[Architect] Detected ${requirements.length} external service(s):`,

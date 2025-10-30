@@ -10,6 +10,25 @@ export interface TechnicalSpec {
   time_estimate?: string;      // e.g., "3 days"
 }
 
+// Technical requirements specification per work order
+export interface TechnicalRequirements {
+  npm_dependencies?: string[];           // e.g., ["react@18.2.0", "next@14.0.0"]
+  npm_dev_dependencies?: string[];       // e.g., ["typescript@5.3.0", "@types/react@18.2.0"]
+  environment_variables?: string[];      // e.g., ["NEXT_PUBLIC_API_URL", "DATABASE_URL"]
+  external_services?: Array<{
+    name: string;                        // e.g., "OpenAI"
+    env_vars: string[];                  // e.g., ["OPENAI_API_KEY"]
+    purpose: string;                     // e.g., "AI text generation"
+  }>;
+  tsconfig_requirements?: {
+    jsx?: 'react' | 'react-jsx' | 'preserve';
+    target?: string;                     // e.g., "ES2020"
+    lib?: string[];                      // e.g., ["ES2020", "DOM"]
+    module?: string;                     // e.g., "commonjs", "esnext"
+    [key: string]: any;                  // Allow other tsconfig options
+  };
+}
+
 export interface WorkOrder {
   title: string;
   description: string;
@@ -20,6 +39,7 @@ export interface WorkOrder {
   dependencies: string[];           // WO IDs or indices
   wireframe?: WireframeMetadata;    // Optional: Generated wireframe metadata
   contracts?: IntegrationContracts;  // Optional: Integration contracts
+  technical_requirements?: TechnicalRequirements;  // NEW: Per-WO dependency specification
 }
 
 export interface DecompositionOutput {

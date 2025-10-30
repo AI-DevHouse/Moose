@@ -2,6 +2,8 @@
 
 import type { EnhancedProposerResponse } from '@/lib/enhanced-proposer-service';
 import type { RoutingDecision } from '@/lib/manager-routing-rules';
+import type { TechnicalRequirements } from '@/types/architect';
+import type { AcceptanceResult } from '@/lib/acceptance-validator';
 
 // Aider execution result
 export interface AiderResult {
@@ -56,18 +58,23 @@ export interface WorkOrder {
   status: string;
   risk_level: 'low' | 'medium' | 'high';
   estimated_cost: number;
+  actual_cost: number | null;
   pattern_confidence: number;
+  complexity_score: number | null;
   proposer_id: string | null;
-  project_id?: string | null;  // NEW: Links work order to target project
+  project_id?: string | null;  // Links work order to target project
   acceptance_criteria: string[] | null;
+  acceptance_result: AcceptanceResult | null;
   files_in_scope: string[] | null;
   context_budget_estimate: number | null;
   decomposition_doc: string | null;
   architect_version: string | null;
+  technical_requirements: TechnicalRequirements | null;
   metadata: any;
   github_pr_url?: string | null;
   github_pr_number?: number | null;
   github_branch?: string | null;
+  completed_at: string | null;
   created_at: string;
   updated_at: string;
 }

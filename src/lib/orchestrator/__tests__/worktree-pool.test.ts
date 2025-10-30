@@ -25,10 +25,17 @@ describe('WorktreePoolManager', () => {
       id: 'test-project-id',
       name: 'test-project',
       local_path: '/test/project/path',
-      github_url: 'https://github.com/test/repo',
+      github_repo_name: 'test-repo',
+      github_repo_url: 'https://github.com/test/repo',
+      github_org: 'test',
+      supabase_project_url: null,
+      supabase_anon_key: null,
+      vercel_team_id: null,
       status: 'active',
-      created_at: new Date(),
-      updated_at: new Date()
+      infrastructure_status: 'ready',
+      setup_notes: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
     } as Project;
 
     // Setup default mocks

@@ -118,6 +118,20 @@ export class WorktreePoolManager {
       console.log('[WorktreePool] Reusing existing worktrees if available (set WORKTREE_CLEANUP_ON_STARTUP=true to force cleanup)');
     }
 
+    // Always prune stale worktree metadata before initialization
+    // This ensures Git's worktree registry is clean even if directories were manually deleted
+    console.log('[WorktreePool] Pruning stale worktree metadata...');
+    try {
+      execSync('git worktree prune', {
+        cwd: this.project!.local_path,
+        stdio: 'pipe'
+      });
+      console.log('[WorktreePool] Worktree metadata pruned successfully');
+    } catch (error: any) {
+      console.warn(`[WorktreePool] Failed to prune worktree metadata: ${error.message}`);
+      // Non-fatal - continue with initialization
+    }
+
     // Set up promise for first worktree's node_modules (for optimization)
     this.firstWorktreeNodeModulesPath = new Promise<string>((resolve) => {
       this.resolveFirstWorktreeNodeModulesPath = resolve;
@@ -159,7 +173,8 @@ export class WorktreePoolManager {
     console.log(`[WorktreePool] Initializing ${worktreeId} at ${worktreePath}...`);
 
     try {
-      let needsFullSetup = false;
+      let needsWorktreeCreation = false;
+      let needsNpmInstall = false;
 
       // Check if worktree already exists (from previous run)
       if (fs.existsSync(worktreePath)) {
@@ -205,26 +220,29 @@ export class WorktreePoolManager {
 
             console.log(`[WorktreePool] ${worktreeId} cleaned and ready for reuse`);
 
-            // If node_modules missing, mark for npm install
+            // If node_modules missing, mark for npm install (but worktree itself is reused)
             if (!hasNodeModules) {
-              needsFullSetup = true;
+              needsNpmInstall = true;
             }
           } catch (cleanError: any) {
             console.warn(`[WorktreePool] Failed to clean ${worktreeId}, recreating: ${cleanError.message}`);
             await this.removeWorktree(worktreePath, worktreeId);
-            needsFullSetup = true;
+            needsWorktreeCreation = true;
+            needsNpmInstall = true;
           }
         } else {
           console.log(`[WorktreePool] ${worktreeId} is invalid, removing and recreating...`);
           await this.removeWorktree(worktreePath, worktreeId);
-          needsFullSetup = true;
+          needsWorktreeCreation = true;
+          needsNpmInstall = true;
         }
       } else {
-        needsFullSetup = true;
+        needsWorktreeCreation = true;
+        needsNpmInstall = true;
       }
 
       // Create worktree if it doesn't exist
-      if (needsFullSetup || !fs.existsSync(worktreePath)) {
+      if (needsWorktreeCreation) {
         console.log(`[WorktreePool] Creating new ${worktreeId}...`);
         // Create worktree at main's commit (detached HEAD to avoid branch conflicts)
         execSync(`git worktree add --detach "${worktreePath}" main`, {
@@ -239,7 +257,7 @@ export class WorktreePoolManager {
       const nodeModulesPath = path.join(worktreePath, 'node_modules');
       const hasNodeModules = fs.existsSync(nodeModulesPath);
 
-      if (hasNodeModules && !needsFullSetup) {
+      if (hasNodeModules && !needsNpmInstall) {
         // Reused worktree with existing node_modules
         console.log(`[WorktreePool] ${worktreeId} reusing existing node_modules`);
 
@@ -249,38 +267,52 @@ export class WorktreePoolManager {
         }
       } else {
         // Need to install or copy node_modules
-        const npmInstallStart = Date.now();
+        // Check if package.json exists first (skip for greenfield projects)
+        const packageJsonPath = path.join(worktreePath, 'package.json');
+        const hasPackageJson = fs.existsSync(packageJsonPath);
 
-        if (index === 1) {
-          // First worktree: Run full npm install
-          console.log(`[WorktreePool] ${worktreeId} running npm install...`);
-          execSync('npm install', {
-            cwd: worktreePath,
-            stdio: 'pipe',
-            encoding: 'utf-8'
-          });
+        if (!hasPackageJson) {
+          console.log(`[WorktreePool] ${worktreeId} has no package.json, skipping npm install (greenfield project)`);
 
-          const npmInstallDuration = Date.now() - npmInstallStart;
-          console.log(`[WorktreePool] ${worktreeId} npm install completed in ${npmInstallDuration}ms`);
-
-          // Signal that node_modules is ready for copying
-          if (this.resolveFirstWorktreeNodeModulesPath) {
-            this.resolveFirstWorktreeNodeModulesPath(nodeModulesPath);
+          // For wt-1, signal empty node_modules path (worktrees will be usable without dependencies)
+          if (index === 1 && this.resolveFirstWorktreeNodeModulesPath) {
+            this.resolveFirstWorktreeNodeModulesPath(nodeModulesPath); // Signal even though it doesn't exist
           }
         } else {
-          // Subsequent worktrees: Wait for wt-1 and copy node_modules
-          console.log(`[WorktreePool] ${worktreeId} waiting for wt-1 node_modules...`);
-          const sourceNodeModules = await this.firstWorktreeNodeModulesPath!;
+          // Package.json exists, proceed with npm install/copy
+          const npmInstallStart = Date.now();
 
-          const copyStart = Date.now();
-          console.log(`[WorktreePool] ${worktreeId} copying node_modules from wt-1...`);
+          if (index === 1) {
+            // First worktree: Run full npm install
+            console.log(`[WorktreePool] ${worktreeId} running npm install --legacy-peer-deps...`);
+            execSync('npm install --legacy-peer-deps', {
+              cwd: worktreePath,
+              stdio: 'pipe',
+              encoding: 'utf-8'
+            });
 
-          const targetNodeModules = path.join(worktreePath, 'node_modules');
-          await this.copyDirectory(sourceNodeModules, targetNodeModules);
+            const npmInstallDuration = Date.now() - npmInstallStart;
+            console.log(`[WorktreePool] ${worktreeId} npm install completed in ${npmInstallDuration}ms`);
 
-          const copyDuration = Date.now() - copyStart;
-          const totalDuration = Date.now() - npmInstallStart;
-          console.log(`[WorktreePool] ${worktreeId} node_modules copied in ${copyDuration}ms (total: ${totalDuration}ms)`);
+            // Signal that node_modules is ready for copying
+            if (this.resolveFirstWorktreeNodeModulesPath) {
+              this.resolveFirstWorktreeNodeModulesPath(nodeModulesPath);
+            }
+          } else {
+            // Subsequent worktrees: Wait for wt-1 and copy node_modules
+            console.log(`[WorktreePool] ${worktreeId} waiting for wt-1 node_modules...`);
+            const sourceNodeModules = await this.firstWorktreeNodeModulesPath!;
+
+            const copyStart = Date.now();
+            console.log(`[WorktreePool] ${worktreeId} copying node_modules from wt-1...`);
+
+            const targetNodeModules = path.join(worktreePath, 'node_modules');
+            await this.copyDirectory(sourceNodeModules, targetNodeModules);
+
+            const copyDuration = Date.now() - copyStart;
+            const totalDuration = Date.now() - npmInstallStart;
+            console.log(`[WorktreePool] ${worktreeId} node_modules copied in ${copyDuration}ms (total: ${totalDuration}ms)`);
+          }
         }
       }
 
@@ -490,6 +522,37 @@ export class WorktreePoolManager {
       } catch (error: any) {
         // Pull might fail if offline or no changes - that's okay
         console.warn(`[WorktreePool] Failed to pull main in ${handle.id}: ${error.message}`);
+      }
+
+      // 5. Check if dependencies need to be installed after pull
+      // This handles the greenfield → established project transition (e.g., after bootstrap WO merges)
+      const packageJsonPath = path.join(handle.path, 'package.json');
+      const nodeModulesPath = path.join(handle.path, 'node_modules');
+      const hasPackageJson = fs.existsSync(packageJsonPath);
+      const hasNodeModules = fs.existsSync(nodeModulesPath);
+
+      if (hasPackageJson && !hasNodeModules) {
+        console.log(`[WorktreePool] ${handle.id} detected new package.json, running npm install --legacy-peer-deps...`);
+        try {
+          const npmStart = Date.now();
+          execSync('npm install --legacy-peer-deps', {
+            cwd: handle.path,
+            stdio: 'pipe',
+            encoding: 'utf-8',
+            timeout: 300000 // 5min timeout for npm install
+          });
+          const npmDuration = Date.now() - npmStart;
+          console.log(`[WorktreePool] ${handle.id} npm install completed in ${npmDuration}ms`);
+
+          // Update metadata to reflect npm install
+          const metadata = this.worktreeMetadata.get(handle.id);
+          if (metadata) {
+            metadata.npm_installed = true;
+          }
+        } catch (error: any) {
+          console.error(`[WorktreePool] Failed to install dependencies in ${handle.id}:`, error.message);
+          // Non-fatal - continue cleanup, but next WO might fail
+        }
       }
 
       const cleanupDuration = Date.now() - cleanupStart;
