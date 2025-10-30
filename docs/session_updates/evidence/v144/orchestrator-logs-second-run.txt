@@ -1,0 +1,415 @@
+PS C:\dev\moose-mission-control> npm run orchestrator
+
+> mission-control@0.1.0 orchestrator
+> tsx --env-file=.env.local scripts/orchestrator-daemon.ts
+
+🦌 Moose Mission Control - Orchestrator Daemon
+==============================================
+Polling Interval: 10000ms
+Max Concurrent: 15
+Worktree Pool: Enabled
+Worktree Pool Size: 15
+Supabase URL: https://veofqiywppjsjqfqztft.supabase.co
+==============================================
+
+[Orchestrator] Starting polling with interval 10000ms
+🚀 Orchestrator daemon started. Press Ctrl+C to stop.
+
+[Orchestrator] Initializing worktree pool with 15 worktrees...
+[WorktreePool] Initializing pool with 15 worktrees...
+[WorktreePool] Reusing existing worktrees if available (set WORKTREE_CLEANUP_ON_STARTUP=true to force cleanup)
+[WorktreePool] Pruning stale worktree metadata...
+[WorktreePool] Worktree metadata pruned successfully
+[WorktreePool] Initializing wt-1 at C:\dev\multi-llm-discussion-v1-wt-1...
+[WorktreePool] Creating new wt-1...
+[WorktreePool] wt-1 running npm install --legacy-peer-deps...
+[WorktreePool] Failed to create wt-1: Command failed: npm install --legacy-peer-deps
+npm warn deprecated @types/electron@1.6.10: This is a stub types definition for electron (https://github.com/electron/electron). electron provides its own type definitions, so you don't need @types/electron installed!
+npm warn deprecated inflight@1.0.6: This module is not supported, and leaks memory. Do not use it. Check out lru-cache if you want a good and tested way to coalesce async requests by a key value, which is much more comprehensive and powerful.
+npm warn deprecated lodash.get@4.4.2: This package is deprecated. Use the optional chaining (?.) operator instead.
+npm warn deprecated @npmcli/move-file@2.0.1: This functionality has been moved to @npmcli/fs
+npm warn deprecated npmlog@6.0.2: This package is no longer supported.
+npm warn deprecated lodash.isequal@4.5.0: This package is deprecated. Use require('node:util').isDeepStrictEqual instead.
+npm warn deprecated @humanwhocodes/config-array@0.11.14: Use @eslint/config-array instead
+npm warn deprecated npmlog@4.1.2: This package is no longer supported.
+npm warn deprecated string-similarity@4.0.4: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
+npm warn deprecated acorn-import-assertions@1.9.0: package has been renamed to acorn-import-attributes
+npm warn deprecated rimraf@3.0.2: Rimraf versions prior to v4 are no longer supported
+npm warn deprecated glob@7.2.3: Glob versions prior to v9 are no longer supported
+npm warn deprecated glob@8.1.0: Glob versions prior to v9 are no longer supported
+npm warn deprecated abab@2.0.6: Use your platform's native atob() and btoa() methods instead
+npm warn deprecated glob@7.1.6: Glob versions prior to v9 are no longer supported
+npm warn deprecated are-we-there-yet@3.0.1: This package is no longer supported.
+npm warn deprecated @humanwhocodes/object-schema@2.0.3: Use @eslint/object-schema instead
+npm warn deprecated are-we-there-yet@1.1.7: This package is no longer supported.
+npm warn deprecated @playwright/test@1.40.0: Please update to the latest version of Playwright to test up-to-date browsers.
+npm warn deprecated domexception@4.0.0: Use your platform's native DOMException instead
+npm warn deprecated gauge@4.0.4: This package is no longer supported.
+npm warn deprecated boolean@3.2.0: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
+npm warn deprecated gauge@2.7.4: This package is no longer supported.
+npm warn deprecated node-domexception@1.0.0: Use your platform's native DOMException instead
+npm warn deprecated eslint@8.55.0: This version is no longer supported. Please see https://eslint.org/version-support for other options.
+npm warn cleanup Failed to remove some directories [
+npm warn cleanup   [
+npm warn cleanup     '\\\\?\\C:\\dev\\multi-llm-discussion-v1-wt-1\\node_modules\\@inquirer',
+npm warn cleanup     [Error: EPERM: operation not permitted, rmdir 'C:\dev\multi-llm-discussion-v1-wt-1\node_modules\@inquirer\external-editor\node_modules'] {
+npm warn cleanup       errno: -4048,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'rmdir',
+npm warn cleanup       path: 'C:\\dev\\multi-llm-discussion-v1-wt-1\\node_modules\\@inquirer\\external-editor\\node_modules'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '\\\\?\\C:\\dev\\multi-llm-discussion-v1-wt-1\\node_modules\\@cspotcode',
+npm warn cleanup     [Error: EPERM: operation not permitted, rmdir 'C:\dev\multi-llm-discussion-v1-wt-1\node_modules\@cspotcode\source-map-support\node_modules'] {
+npm warn cleanup       errno: -4048,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'rmdir',
+npm warn cleanup       path: 'C:\\dev\\multi-llm-discussion-v1-wt-1\\node_modules\\@cspotcode\\source-map-support\\node_modules'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '\\\\?\\C:\\dev\\multi-llm-discussion-v1-wt-1\\node_modules',
+npm warn cleanup     [Error: EPERM: operation not permitted, rmdir 'C:\dev\multi-llm-discussion-v1-wt-1\node_modules\@testing-library\dom\node_modules'] {     
+npm warn cleanup       errno: -4048,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'rmdir',
+npm warn cleanup       path: 'C:\\dev\\multi-llm-discussion-v1-wt-1\\node_modules\\@testing-library\\dom\\node_modules'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '\\\\?\\C:\\dev\\multi-llm-discussion-v1-wt-1\\node_modules\\compromise',
+npm warn cleanup     [Error: EPERM: operation not permitted, rmdir 'C:\dev\multi-llm-discussion-v1-wt-1\node_modules\compromise\src\2-two'] {
+npm warn cleanup       errno: -4048,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'rmdir',
+npm warn cleanup       path: 'C:\\dev\\multi-llm-discussion-v1-wt-1\\node_modules\\compromise\\src\\2-two'
+npm warn cleanup     }
+npm warn cleanup   ]
+npm warn cleanup ]
+npm error code 1
+npm error path C:\dev\multi-llm-discussion-v1-wt-1\node_modules\robotjs
+npm error command failed
+npm error command C:\WINDOWS\system32\cmd.exe /d /s /c prebuild-install || node-gyp rebuild
+npm error gyp info it worked if it ends with ok
+npm error gyp info using node-gyp@9.4.1
+npm error gyp info using node@22.19.0 | win32 | x64
+npm error (node:24628) [DEP0060] DeprecationWarning: The `util._extend` API is deprecated. Please use Object.assign() instead.
+npm error (Use `node --trace-deprecation ...` to show where the warning was created)
+npm error gyp info find Python using Python version 3.11.9 found at "C:\Program Files\Python311\python.exe"
+npm error gyp ERR! find VS
+npm error gyp ERR! find VS msvs_version not set from command line or npm config
+npm error gyp ERR! find VS VCINSTALLDIR not set, not running in VS Command Prompt
+npm error gyp ERR! find VS checking VS2019 (16.11.36422.26) found at:
+npm error gyp ERR! find VS "C:\Program Files (x86)\Microsoft Visual Studio\2019\BuildTools"
+npm error gyp ERR! find VS - found "Visual Studio C++ core features"
+npm error gyp ERR! find VS - found VC++ toolset: v142
+npm error gyp ERR! find VS - missing any Windows SDK
+npm error gyp ERR! find VS could not find a version of Visual Studio 2017 or newer to use
+npm error gyp ERR! find VS not looking for VS2015 as it is only supported up to Node.js 18
+npm error gyp ERR! find VS not looking for VS2013 as it is only supported up to Node.js 8
+npm error gyp ERR! find VS
+npm error gyp ERR! find VS **************************************************************
+npm error gyp ERR! find VS You need to install the latest version of Visual Studio
+npm error gyp ERR! find VS including the "Desktop development with C++" workload.
+npm error gyp ERR! find VS For more information consult the documentation at:
+npm error gyp ERR! find VS https://github.com/nodejs/node-gyp#on-windows
+npm error gyp ERR! find VS **************************************************************
+npm error gyp ERR! find VS
+npm error gyp ERR! configure error
+npm error gyp ERR! stack Error: Could not find any Visual Studio installation to use
+npm error gyp ERR! stack     at VisualStudioFinder.fail (C:\dev\multi-llm-discussion-v1-wt-1\node_modules\node-gyp\lib\find-visualstudio.js:122:47)
+npm error gyp ERR! stack     at C:\dev\multi-llm-discussion-v1-wt-1\node_modules\node-gyp\lib\find-visualstudio.js:75:16
+npm error gyp ERR! stack     at VisualStudioFinder.findVisualStudio2013 (C:\dev\multi-llm-discussion-v1-wt-1\node_modules\node-gyp\lib\find-visualstudio.js:380:14)
+npm error gyp ERR! stack     at C:\dev\multi-llm-discussion-v1-wt-1\node_modules\node-gyp\lib\find-visualstudio.js:71:14
+npm error gyp ERR! stack     at VisualStudioFinder.findVisualStudio2015 (C:\dev\multi-llm-discussion-v1-wt-1\node_modules\node-gyp\lib\find-visualstudio.js:364:14)
+npm error gyp ERR! stack     at C:\dev\multi-llm-discussion-v1-wt-1\node_modules\node-gyp\lib\find-visualstudio.js:67:12
+npm error gyp ERR! stack     at VisualStudioFinder.parseData (C:\dev\multi-llm-discussion-v1-wt-1\node_modules\node-gyp\lib\find-visualstudio.js:237:5)
+npm error gyp ERR! stack     at C:\dev\multi-llm-discussion-v1-wt-1\node_modules\node-gyp\lib\find-visualstudio.js:143:14
+npm error gyp ERR! stack     at ChildProcess.exithandler (node:child_process:410:7)
+npm error gyp ERR! stack     at ChildProcess.emit (node:events:519:28)
+npm error gyp ERR! stack     at maybeClose (node:internal/child_process:1101:16)
+npm error gyp ERR! stack     at ChildProcess._handle.onexit (node:internal/child_process:304:5)
+npm error gyp ERR! System Windows_NT 10.0.26100
+npm error gyp ERR! command "C:\\Program Files\\nodejs\\node.exe" "C:\\dev\\multi-llm-discussion-v1-wt-1\\node_modules\\node-gyp\\bin\\node-gyp.js" "rebuild"   
+npm error gyp ERR! cwd C:\dev\multi-llm-discussion-v1-wt-1\node_modules\robotjs
+npm error gyp ERR! node -v v22.19.0
+npm error gyp ERR! node-gyp -v v9.4.1
+npm error gyp ERR! not ok
+npm error A complete log of this run can be found in: C:\Users\Courtland Clarkson\AppData\Local\npm-cache\_logs\2025-10-29T11_08_25_658Z-debug-0.log
+
+[WorktreePool] Initializing wt-2 at C:\dev\multi-llm-discussion-v1-wt-2...
+[WorktreePool] Creating new wt-2...
+[WorktreePool] wt-2 waiting for wt-1 node_modules...
+[WorktreePool] Initializing wt-3 at C:\dev\multi-llm-discussion-v1-wt-3...
+[WorktreePool] Creating new wt-3...
+[WorktreePool] wt-3 waiting for wt-1 node_modules...
+[WorktreePool] Initializing wt-4 at C:\dev\multi-llm-discussion-v1-wt-4...
+[WorktreePool] Creating new wt-4...
+[WorktreePool] wt-4 waiting for wt-1 node_modules...
+[WorktreePool] Initializing wt-5 at C:\dev\multi-llm-discussion-v1-wt-5...
+[WorktreePool] Creating new wt-5...
+[WorktreePool] wt-5 waiting for wt-1 node_modules...
+[WorktreePool] Initializing wt-6 at C:\dev\multi-llm-discussion-v1-wt-6...
+[WorktreePool] Creating new wt-6...
+[WorktreePool] wt-6 waiting for wt-1 node_modules...
+[WorktreePool] Initializing wt-7 at C:\dev\multi-llm-discussion-v1-wt-7...
+[WorktreePool] Creating new wt-7...
+[WorktreePool] wt-7 waiting for wt-1 node_modules...
+[WorktreePool] Initializing wt-8 at C:\dev\multi-llm-discussion-v1-wt-8...
+[WorktreePool] Creating new wt-8...
+[WorktreePool] wt-8 waiting for wt-1 node_modules...
+[WorktreePool] Initializing wt-9 at C:\dev\multi-llm-discussion-v1-wt-9...
+[WorktreePool] Creating new wt-9...
+[WorktreePool] wt-9 waiting for wt-1 node_modules...
+[WorktreePool] Initializing wt-10 at C:\dev\multi-llm-discussion-v1-wt-10...
+[WorktreePool] Creating new wt-10...
+[WorktreePool] wt-10 waiting for wt-1 node_modules...
+[WorktreePool] Initializing wt-11 at C:\dev\multi-llm-discussion-v1-wt-11...
+[WorktreePool] Creating new wt-11...
+[WorktreePool] wt-11 waiting for wt-1 node_modules...
+[WorktreePool] Initializing wt-12 at C:\dev\multi-llm-discussion-v1-wt-12...
+[WorktreePool] Creating new wt-12...
+[WorktreePool] wt-12 waiting for wt-1 node_modules...
+[WorktreePool] Initializing wt-13 at C:\dev\multi-llm-discussion-v1-wt-13...
+[WorktreePool] Creating new wt-13...
+[WorktreePool] wt-13 waiting for wt-1 node_modules...
+[WorktreePool] Initializing wt-14 at C:\dev\multi-llm-discussion-v1-wt-14...
+[WorktreePool] Creating new wt-14...
+[WorktreePool] wt-14 waiting for wt-1 node_modules...
+[WorktreePool] Initializing wt-15 at C:\dev\multi-llm-discussion-v1-wt-15...
+[WorktreePool] Creating new wt-15...
+[WorktreePool] wt-15 waiting for wt-1 node_modules...
+[WorktreePool] Initialization failed: Worktree wt-1 creation failed: Command failed: npm install --legacy-peer-deps
+npm warn deprecated @types/electron@1.6.10: This is a stub types definition for electron (https://github.com/electron/electron). electron provides its own type definitions, so you don't need @types/electron installed!
+npm warn deprecated inflight@1.0.6: This module is not supported, and leaks memory. Do not use it. Check out lru-cache if you want a good and tested way to coalesce async requests by a key value, which is much more comprehensive and powerful.
+npm warn deprecated lodash.get@4.4.2: This package is deprecated. Use the optional chaining (?.) operator instead.
+npm warn deprecated @npmcli/move-file@2.0.1: This functionality has been moved to @npmcli/fs
+npm warn deprecated npmlog@6.0.2: This package is no longer supported.
+npm warn deprecated lodash.isequal@4.5.0: This package is deprecated. Use require('node:util').isDeepStrictEqual instead.
+npm warn deprecated @humanwhocodes/config-array@0.11.14: Use @eslint/config-array instead
+npm warn deprecated npmlog@4.1.2: This package is no longer supported.
+npm warn deprecated string-similarity@4.0.4: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
+npm warn deprecated acorn-import-assertions@1.9.0: package has been renamed to acorn-import-attributes
+npm warn deprecated rimraf@3.0.2: Rimraf versions prior to v4 are no longer supported
+npm warn deprecated glob@7.2.3: Glob versions prior to v9 are no longer supported
+npm warn deprecated glob@8.1.0: Glob versions prior to v9 are no longer supported
+npm warn deprecated abab@2.0.6: Use your platform's native atob() and btoa() methods instead
+npm warn deprecated glob@7.1.6: Glob versions prior to v9 are no longer supported
+npm warn deprecated are-we-there-yet@3.0.1: This package is no longer supported.
+npm warn deprecated @humanwhocodes/object-schema@2.0.3: Use @eslint/object-schema instead
+npm warn deprecated are-we-there-yet@1.1.7: This package is no longer supported.
+npm warn deprecated @playwright/test@1.40.0: Please update to the latest version of Playwright to test up-to-date browsers.
+npm warn deprecated domexception@4.0.0: Use your platform's native DOMException instead
+npm warn deprecated gauge@4.0.4: This package is no longer supported.
+npm warn deprecated boolean@3.2.0: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
+npm warn deprecated gauge@2.7.4: This package is no longer supported.
+npm warn deprecated node-domexception@1.0.0: Use your platform's native DOMException instead
+npm warn deprecated eslint@8.55.0: This version is no longer supported. Please see https://eslint.org/version-support for other options.
+npm warn cleanup Failed to remove some directories [
+npm warn cleanup   [
+npm warn cleanup     '\\\\?\\C:\\dev\\multi-llm-discussion-v1-wt-1\\node_modules\\@inquirer',
+npm warn cleanup     [Error: EPERM: operation not permitted, rmdir 'C:\dev\multi-llm-discussion-v1-wt-1\node_modules\@inquirer\external-editor\node_modules'] {
+npm warn cleanup       errno: -4048,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'rmdir',
+npm warn cleanup       path: 'C:\\dev\\multi-llm-discussion-v1-wt-1\\node_modules\\@inquirer\\external-editor\\node_modules'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '\\\\?\\C:\\dev\\multi-llm-discussion-v1-wt-1\\node_modules\\@cspotcode',
+npm warn cleanup     [Error: EPERM: operation not permitted, rmdir 'C:\dev\multi-llm-discussion-v1-wt-1\node_modules\@cspotcode\source-map-support\node_modules'] {
+npm warn cleanup       errno: -4048,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'rmdir',
+npm warn cleanup       path: 'C:\\dev\\multi-llm-discussion-v1-wt-1\\node_modules\\@cspotcode\\source-map-support\\node_modules'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '\\\\?\\C:\\dev\\multi-llm-discussion-v1-wt-1\\node_modules',
+npm warn cleanup     [Error: EPERM: operation not permitted, rmdir 'C:\dev\multi-llm-discussion-v1-wt-1\node_modules\@testing-library\dom\node_modules'] {     
+npm warn cleanup       errno: -4048,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'rmdir',
+npm warn cleanup       path: 'C:\\dev\\multi-llm-discussion-v1-wt-1\\node_modules\\@testing-library\\dom\\node_modules'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '\\\\?\\C:\\dev\\multi-llm-discussion-v1-wt-1\\node_modules\\compromise',
+npm warn cleanup     [Error: EPERM: operation not permitted, rmdir 'C:\dev\multi-llm-discussion-v1-wt-1\node_modules\compromise\src\2-two'] {
+npm warn cleanup       errno: -4048,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'rmdir',
+npm warn cleanup       path: 'C:\\dev\\multi-llm-discussion-v1-wt-1\\node_modules\\compromise\\src\\2-two'
+npm warn cleanup     }
+npm warn cleanup   ]
+npm warn cleanup ]
+npm error code 1
+npm error path C:\dev\multi-llm-discussion-v1-wt-1\node_modules\robotjs
+npm error command failed
+npm error command C:\WINDOWS\system32\cmd.exe /d /s /c prebuild-install || node-gyp rebuild
+npm error gyp info it worked if it ends with ok
+npm error gyp info using node-gyp@9.4.1
+npm error gyp info using node@22.19.0 | win32 | x64
+npm error (node:24628) [DEP0060] DeprecationWarning: The `util._extend` API is deprecated. Please use Object.assign() instead.
+npm error (Use `node --trace-deprecation ...` to show where the warning was created)
+npm error gyp info find Python using Python version 3.11.9 found at "C:\Program Files\Python311\python.exe"
+npm error gyp ERR! find VS
+npm error gyp ERR! find VS msvs_version not set from command line or npm config
+npm error gyp ERR! find VS VCINSTALLDIR not set, not running in VS Command Prompt
+npm error gyp ERR! find VS checking VS2019 (16.11.36422.26) found at:
+npm error gyp ERR! find VS "C:\Program Files (x86)\Microsoft Visual Studio\2019\BuildTools"
+npm error gyp ERR! find VS - found "Visual Studio C++ core features"
+npm error gyp ERR! find VS - found VC++ toolset: v142
+npm error gyp ERR! find VS - missing any Windows SDK
+npm error gyp ERR! find VS could not find a version of Visual Studio 2017 or newer to use
+npm error gyp ERR! find VS not looking for VS2015 as it is only supported up to Node.js 18
+npm error gyp ERR! find VS not looking for VS2013 as it is only supported up to Node.js 8
+npm error gyp ERR! find VS
+npm error gyp ERR! find VS **************************************************************
+npm error gyp ERR! find VS You need to install the latest version of Visual Studio
+npm error gyp ERR! find VS including the "Desktop development with C++" workload.
+npm error gyp ERR! find VS For more information consult the documentation at:
+npm error gyp ERR! find VS https://github.com/nodejs/node-gyp#on-windows
+npm error gyp ERR! find VS **************************************************************
+npm error gyp ERR! find VS
+npm error gyp ERR! configure error
+npm error gyp ERR! stack Error: Could not find any Visual Studio installation to use
+npm error gyp ERR! stack     at VisualStudioFinder.fail (C:\dev\multi-llm-discussion-v1-wt-1\node_modules\node-gyp\lib\find-visualstudio.js:122:47)
+npm error gyp ERR! stack     at C:\dev\multi-llm-discussion-v1-wt-1\node_modules\node-gyp\lib\find-visualstudio.js:75:16
+npm error gyp ERR! stack     at VisualStudioFinder.findVisualStudio2013 (C:\dev\multi-llm-discussion-v1-wt-1\node_modules\node-gyp\lib\find-visualstudio.js:380:14)
+npm error gyp ERR! stack     at C:\dev\multi-llm-discussion-v1-wt-1\node_modules\node-gyp\lib\find-visualstudio.js:71:14
+npm error gyp ERR! stack     at VisualStudioFinder.findVisualStudio2015 (C:\dev\multi-llm-discussion-v1-wt-1\node_modules\node-gyp\lib\find-visualstudio.js:364:14)
+npm error gyp ERR! stack     at C:\dev\multi-llm-discussion-v1-wt-1\node_modules\node-gyp\lib\find-visualstudio.js:67:12
+npm error gyp ERR! stack     at VisualStudioFinder.parseData (C:\dev\multi-llm-discussion-v1-wt-1\node_modules\node-gyp\lib\find-visualstudio.js:237:5)        
+npm error gyp ERR! stack     at C:\dev\multi-llm-discussion-v1-wt-1\node_modules\node-gyp\lib\find-visualstudio.js:143:14
+npm error gyp ERR! stack     at ChildProcess.exithandler (node:child_process:410:7)
+npm error gyp ERR! stack     at ChildProcess.emit (node:events:519:28)
+npm error gyp ERR! stack     at maybeClose (node:internal/child_process:1101:16)
+npm error gyp ERR! stack     at ChildProcess._handle.onexit (node:internal/child_process:304:5)
+npm error gyp ERR! System Windows_NT 10.0.26100
+npm error gyp ERR! command "C:\\Program Files\\nodejs\\node.exe" "C:\\dev\\multi-llm-discussion-v1-wt-1\\node_modules\\node-gyp\\bin\\node-gyp.js" "rebuild"   
+npm error gyp ERR! cwd C:\dev\multi-llm-discussion-v1-wt-1\node_modules\robotjs
+npm error gyp ERR! node -v v22.19.0
+npm error gyp ERR! node-gyp -v v9.4.1
+npm error gyp ERR! not ok
+npm error A complete log of this run can be found in: C:\Users\Courtland Clarkson\AppData\Local\npm-cache\_logs\2025-10-29T11_08_25_658Z-debug-0.log
+
+[WorktreePool] Cleaning up all worktrees...
+[WorktreePool] Cleanup complete
+[Orchestrator] Failed to initialize worktree pool: Worktree wt-1 creation failed: Command failed: npm install --legacy-peer-deps
+npm warn deprecated @types/electron@1.6.10: This is a stub types definition for electron (https://github.com/electron/electron). electron provides its own type definitions, so you don't need @types/electron installed!
+npm warn deprecated inflight@1.0.6: This module is not supported, and leaks memory. Do not use it. Check out lru-cache if you want a good and tested way to coalesce async requests by a key value, which is much more comprehensive and powerful.
+npm warn deprecated lodash.get@4.4.2: This package is deprecated. Use the optional chaining (?.) operator instead.
+npm warn deprecated @npmcli/move-file@2.0.1: This functionality has been moved to @npmcli/fs
+npm warn deprecated npmlog@6.0.2: This package is no longer supported.
+npm warn deprecated lodash.isequal@4.5.0: This package is deprecated. Use require('node:util').isDeepStrictEqual instead.
+npm warn deprecated @humanwhocodes/config-array@0.11.14: Use @eslint/config-array instead
+npm warn deprecated npmlog@4.1.2: This package is no longer supported.
+npm warn deprecated string-similarity@4.0.4: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
+npm warn deprecated acorn-import-assertions@1.9.0: package has been renamed to acorn-import-attributes
+npm warn deprecated rimraf@3.0.2: Rimraf versions prior to v4 are no longer supported
+npm warn deprecated glob@7.2.3: Glob versions prior to v9 are no longer supported
+npm warn deprecated glob@8.1.0: Glob versions prior to v9 are no longer supported
+npm warn deprecated abab@2.0.6: Use your platform's native atob() and btoa() methods instead
+npm warn deprecated glob@7.1.6: Glob versions prior to v9 are no longer supported
+npm warn deprecated are-we-there-yet@3.0.1: This package is no longer supported.
+npm warn deprecated @humanwhocodes/object-schema@2.0.3: Use @eslint/object-schema instead
+npm warn deprecated are-we-there-yet@1.1.7: This package is no longer supported.
+npm warn deprecated @playwright/test@1.40.0: Please update to the latest version of Playwright to test up-to-date browsers.
+npm warn deprecated domexception@4.0.0: Use your platform's native DOMException instead
+npm warn deprecated gauge@4.0.4: This package is no longer supported.
+npm warn deprecated boolean@3.2.0: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
+npm warn deprecated gauge@2.7.4: This package is no longer supported.
+npm warn deprecated node-domexception@1.0.0: Use your platform's native DOMException instead
+npm warn deprecated eslint@8.55.0: This version is no longer supported. Please see https://eslint.org/version-support for other options.
+npm warn cleanup Failed to remove some directories [
+npm warn cleanup   [
+npm warn cleanup     '\\\\?\\C:\\dev\\multi-llm-discussion-v1-wt-1\\node_modules\\@inquirer',
+npm warn cleanup     [Error: EPERM: operation not permitted, rmdir 'C:\dev\multi-llm-discussion-v1-wt-1\node_modules\@inquirer\external-editor\node_modules'] {
+npm warn cleanup       errno: -4048,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'rmdir',
+npm warn cleanup       path: 'C:\\dev\\multi-llm-discussion-v1-wt-1\\node_modules\\@inquirer\\external-editor\\node_modules'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '\\\\?\\C:\\dev\\multi-llm-discussion-v1-wt-1\\node_modules\\@cspotcode',
+npm warn cleanup     [Error: EPERM: operation not permitted, rmdir 'C:\dev\multi-llm-discussion-v1-wt-1\node_modules\@cspotcode\source-map-support\node_modules'] {
+npm warn cleanup       errno: -4048,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'rmdir',
+npm warn cleanup       path: 'C:\\dev\\multi-llm-discussion-v1-wt-1\\node_modules\\@cspotcode\\source-map-support\\node_modules'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '\\\\?\\C:\\dev\\multi-llm-discussion-v1-wt-1\\node_modules',
+npm warn cleanup     [Error: EPERM: operation not permitted, rmdir 'C:\dev\multi-llm-discussion-v1-wt-1\node_modules\@testing-library\dom\node_modules'] {     
+npm warn cleanup       errno: -4048,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'rmdir',
+npm warn cleanup       path: 'C:\\dev\\multi-llm-discussion-v1-wt-1\\node_modules\\@testing-library\\dom\\node_modules'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '\\\\?\\C:\\dev\\multi-llm-discussion-v1-wt-1\\node_modules\\compromise',
+npm warn cleanup     [Error: EPERM: operation not permitted, rmdir 'C:\dev\multi-llm-discussion-v1-wt-1\node_modules\compromise\src\2-two'] {
+npm warn cleanup       errno: -4048,
+npm warn cleanup       code: 'EPERM',
+npm warn cleanup       syscall: 'rmdir',
+npm warn cleanup       path: 'C:\\dev\\multi-llm-discussion-v1-wt-1\\node_modules\\compromise\\src\\2-two'
+npm warn cleanup     }
+npm warn cleanup   ]
+npm warn cleanup ]
+npm error code 1
+npm error path C:\dev\multi-llm-discussion-v1-wt-1\node_modules\robotjs
+npm error command failed
+npm error command C:\WINDOWS\system32\cmd.exe /d /s /c prebuild-install || node-gyp rebuild
+npm error gyp info it worked if it ends with ok
+npm error gyp info using node-gyp@9.4.1
+npm error gyp info using node@22.19.0 | win32 | x64
+npm error (node:24628) [DEP0060] DeprecationWarning: The `util._extend` API is deprecated. Please use Object.assign() instead.
+npm error (Use `node --trace-deprecation ...` to show where the warning was created)
+npm error gyp info find Python using Python version 3.11.9 found at "C:\Program Files\Python311\python.exe"
+npm error gyp ERR! find VS
+npm error gyp ERR! find VS msvs_version not set from command line or npm config
+npm error gyp ERR! find VS VCINSTALLDIR not set, not running in VS Command Prompt
+npm error gyp ERR! find VS checking VS2019 (16.11.36422.26) found at:
+npm error gyp ERR! find VS "C:\Program Files (x86)\Microsoft Visual Studio\2019\BuildTools"
+npm error gyp ERR! find VS - found "Visual Studio C++ core features"
+npm error gyp ERR! find VS - found VC++ toolset: v142
+npm error gyp ERR! find VS - missing any Windows SDK
+npm error gyp ERR! find VS could not find a version of Visual Studio 2017 or newer to use
+npm error gyp ERR! find VS not looking for VS2015 as it is only supported up to Node.js 18
+npm error gyp ERR! find VS not looking for VS2013 as it is only supported up to Node.js 8
+npm error gyp ERR! find VS
+npm error gyp ERR! find VS **************************************************************
+npm error gyp ERR! find VS You need to install the latest version of Visual Studio
+npm error gyp ERR! find VS including the "Desktop development with C++" workload.
+npm error gyp ERR! find VS For more information consult the documentation at:
+npm error gyp ERR! find VS https://github.com/nodejs/node-gyp#on-windows
+npm error gyp ERR! find VS **************************************************************
+npm error gyp ERR! find VS
+npm error gyp ERR! configure error
+npm error gyp ERR! stack Error: Could not find any Visual Studio installation to use
+npm error gyp ERR! stack     at VisualStudioFinder.fail (C:\dev\multi-llm-discussion-v1-wt-1\node_modules\node-gyp\lib\find-visualstudio.js:122:47)
+npm error gyp ERR! stack     at C:\dev\multi-llm-discussion-v1-wt-1\node_modules\node-gyp\lib\find-visualstudio.js:75:16
+npm error gyp ERR! stack     at VisualStudioFinder.findVisualStudio2013 (C:\dev\multi-llm-discussion-v1-wt-1\node_modules\node-gyp\lib\find-visualstudio.js:380:14)
+npm error gyp ERR! stack     at C:\dev\multi-llm-discussion-v1-wt-1\node_modules\node-gyp\lib\find-visualstudio.js:71:14
+npm error gyp ERR! stack     at VisualStudioFinder.findVisualStudio2015 (C:\dev\multi-llm-discussion-v1-wt-1\node_modules\node-gyp\lib\find-visualstudio.js:364:14)
+npm error gyp ERR! stack     at C:\dev\multi-llm-discussion-v1-wt-1\node_modules\node-gyp\lib\find-visualstudio.js:67:12
+npm error gyp ERR! stack     at VisualStudioFinder.parseData (C:\dev\multi-llm-discussion-v1-wt-1\node_modules\node-gyp\lib\find-visualstudio.js:237:5)        
+npm error gyp ERR! stack     at C:\dev\multi-llm-discussion-v1-wt-1\node_modules\node-gyp\lib\find-visualstudio.js:143:14
+npm error gyp ERR! stack     at ChildProcess.exithandler (node:child_process:410:7)
+npm error gyp ERR! stack     at ChildProcess.emit (node:events:519:28)
+npm error gyp ERR! stack     at maybeClose (node:internal/child_process:1101:16)
+npm error gyp ERR! stack     at ChildProcess._handle.onexit (node:internal/child_process:304:5)
+npm error gyp ERR! System Windows_NT 10.0.26100
+npm error gyp ERR! command "C:\\Program Files\\nodejs\\node.exe" "C:\\dev\\multi-llm-discussion-v1-wt-1\\node_modules\\node-gyp\\bin\\node-gyp.js" "rebuild"   
+npm error gyp ERR! cwd C:\dev\multi-llm-discussion-v1-wt-1\node_modules\robotjs
+npm error gyp ERR! node -v v22.19.0
+npm error gyp ERR! node-gyp -v v9.4.1
+npm error gyp ERR! not ok
+npm error A complete log of this run can be found in: C:\Users\Courtland Clarkson\AppData\Local\npm-cache\_logs\2025-10-29T11_08_25_658Z-debug-0.log
+
+[Orchestrator] Continuing without worktree pool (shared directory mode)

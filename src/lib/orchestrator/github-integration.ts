@@ -21,19 +21,21 @@ import type { RoutingDecision } from '@/lib/manager-routing-rules';
 export function buildPRBody(
   wo: WorkOrder,
   routingDecision: RoutingDecision,
-  proposerResponse: EnhancedProposerResponse
+  proposerResponse: EnhancedProposerResponse | null // Null in direct Aider mode (v149+)
 ): string {
   const parts = [];
 
   parts.push(`## Work Order: ${wo.id}`);
   parts.push('');
   parts.push(`**Risk Level:** ${wo.risk_level}`);
-  parts.push(`**Proposer Used:** ${proposerResponse.proposer_used}`);
+  parts.push(`**Model Used:** ${proposerResponse?.proposer_used || routingDecision.selected_proposer}`);
   parts.push(`**Complexity Score:** ${routingDecision.routing_metadata?.complexity_score?.toFixed(2) || 'N/A'}`);
-  parts.push(`**Cost:** $${proposerResponse.cost.toFixed(4)}`);
+  if (proposerResponse) {
+    parts.push(`**Cost:** $${proposerResponse.cost.toFixed(4)}`);
+  }
   parts.push(`**Hard Stop Required:** ${routingDecision.routing_metadata?.hard_stop_required ? 'Yes' : 'No'}`);
 
-  if (proposerResponse.refinement_metadata) {
+  if (proposerResponse?.refinement_metadata) {
     parts.push(`**Refinement Cycles:** ${proposerResponse.refinement_metadata.refinement_count}`);
     if (proposerResponse.refinement_metadata.final_errors !== undefined) {
       parts.push(`**Final Error Count:** ${proposerResponse.refinement_metadata.final_errors}`);
@@ -78,12 +80,12 @@ export function buildPRBody(
   parts.push(JSON.stringify({
     work_order_id: wo.id,
     routing_metadata: routingDecision.routing_metadata,
-    proposer_metadata: {
+    proposer_metadata: proposerResponse ? {
       cost: proposerResponse.cost,
       token_usage: proposerResponse.token_usage,
       execution_time_ms: proposerResponse.execution_time_ms,
       refinement_metadata: proposerResponse.refinement_metadata
-    }
+    } : null // Null in direct Aider mode (v149+)
   }, null, 2));
   parts.push('```');
   parts.push('');
@@ -112,7 +114,7 @@ export async function pushBranchAndCreatePR(
   wo: WorkOrder,
   branchName: string,
   routingDecision: RoutingDecision,
-  proposerResponse: EnhancedProposerResponse,
+  proposerResponse: EnhancedProposerResponse | null, // Null in direct Aider mode (v149+)
   worktreePath?: string
 ): Promise<GitHubPRResult> {
   console.log(`[GitHubIntegration] Pushing branch and creating PR for WO ${wo.id}`);

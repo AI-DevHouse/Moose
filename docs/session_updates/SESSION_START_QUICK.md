@@ -5,39 +5,40 @@
 ---
 
 ## ⚙️ MODEL INSTRUCTION (PRIORITY)
-**Models must do this before any action:**  
-1️⃣ Open MASTER §5.1 “Working Behaviour Standards”.  
-2️⃣ State compliance in ≤1 sentence.  
-3️⃣ Then load this file + the current session handover only.
+**Do this before any action:**
+1️⃣ Open MASTER §§5.1–5.3 and follow exactly.
+2️⃣ Reply must start with `ACK MOOSE-SOP v3`.
+3️⃣ Use the required schema for your task type: PRECHECK / PLAN / DIFFS / TESTS / COMPLIANCE (or variants for scripts/investigation).
+4️⃣ If DB evidence (schema + 3 rows for primary tables) cannot be shown and you will edit the DB, reply `BLOCKED: missing <specific item>` and stop.
 
 ---
 
 ## 1. ORIENTATION
 Project: **Moose Mission Control**
 Background rules → [SESSION_HANDOVER_MASTER.md](C:\dev\moose-mission-control\docs\session_updates\SESSION_HANDOVER_MASTER.md)
-Current state → [session-v126-20251023-1050-handover.md](C:\dev\moose-mission-control\docs\session_updates\session-v126-20251023-1050-handover.md)
+Current state → [session-v144-20251029-1700-handover.md](C:\dev\moose-mission-control\docs\session_updates\session-v144-20251029-1700-handover.md)
 
 ---
 
 ## 2. BEFORE YOU START (CHECKLIST)
-☑ Load MASTER §5.1 and confirm compliance.
-☑ Verify Supabase + Git connections active.
+☑ Load MASTER §§5.1–5.3 and begin reply with `ACK MOOSE-SOP v3`.
+☑ Verify Supabase + Git connections active **and show evidence in PRECHECK** (schema + 3 rows if editing DB; `git status --porcelain` if editing code).
 ☑ Open current handover → read Δ Summary + Next Actions.
-☑ Confirm scripts exist and environment variables loaded.
+☑ Check `docs/index_cards/SCRIPTS.md` for existing scripts before creating new ones.
 
 ---
 
 ## 3. TODAY'S WORKFLOW
-1️⃣ Continue from v126 Next Actions.
-2️⃣ Document progress in a new `session-v127-…-handover.md`.
-3️⃣ Keep updates short (≤5 bullets); store logs under `/evidence/v127/`.
-4️⃣ If unexpected behaviour → pause and verify code/schema before changes.
+1️⃣ Continue from v144 Next Actions.
+2️⃣ Document progress in a new `session-v145-…-handover.md`.
+3️⃣ Keep updates short (≤5 bullets); store logs under `/evidence/v145/`.
+4️⃣ If unexpected behaviour → **stop with `BLOCKED`** and list the single minimal artifact needed to proceed.
 
 ---
 
 ## 4. WRAP-UP
-📝 Create v127 handover using MASTER §9 template.
-📂 Archive handovers older than v124 → `archive\`.
+📝 Create v145 handover using MASTER §9 template.
+📂 Archive handovers older than v143 → `archive\`.
 
 ---
 
@@ -45,7 +46,7 @@ Current state → [session-v126-20251023-1050-handover.md](C:\dev\moose-mission-
 | Purpose | File | Path |
 |----------|------|------|
 | Rules | MASTER | docs\session_updates\ |
-| Last Session | v126 | docs\session_updates\ |
+| Last Session | v144 | docs\session_updates\ |
 | Evidence | evidence\ | docs\session_updates\evidence\ |
 | Archive | archive\ | docs\session_updates\archive\ |
 

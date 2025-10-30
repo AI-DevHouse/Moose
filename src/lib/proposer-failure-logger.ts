@@ -11,7 +11,9 @@
 
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from '@/types/supabase';
-import type { RefinementResult } from './proposer-refinement-rules';
+// DEPRECATED v149: proposer-refinement-rules removed
+// import type { RefinementResult } from './proposer-refinement-rules';
+type RefinementResult = any; // Placeholder for backwards compatibility
 import type { ValidationResult } from './contract-validator';
 
 const supabase = createClient<Database>(

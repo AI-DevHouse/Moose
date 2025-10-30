@@ -12,59 +12,105 @@ import { projectService } from '@/lib/project-service';
 import { projectValidator } from '@/lib/project-validator';
 import { createSupabaseServiceClient } from '@/lib/supabase';
 import type { WorkOrder, AiderResult } from './types';
-import type { EnhancedProposerResponse } from '@/lib/enhanced-proposer-service';
 
 /**
- * Create Aider instruction file
+ * Build comprehensive prompt from Work Order requirements
+ *
+ * Generates natural language instructions for Aider based on:
+ * - WO description and acceptance criteria
+ * - Technical requirements (dependencies, config)
+ * - Dependencies (if any)
  *
  * @param wo - Work Order
- * @param proposerResponse - Proposer response with generated code
- * @returns Path to instruction file
+ * @returns Comprehensive prompt string
  */
-export function createAiderInstructionFile(
-  wo: WorkOrder,
-  proposerResponse: EnhancedProposerResponse
-): string {
+function buildAiderPrompt(wo: WorkOrder): string {
   const instructionParts = [];
 
-  instructionParts.push(`Work Order ID: ${wo.id}`);
-  instructionParts.push(`Title: ${wo.title}`);
+  // Header
+  instructionParts.push(`# Work Order: ${wo.title}`);
+  instructionParts.push(`ID: ${wo.id}`);
   instructionParts.push('');
-  instructionParts.push('Description:');
+
+  // Task description
+  instructionParts.push('## Task Description');
   instructionParts.push(wo.description);
   instructionParts.push('');
 
+  // Acceptance criteria
   if (wo.acceptance_criteria && wo.acceptance_criteria.length > 0) {
-    instructionParts.push('Acceptance Criteria:');
+    instructionParts.push('## Acceptance Criteria');
+    instructionParts.push('The implementation MUST satisfy all of the following:');
     wo.acceptance_criteria.forEach((ac, i) => {
       instructionParts.push(`${i + 1}. ${ac}`);
     });
     instructionParts.push('');
   }
 
+  // Technical requirements
+  if (wo.technical_requirements) {
+    const techReq = wo.technical_requirements;
+
+    if (techReq.npm_dependencies && techReq.npm_dependencies.length > 0) {
+      instructionParts.push('## Required NPM Dependencies');
+      techReq.npm_dependencies.forEach(dep => {
+        instructionParts.push(`- ${dep}`);
+      });
+      instructionParts.push('');
+    }
+
+    if (techReq.npm_dev_dependencies && techReq.npm_dev_dependencies.length > 0) {
+      instructionParts.push('## Required Dev Dependencies');
+      techReq.npm_dev_dependencies.forEach(dep => {
+        instructionParts.push(`- ${dep}`);
+      });
+      instructionParts.push('');
+    }
+
+    if (techReq.environment_variables && techReq.environment_variables.length > 0) {
+      instructionParts.push('## Environment Variables Required');
+      techReq.environment_variables.forEach(envVar => {
+        instructionParts.push(`- ${envVar}`);
+      });
+      instructionParts.push('');
+    }
+  }
+
+  // Files in scope
   if (wo.files_in_scope && wo.files_in_scope.length > 0) {
-    instructionParts.push('Files to modify:');
+    instructionParts.push('## Files in Scope');
     wo.files_in_scope.forEach(f => {
       instructionParts.push(`- ${f}`);
     });
     instructionParts.push('');
   }
 
-  instructionParts.push(`Generated code from ${proposerResponse.proposer_used}:`);
+  // Implementation instructions
+  instructionParts.push('## Implementation Instructions');
+  instructionParts.push('1. Analyze the task description and acceptance criteria carefully');
+  instructionParts.push('2. Create or modify the files listed in scope');
+  instructionParts.push('3. Implement the solution that satisfies ALL acceptance criteria');
+  instructionParts.push('4. Ensure TypeScript compilation succeeds with no errors');
+  instructionParts.push('5. Follow best practices: type safety, error handling, clear naming');
+  instructionParts.push('6. Commit changes with a descriptive message');
   instructionParts.push('');
-  instructionParts.push(proposerResponse.content);
-  instructionParts.push('');
-  instructionParts.push('Instructions:');
-  instructionParts.push('1. Create/modify the files listed above');
-  instructionParts.push('2. Apply the generated code changes');
-  instructionParts.push('3. Ensure all acceptance criteria are met');
-  instructionParts.push('4. Commit changes with descriptive message');
 
-  const instruction = instructionParts.join('\n').trim();
+  instructionParts.push('## Quality Standards');
+  instructionParts.push('- All code must be valid TypeScript (no syntax errors)');
+  instructionParts.push('- Use proper types (avoid `any` where possible)');
+  instructionParts.push('- Handle edge cases and errors appropriately');
+  instructionParts.push('- Write clear, self-documenting code');
 
+  return instructionParts.join('\n');
+}
+
+/**
+ * Create Aider instruction file from prompt
+ */
+function createInstructionFile(wo: WorkOrder, prompt: string): string {
   const tmpDir = os.tmpdir();
   const instructionPath = path.join(tmpDir, `wo-${wo.id}-instruction.txt`);
-  fs.writeFileSync(instructionPath, instruction, 'utf-8');
+  fs.writeFileSync(instructionPath, prompt, 'utf-8');
 
   console.log(`[AiderExecutor] Created instruction file: ${instructionPath}`);
 
@@ -225,18 +271,17 @@ async function getBaseBranchForWorkOrder(wo: WorkOrder): Promise<string> {
  * - ANTHROPIC_API_KEY or OPENAI_API_KEY in environment
  *
  * @param wo - Work Order
- * @param proposerResponse - Proposer response
  * @param selectedProposer - Model selected by Manager
  * @param worktreePath - Optional worktree path (overrides project.local_path for concurrent execution)
  * @returns Aider execution result
  */
 export async function executeAider(
   wo: WorkOrder,
-  proposerResponse: EnhancedProposerResponse,
   selectedProposer: string,
   worktreePath?: string
 ): Promise<AiderResult> {
-  console.log(`[AiderExecutor] Starting Aider execution for WO ${wo.id}`);
+  console.log(`[AiderExecutor] Starting direct Aider execution for WO ${wo.id}`);
+  console.log(`[AiderExecutor] Using model: ${selectedProposer}`);
 
   // 0. SAFETY CHECK: Prevent self-modification
   validateWorkOrderSafety(wo.id, wo.project_id);
@@ -265,8 +310,12 @@ export async function executeAider(
     );
   }
 
-  // 2. Create instruction file
-  const instructionPath = createAiderInstructionFile(wo, proposerResponse);
+  // 2. Build comprehensive prompt and create instruction file
+  console.log(`[AiderExecutor] Building comprehensive prompt from WO requirements`);
+  const prompt = buildAiderPrompt(wo);
+  const instructionPath = createInstructionFile(wo, prompt);
+
+  console.log(`[AiderExecutor] Prompt length: ${prompt.length} characters`);
 
   // 3. Determine base branch from dependencies
   const baseBranch = await getBaseBranchForWorkOrder(wo);

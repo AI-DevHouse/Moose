@@ -1,0 +1,213 @@
+[dotenv@17.2.3] injecting env (0) from .env.local -- tip: ⚙️  load multiple .env files with { path: ['.env.local', '.env'] }
+
+📊 WO Status Summary:
+
+IN_PROGRESS: 22
+FAILED: 23
+APPROVED: 4
+
+TOTAL: 49
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🔄 IN PROGRESS WOs:
+
+1. Implement Error Recovery and Retry Strategy for Clipboard Operations
+   ID: 2c76df9f...
+   Branch: feature/wo-2c76df9f-implement-error-recovery-and-retry-strategy-for-clipboard-operations
+   PR: https://github.com/AI-DevHouse/multi-llm-discussion-v1/pull/312
+   Proposer: Not assigned yet
+   Updated: 29/10/2025, 11:33:38
+
+2. Initialize Express Server for Alignment Service with TypeScript Configuration
+   ID: d7a71749...
+   Branch: feature/wo-d7a71749-initialize-express-server-for-alignment-service-with-typescript-configuration
+   PR: https://github.com/AI-DevHouse/multi-llm-discussion-v1/pull/308
+   Proposer: Not assigned yet
+   Updated: 29/10/2025, 11:33:38
+
+3. Implement Gemini and Grok Provider Adapters
+   ID: 666660fb...
+   Branch: feature/wo-666660fb-implement-gemini-and-grok-provider-adapters
+   PR: https://github.com/AI-DevHouse/multi-llm-discussion-v1/pull/316
+   Proposer: Not assigned yet
+   Updated: 29/10/2025, 11:33:38
+
+4. Complete Documentation, Build Configuration, and Production Packaging
+   ID: ca68150a...
+   Branch: feature/wo-ca68150a-complete-documentation-build-configuration-and-production-packaging
+   PR: https://github.com/AI-DevHouse/multi-llm-discussion-v1/pull/313
+   Proposer: Not assigned yet
+   Updated: 29/10/2025, 11:33:38
+
+5. Implement Route Structure and Page Scaffolding for Core Features
+   ID: 501edce0...
+   Branch: feature/wo-501edce0-implement-route-structure-and-page-scaffolding-for-core-features
+   PR: https://github.com/AI-DevHouse/multi-llm-discussion-v1/pull/320
+   Proposer: Not assigned yet
+   Updated: 29/10/2025, 11:33:38
+
+6. Define IPC Channel Architecture and Type Definitions
+   ID: 91259028...
+   Branch: feature/wo-91259028-define-ipc-channel-architecture-and-type-definitions
+   PR: https://github.com/AI-DevHouse/multi-llm-discussion-v1/pull/318
+   Proposer: Not assigned yet
+   Updated: 29/10/2025, 11:33:38
+
+7. Build Alignment Scoring Algorithm and Normalization Engine
+   ID: a14242af...
+   Branch: feature/wo-a14242af-build-alignment-scoring-algorithm-and-normalization-engine
+   PR: https://github.com/AI-DevHouse/multi-llm-discussion-v1/pull/309
+   Proposer: Not assigned yet
+   Updated: 29/10/2025, 11:33:38
+
+8. Implement Discussion State Machine and Lifecycle Manager
+   ID: f0fd1bf2...
+   Branch: feature/wo-f0fd1bf2-implement-discussion-state-machine-and-lifecycle-manager
+   PR: https://github.com/AI-DevHouse/multi-llm-discussion-v1/pull/311
+   Proposer: Not assigned yet
+   Updated: 29/10/2025, 11:33:38
+
+9. Implement Unified Response Detection and Extraction Service
+   ID: da5376da...
+   Branch: feature/wo-da5376da-implement-unified-response-detection-and-extraction-service
+   PR: https://github.com/AI-DevHouse/multi-llm-discussion-v1/pull/327
+   Proposer: Not assigned yet
+   Updated: 29/10/2025, 11:33:38
+
+10. Initialize Electron + TypeScript Project Structure
+   ID: a2acb099...
+   Branch: Not created yet
+   PR: Not created yet
+   Proposer: Not assigned yet
+   Updated: 29/10/2025, 11:33:38
+
+11. Create Turn Coordination Engine with Multi-Provider Orchestration
+   ID: 88432539...
+   Branch: feature/wo-88432539-create-turn-coordination-engine-with-multi-provider-orchestration
+   PR: https://github.com/AI-DevHouse/multi-llm-discussion-v1/pull/321
+   Proposer: Not assigned yet
+   Updated: 29/10/2025, 11:33:38
+
+12. Implement Integration and E2E Test Suites for Critical User Flows (15% + 5% Coverage)
+   ID: 826a8b13...
+   Branch: feature/wo-826a8b13-implement-integration-and-e2e-test-suites-for-critical-user-flows-15-5-coverage
+   PR: https://github.com/AI-DevHouse/multi-llm-discussion-v1/pull/314
+   Proposer: Not assigned yet
+   Updated: 29/10/2025, 11:33:38
+
+13. Implement Performance Optimization and Resource Management System
+   ID: d8d41cd4...
+   Branch: feature/wo-d8d41cd4-implement-performance-optimization-and-resource-management-system
+   PR: https://github.com/AI-DevHouse/multi-llm-discussion-v1/pull/354
+   Proposer: Not assigned yet
+   Updated: 29/10/2025, 09:58:06
+
+14. Implement Redux Middleware for IPC Synchronization and Action Logging
+   ID: 3e1922cb...
+   Branch: feature/wo-3e1922cb-implement-redux-middleware-for-ipc-synchronization-and-action-logging
+   PR: https://github.com/AI-DevHouse/multi-llm-discussion-v1/pull/355
+   Proposer: Not assigned yet
+   Updated: 29/10/2025, 09:58:06
+
+15. Build Application Layout System with Navigation and Provider Management UI
+   ID: a0d99bcd...
+   Branch: feature/wo-a0d99bcd-build-application-layout-system-with-navigation-and-provider-management-ui
+   PR: https://github.com/AI-DevHouse/multi-llm-discussion-v1/pull/315
+   Proposer: Not assigned yet
+   Updated: 29/10/2025, 09:58:06
+
+16. Implement IPC Error Handling and Monitoring System
+   ID: 64ec1d98...
+   Branch: feature/wo-64ec1d98-implement-ipc-error-handling-and-monitoring-system
+   PR: https://github.com/AI-DevHouse/multi-llm-discussion-v1/pull/324
+   Proposer: Not assigned yet
+   Updated: 29/10/2025, 09:58:06
+
+17. Build Status Indicator System with Real-Time Activity and Error Notifications
+   ID: d8b748fd...
+   Branch: feature/wo-d8b748fd-build-status-indicator-system-with-real-time-activity-and-error-notifications
+   PR: https://github.com/AI-DevHouse/multi-llm-discussion-v1/pull/322
+   Proposer: Not assigned yet
+   Updated: 29/10/2025, 09:58:06
+
+18. Implement Claude Provider Adapter
+   ID: f491b9c5...
+   Branch: feature/wo-f491b9c5-implement-claude-provider-adapter
+   PR: https://github.com/AI-DevHouse/multi-llm-discussion-v1/pull/319
+   Proposer: Not assigned yet
+   Updated: 29/10/2025, 09:58:06
+
+19. Parser Recognition Logic
+   ID: a7bb6c49...
+   Branch: feature/wo-a7bb6c49-parser-recognition-logic
+   PR: https://github.com/AI-DevHouse/multi-llm-discussion-v1/pull/356
+   Proposer: Not assigned yet
+   Updated: 29/10/2025, 09:58:06
+
+20. Create Renderer Process IPC Client with Promise-Based API
+   ID: fb95216c...
+   Branch: feature/wo-fb95216c-create-renderer-process-ipc-client-with-promise-based-api
+   PR: https://github.com/AI-DevHouse/multi-llm-discussion-v1/pull/329
+   Proposer: Not assigned yet
+   Updated: 29/10/2025, 09:58:06
+
+21. Validation and Testing Suite
+   ID: 92a9c7c1...
+   Branch: feature/wo-92a9c7c1-validation-and-testing-suite
+   PR: https://github.com/AI-DevHouse/multi-llm-discussion-v1/pull/357
+   Proposer: Not assigned yet
+   Updated: 29/10/2025, 09:58:06
+
+22. Implement Clipboard Monitoring Service with Native API Integration
+   ID: 1fbd385f...
+   Branch: feature/wo-1fbd385f-implement-clipboard-monitoring-service-with-native-api-integration
+   PR: https://github.com/AI-DevHouse/multi-llm-discussion-v1/pull/323
+   Proposer: Not assigned yet
+   Updated: 29/10/2025, 09:58:06
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🕐 10 Most Recently Updated WOs:
+
+1. [IN_PROGRESS] Implement Error Recovery and Retry Strategy for Clipboard Operations
+   Updated: 3h ago
+   PR: https://github.com/AI-DevHouse/multi-llm-discussion-v1/pull/312
+
+2. [FAILED] Implement Unit Test Suites for Core Services and State Management (80% Coverage Target)
+   Updated: 3h ago
+
+3. [IN_PROGRESS] Initialize Express Server for Alignment Service with TypeScript Configuration
+   Updated: 3h ago
+   PR: https://github.com/AI-DevHouse/multi-llm-discussion-v1/pull/308
+
+4. [IN_PROGRESS] Implement Gemini and Grok Provider Adapters
+   Updated: 3h ago
+   PR: https://github.com/AI-DevHouse/multi-llm-discussion-v1/pull/316
+
+5. [IN_PROGRESS] Complete Documentation, Build Configuration, and Production Packaging
+   Updated: 3h ago
+   PR: https://github.com/AI-DevHouse/multi-llm-discussion-v1/pull/313
+
+6. [IN_PROGRESS] Implement Route Structure and Page Scaffolding for Core Features
+   Updated: 3h ago
+   PR: https://github.com/AI-DevHouse/multi-llm-discussion-v1/pull/320
+
+7. [IN_PROGRESS] Define IPC Channel Architecture and Type Definitions
+   Updated: 3h ago
+   PR: https://github.com/AI-DevHouse/multi-llm-discussion-v1/pull/318
+
+8. [IN_PROGRESS] Build Alignment Scoring Algorithm and Normalization Engine
+   Updated: 3h ago
+   PR: https://github.com/AI-DevHouse/multi-llm-discussion-v1/pull/309
+
+9. [IN_PROGRESS] Implement Discussion State Machine and Lifecycle Manager
+   Updated: 3h ago
+   PR: https://github.com/AI-DevHouse/multi-llm-discussion-v1/pull/311
+
+10. [IN_PROGRESS] Implement Unified Response Detection and Extraction Service
+   Updated: 3h ago
+   PR: https://github.com/AI-DevHouse/multi-llm-discussion-v1/pull/327
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📊 GitHub Activity:
+   WOs with branches: 37
+   WOs with PRs: 37

@@ -18,14 +18,14 @@ import type { RoutingDecision } from '@/lib/manager-routing-rules';
  *
  * @param wo - Work Order
  * @param routingDecision - Manager routing decision
- * @param proposerResponse - Proposer code generation response
+ * @param proposerResponse - Proposer code generation response (null in direct Aider mode)
  * @param aiderResult - Aider execution result
  * @param prResult - GitHub PR creation result
  */
 export async function trackSuccessfulExecution(
   wo: WorkOrder,
   routingDecision: RoutingDecision,
-  proposerResponse: EnhancedProposerResponse,
+  proposerResponse: EnhancedProposerResponse | null,
   aiderResult: AiderResult,
   prResult: GitHubPRResult
 ): Promise<void> {
@@ -51,13 +51,13 @@ export async function trackSuccessfulExecution(
             confidence: routingDecision.confidence,
             routing_metadata: routingDecision.routing_metadata
           },
-          proposer_response: {
+          proposer_response: proposerResponse ? {
             proposer_used: proposerResponse.proposer_used,
             cost: proposerResponse.cost,
             token_usage: proposerResponse.token_usage,
             execution_time_ms: proposerResponse.execution_time_ms,
             refinement_cycles: proposerResponse.refinement_metadata?.refinement_count || 0
-          },
+          } : null, // Null in direct Aider mode (v149+)
           aider_execution: {
             branch_name: aiderResult.branch_name,
             success: aiderResult.success
@@ -86,8 +86,8 @@ export async function trackSuccessfulExecution(
           pr_url: prResult.pr_url,
           branch_name: prResult.branch_name,
           risk_level: wo.risk_level,
-          proposer_used: proposerResponse.proposer_used,
-          cost: proposerResponse.cost
+          proposer_used: proposerResponse?.proposer_used || routingDecision.selected_proposer,
+          cost: proposerResponse?.cost || 0
         }
       } as any);
 
@@ -97,41 +97,44 @@ export async function trackSuccessfulExecution(
     }
 
     // 3. Write to outcome_vectors (tracks LLM model performance)
-    // Include failure classification if proposer had residual errors (even though PR succeeded)
-    const { error: ovError } = await supabase
-      .from('outcome_vectors')
-      .insert({
-        work_order_id: wo.id,
-        model_used: proposerResponse.proposer_used,
-        route_reason: routingDecision.reason,
-        cost: proposerResponse.cost,
-        execution_time_ms: proposerResponse.execution_time_ms,
-        success: true,
-        diff_size_lines: 0, // TODO: Parse from Aider output
-        test_duration_ms: null, // TODO: Get from Sentinel
-        failure_class: proposerResponse.failure_class || null, // NEW: Classification if residual errors
-        error_context: proposerResponse.error_context || null, // NEW: Structured error details
-        metadata: {
-          complexity_score: routingDecision.routing_metadata.complexity_score,
-          hard_stop_required: routingDecision.routing_metadata.hard_stop_required,
-          refinement_cycles: proposerResponse.refinement_metadata?.refinement_count || 0,
-          contract_violations: proposerResponse.contract_validation?.breaking_changes.length || 0
-        }
-      } as any);
+    // Skip if proposerResponse is null (direct Aider mode - v149+)
+    if (proposerResponse) {
+      // Include failure classification if proposer had residual errors (even though PR succeeded)
+      const { error: ovError } = await supabase
+        .from('outcome_vectors')
+        .insert({
+          work_order_id: wo.id,
+          model_used: proposerResponse.proposer_used,
+          route_reason: routingDecision.reason,
+          cost: proposerResponse.cost,
+          execution_time_ms: proposerResponse.execution_time_ms,
+          success: true,
+          diff_size_lines: 0, // TODO: Parse from Aider output
+          test_duration_ms: null, // TODO: Get from Sentinel
+          failure_class: proposerResponse.failure_class || null, // NEW: Classification if residual errors
+          error_context: proposerResponse.error_context || null, // NEW: Structured error details
+          metadata: {
+            complexity_score: routingDecision.routing_metadata.complexity_score,
+            hard_stop_required: routingDecision.routing_metadata.hard_stop_required,
+            refinement_cycles: proposerResponse.refinement_metadata?.refinement_count || 0,
+            contract_violations: proposerResponse.contract_validation?.breaking_changes.length || 0
+          }
+        } as any);
 
-    if (ovError) {
-      await handleCriticalError({
-        component: 'ResultTracker',
-        operation: 'writeOutcomeVectors',
-        error: ovError as Error,
-        workOrderId: wo.id,
-        severity: 'critical',
-        metadata: {
-          proposer_used: proposerResponse.proposer_used,
-          cost: proposerResponse.cost
-        }
-      });
-      // Still continue execution - escalation notifies human but doesn't block
+      if (ovError) {
+        await handleCriticalError({
+          component: 'ResultTracker',
+          operation: 'writeOutcomeVectors',
+          error: ovError as Error,
+          workOrderId: wo.id,
+          severity: 'critical',
+          metadata: {
+            proposer_used: proposerResponse.proposer_used,
+            cost: proposerResponse.cost
+          }
+        });
+        // Still continue execution - escalation notifies human but doesn't block
+      }
     }
 
     console.log(`[ResultTracker] Successfully tracked execution for WO ${wo.id}`);

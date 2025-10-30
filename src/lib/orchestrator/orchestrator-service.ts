@@ -4,7 +4,6 @@ import { handleCriticalError } from '@/lib/error-escalation';
 import type { OrchestratorStatus, ExecutionResult, WorkOrder, WorktreeHandle } from './types';
 import { pollPendingWorkOrders, getWorkOrder } from './work-order-poller';
 import { getRoutingDecision } from './manager-coordinator';
-import { generateCode } from './proposer-executor';
 import { executeAider, rollbackAider } from './aider-executor';
 import { pushBranchAndCreatePR, rollbackPR } from './github-integration';
 import { trackSuccessfulExecution, trackFailedExecution } from './result-tracker';
@@ -14,6 +13,7 @@ import { validateWorkOrderAcceptance } from '@/lib/acceptance-validator';
 import { projectService } from '@/lib/project-service';
 import { createSupabaseServiceClient } from '@/lib/supabase';
 import { WorktreePoolManager } from './worktree-pool';
+import { checkCompilation, formatErrorSummary } from './compilation-gate';
 
 /**
  * Orchestrator Service (Singleton)
@@ -21,8 +21,8 @@ import { WorktreePoolManager } from './worktree-pool';
  * Coordinates the entire Work Order execution pipeline:
  * 1. Poll for pending approved Work Orders
  * 2. Get routing decision from Manager
- * 3. Generate code via Proposer
- * 4. Apply code via Aider
+ * 3. Execute Aider directly (generates and applies code)
+ * 4. Run compilation gate (TypeScript validation)
  * 5. Create PR on GitHub
  * 6. Validate acceptance (Phase 4) - 5-dimension quality scoring
  * 7. Track results in database
@@ -200,8 +200,8 @@ export class OrchestratorService {
    *
    * Full pipeline:
    * 1. Get routing decision from Manager
-   * 2. Generate code via Proposer
-   * 3. Apply code via Aider
+   * 2. Execute Aider directly (generates and applies code)
+   * 3. Run compilation gate (TypeScript validation)
    * 4. Create PR on GitHub
    * 5. Track results
    *
@@ -247,7 +247,7 @@ export class OrchestratorService {
         progress: 10
       });
 
-      // 2. Get routing decision from Manager
+      // 2. Get routing decision from Manager (selects which AI model to use)
       console.log(`[Orchestrator] Step 1/5: Getting routing decision for WO ${workOrderId}`);
       let routingDecision;
       try {
@@ -275,30 +275,9 @@ export class OrchestratorService {
         throw error;
       }
 
-      // 3. Generate code via Proposer
-      console.log(`[Orchestrator] Step 2/5: Generating code for WO ${workOrderId}`);
-      executionEvents.emit(workOrderId, {
-        type: 'progress',
-        message: `Generating code solution...`,
-        progress: 30
-      });
-      let proposerResponse;
-      try {
-        proposerResponse = await generateCode(wo);
-
-        executionEvents.emit(workOrderId, {
-          type: 'progress',
-          message: `Code solution generated successfully`,
-          progress: 50
-        });
-      } catch (error: any) {
-        await trackFailedExecution(wo, error, 'proposer');
-        throw error;
-      }
-
-      // 4. Lease worktree (if pool enabled)
+      // Lease worktree (if pool enabled)
       if (worktreePool.isEnabled()) {
-        console.log(`[Orchestrator] Leasing worktree for WO ${workOrderId}`);
+        console.log(`[Orchestrator] Step 2/5: Leasing worktree for WO ${workOrderId}`);
         try {
           worktreeHandle = await worktreePool.leaseWorktree(workOrderId);
           console.log(`[Orchestrator] Leased ${worktreeHandle.id} for WO ${workOrderId}`);
@@ -308,18 +287,17 @@ export class OrchestratorService {
         }
       }
 
-      // 5. Apply code via Aider
-      console.log(`[Orchestrator] Step 3/5: Applying code via Aider for WO ${workOrderId}`);
+      // 3. Execute Aider directly (generates and applies code in one step)
+      console.log(`[Orchestrator] Step 3/5: Executing Aider for WO ${workOrderId}`);
       executionEvents.emit(workOrderId, {
         type: 'progress',
-        message: `Executing with Aider...`,
-        progress: 60
+        message: `Generating and applying solution with Aider...`,
+        progress: 50
       });
       let aiderResult;
       try {
         aiderResult = await executeAider(
           wo,
-          proposerResponse,
           routingDecision.selected_proposer,
           worktreeHandle?.path  // Pass worktree path if available
         );
@@ -327,7 +305,7 @@ export class OrchestratorService {
         executionEvents.emit(workOrderId, {
           type: 'progress',
           message: `Code applied successfully, branch: ${aiderResult.branch_name}`,
-          progress: 80
+          progress: 70
         });
       } catch (error: any) {
         await trackFailedExecution(wo, error, 'aider');
@@ -338,12 +316,51 @@ export class OrchestratorService {
         throw error;
       }
 
-      // 6. Create PR on GitHub
-      console.log(`[Orchestrator] Step 4/6: Creating PR for WO ${workOrderId}`);
+      // 4. Run compilation gate (TypeScript validation)
+      console.log(`[Orchestrator] Step 4/5: Running compilation gate for WO ${workOrderId}`);
+      executionEvents.emit(workOrderId, {
+        type: 'progress',
+        message: `Validating TypeScript compilation...`,
+        progress: 75
+      });
+
+      try {
+        // Get project path for compilation check
+        const projectPath = worktreeHandle?.path ||
+          (wo.project_id ? (await projectService.getProject(wo.project_id))?.local_path : undefined) ||
+          process.cwd();
+
+        const compilationResult = await checkCompilation(projectPath, workOrderId);
+
+        console.log(`[Orchestrator] Compilation gate decision: ${compilationResult.decision}`);
+        console.log(formatErrorSummary(compilationResult));
+
+        if (compilationResult.decision === 'escalate') {
+          // TODO Phase 2: Send to Claude review system
+          console.warn(`[Orchestrator] ⚠️  ${compilationResult.error_count} TS errors - escalation not yet implemented`);
+          console.warn(`[Orchestrator] PR will be created but marked needs_review`);
+
+          // For now, continue but mark as needs review
+          await supabase.from('work_orders').update({
+            status: 'needs_review',
+            metadata: {
+              ...wo.metadata,
+              compilation_errors: compilationResult.error_count,
+              compilation_gate_decision: compilationResult.decision
+            }
+          }).eq('id', workOrderId);
+        }
+      } catch (error: any) {
+        console.warn(`[Orchestrator] Compilation gate failed (non-fatal): ${error.message}`);
+        // Continue - compilation check failure is not fatal in Phase 1
+      }
+
+      // 5. Create PR on GitHub
+      console.log(`[Orchestrator] Step 5/5: Creating PR for WO ${workOrderId}`);
       executionEvents.emit(workOrderId, {
         type: 'progress',
         message: `Creating pull request...`,
-        progress: 85
+        progress: 80
       });
 
       // Get working directory for potential rollback
@@ -361,7 +378,7 @@ export class OrchestratorService {
           wo,
           aiderResult.branch_name,
           routingDecision,
-          proposerResponse,
+          null, // No proposer response in direct Aider mode (v149)
           worktreeHandle?.path  // Pass worktree path if available
         );
       } catch (error: any) {
@@ -371,8 +388,8 @@ export class OrchestratorService {
         throw error;
       }
 
-      // 7. Run acceptance validation (Phase 4)
-      console.log(`[Orchestrator] Step 5/6: Running acceptance validation for WO ${workOrderId}`);
+      // 6. Run acceptance validation (Phase 4)
+      console.log(`[Orchestrator] Step 5/5: Running acceptance validation for WO ${workOrderId}`);
       executionEvents.emit(workOrderId, {
         type: 'progress',
         message: `Validating work order quality...`,
@@ -407,7 +424,7 @@ export class OrchestratorService {
         const newStatus = acceptance.acceptance_score >= 7 ? 'completed' : 'needs_review';
 
         await supabase.from('work_orders').update({
-          acceptance_result: acceptance,
+          acceptance_result: acceptance as any,
           status: newStatus
         }).eq('id', workOrderId);
 
@@ -426,9 +443,9 @@ export class OrchestratorService {
         // Continue - acceptance validation failure is not fatal
       }
 
-      // 8. Track successful execution
-      console.log(`[Orchestrator] Step 6/6: Tracking results for WO ${workOrderId}`);
-      await trackSuccessfulExecution(wo, routingDecision, proposerResponse, aiderResult, prResult);
+      // 6. Track successful execution
+      console.log(`[Orchestrator] Tracking results for WO ${workOrderId}`);
+      await trackSuccessfulExecution(wo, routingDecision, null, aiderResult, prResult);
 
       const executionTime = Date.now() - startTime;
       this.totalExecuted++;

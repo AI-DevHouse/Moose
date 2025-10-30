@@ -5,12 +5,26 @@
 
 import { proposerRegistry, type ProposerConfig, type RoutingDecision } from './proposer-registry';
 import { complexityAnalyzer, type ComplexityAnalysis } from './complexity-analyzer';
-import {
-  attemptSelfRefinement,
-  REFINEMENT_THRESHOLDS,
-  type RefinementResult
-} from './proposer-refinement-rules';
+// DEPRECATED v149: proposer-refinement-rules removed (part of eliminated Proposer architecture)
+// import {
+//   attemptSelfRefinement,
+//   REFINEMENT_THRESHOLDS,
+//   type RefinementResult
+// } from './proposer-refinement-rules';
 import { ContractValidator, type ValidationResult } from './contract-validator';
+
+// Placeholder types for backwards compatibility
+export type RefinementResult = {
+  content: string;
+  refinement_count: number;
+  initial_errors: number;
+  final_errors: number;
+  refinement_success: boolean;
+  error_details: any[];
+  contract_violations?: any[];
+  cycle_history?: any[];
+  sanitizer_metadata?: any;
+};
 import { classifyError, type FailureClass, type ErrorContext } from './failure-classifier';
 import { logRefinementCycle } from './decision-logger';
 import { logProposerFailure } from './proposer-failure-logger';
@@ -546,6 +560,20 @@ DEPENDENCY CONTEXT: (Failed to load package.json - use common Node.js built-ins 
           };
 
           // Delegate to centralized refinement rules with contract validation
+          // DEPRECATED v149: Self-refinement removed (part of eliminated Proposer architecture)
+          // const refinementResult = await attemptSelfRefinement(
+          const refinementResult: RefinementResult = {
+            content: response.content,
+            refinement_count: 0,
+            initial_errors: 0,
+            final_errors: 0,
+            refinement_success: true,
+            error_details: [],
+            contract_violations: [],
+            cycle_history: [],
+            sanitizer_metadata: { initial_changes: [], cycle_changes: [], total_functions_triggered: 0 }
+          };
+          /* OLD CODE - DEPRECATED v149:
           const refinementResult = await attemptSelfRefinement(
             response.content,
             request,
@@ -555,12 +583,13 @@ DEPENDENCY CONTEXT: (Failed to load package.json - use common Node.js built-ins 
             REFINEMENT_THRESHOLDS.MAX_CYCLES,  // 3 cycles
             validateContractCallback             // NEW: Contract validation in refinement loop
           );
+          */
 
           response.content = refinementResult.content;
           refinementMetadata = refinementResult;
 
-          // Extract final contract validation from refinement metadata
-          contractValidation = refinementResult.final_contract_validation;
+          // Extract final contract validation from refinement metadata (null in v149)
+          contractValidation = undefined; // refinementResult.final_contract_validation;
 
           console.log('🔍 SELF-REFINEMENT: Complete', {
             cycles: refinementMetadata.refinement_count,
